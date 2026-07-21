@@ -1,0 +1,514 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { db } from '@/firebase';
+import { collection, addDoc, updateDoc, serverTimestamp, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+
+// --- Constants ---
+const PROVINCES = [
+  'ນະຄອນຫຼວງວຽງຈັນ', 'ຜົ້ງສາລີ', 'ຫຼວງນ້ຳທາ', 'ອຸດົມໄຊ', 'ບໍ່ແກ້ວ', 'ຫຼວງພະບາງ', 'ຫົວພັນ', 'ໄຊຍະບູລີ',
+  'ຊຽງຂວາງ', 'ວຽງຈັນ', 'ບໍລິຄຳໄຊ', 'ຄຳມ່ວນ', 'ສະຫວັນນະເຂດ', 'ສາລະວັນ', 'ເຊກອງ', 'ຈຳປາສັກ', 'ອັດຕະປື', 'ໄຊສົມບູນ'
+];
+const TRANSPORTS = ['ANOUSITH Express', 'HAL Express', 'Unt Express', 'ຮຸ່ງອາລຸນ', 'ມີໄຊ', 'ຝາກລົດໂດຍສານ', 'ຮັບເອງ'];
+const STATUSES = [
+  'ຮັບອໍເດີແລ້ວ',
+  'ສົ່ງບິນແລ້ວ',
+  'ກວດສອບແລ້ວ',
+  'ໂອນມັດຈຳແລ້ວ',
+  'ສັ່ງເຄື່ອງແລ້ວ',
+  'ເຄື່ອງມາຮອດແລ້ວ',
+  'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ',
+  'ໄດ້ຮັບເງິນແລ້ວ',
+  'ຍົກເລີກອໍເດີ'
+];
+// WALLETS is now loaded dynamically from Firestore (see state below)
+
+interface OrderItem {
+  id: string;
+  name: string;
+  qty: number;
+  cost: number;
+  price: number;
+  status?: string;
+  imageUrl?: string;
+}
+
+
+interface StockItem {
+  id: string;
+  itemName: string;
+  quantity: number;
+  costPrice: number;
+  sellingPrice: number;
+  imageUrl?: string;
+  notes?: string;
+}
+
+// =====================================================================
+// Design tokens — one source of truth so every field/card/button in the
+// form shares the exact same height, radius, border and focus treatment.
+// =====================================================================
+const card = 'bg-white dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-white/8 shadow-sm dark:shadow-none';
+const pad = 'p-5 sm:p-6 lg:p-7';
+const label = 'block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5';
+const field =
+  'w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-sm text-slate-800 placeholder-slate-400 outline-none transition-colors duration-150 focus:bg-white focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10';
+const sectionTitle = 'flex items-center gap-2.5 text-[13px] font-bold text-slate-800 uppercase tracking-wide';
+const chip = 'w-9 h-9 rounded-xl flex items-center justify-center shrink-0';
+const primaryBtn =
+  'inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-violet-600 text-white text-sm font-bold shadow-md shadow-violet-500/25 hover:bg-violet-700 active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:shadow-none disabled:active:scale-100 motion-reduce:transition-none';
+const ghostBtn =
+  'inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 active:scale-[0.98] transition-all duration-150 motion-reduce:transition-none';
+
+// --- Pure helpers (module scope — no need to recreate on every render) ---
+const formatNumber = (num: number | string) => {
+  if (!num) return '0';
+  return Number(num).toLocaleString('en-US');
+};
+const parseNumericInput = (val: string): string | null => {
+  const raw = val.replace(/,/g, '');
+  return isNaN(Number(raw)) ? null : raw;
+};
+
+// --- Reusable field primitives ---
+function MoneyInput({
+  value,
+  onChange,
+  placeholder = '0',
+  className = '',
+}: {
+  value: string | number;
+  onChange: (raw: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={formatNumber(value)}
+      onChange={(e) => {
+        const raw = parseNumericInput(e.target.value);
+        if (raw !== null) onChange(raw);
+      }}
+      placeholder={placeholder}
+      className={`${field} text-right tabular-nums font-bold ${className}`}
+    />
+  );
+}
+
+function SelectField({
+  value,
+  onChange,
+  options,
+  className = '',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  className?: string;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${field} appearance-none pr-9 cursor-pointer ${className}`}
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      <svg
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+      >
+        <path
+          fillRule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+          clipRule="evenodd"
+        />
+      </svg>
+    </div>
+  );
+}
+
+interface WalletOption {
+  id: string;
+  name: string;
+}
+
+export default function OrderForm({ editId, onSuccess }: { editId?: string; onSuccess?: () => void }) {
+  // --- State ---
+  const [rawText, setRawText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+
+  // Dynamic wallets from Firestore
+  const [walletOptions, setWalletOptions] = useState<WalletOption[]>([]);
+
+  // Customer & Order
+  const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [transport, setTransport] = useState(TRANSPORTS[0]);
+  const [village, setVillage] = useState('');
+  const [district, setDistrict] = useState('');
+  const [province, setProvince] = useState(PROVINCES[0]);
+
+  const [orderDate, setOrderDate] = useState(new Date().toLocaleDateString('en-GB'));
+  const [status, setStatus] = useState(STATUSES[0]);
+  const [wallet, setWallet] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'ຈ່າຍແລ້ວ'>('COD');
+  const [deposit, setDeposit] = useState<string>('');
+  const [shippingFee, setShippingFee] = useState<string>('');
+
+  const [items, setItems] = useState<OrderItem[]>([{ id: Date.now().toString(), name: '', qty: 1, cost: 0, price: 0 }]);
+
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>('');
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const [mobileBarCollapsed, setMobileBarCollapsed] = useState(false);
+
+  // Stock state
+  const [stocks, setStocks] = useState<StockItem[]>([]);
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [stockSearch, setStockSearch] = useState('');
+
+  // Load wallets from Firestore
+  useEffect(() => {
+    const q = query(collection(db, 'wallets'), orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list: WalletOption[] = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
+        setWalletOptions(list);
+        // Auto-select first wallet if none selected yet
+        setWallet(prev => prev || list[0]?.name || '');
+      },
+      (err) => {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderForm] wallets snapshot error:', err);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Load stocks from Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'stocks'), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as StockItem));
+      setStocks(list);
+    }, (err) => {
+      if (process.env.NODE_ENV !== 'production') console.error('[OrderForm] stocks snapshot error:', err);
+    });
+    return () => unsub();
+  }, []);
+
+  // Load existing order data when in edit mode
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'orders', editId));
+        if (!snap.exists() || cancelled) return;
+        const d = snap.data();
+        setCustomerName(d.customerName ?? '');
+        setPhone(d.phone ?? '');
+        setTransport(d.transport ?? TRANSPORTS[0]);
+        setVillage(d.village ?? '');
+        setDistrict(d.district ?? '');
+        setProvince(d.province ?? PROVINCES[0]);
+        setOrderDate(d.orderDate ?? new Date().toLocaleDateString('en-GB'));
+        setStatus(d.status ?? STATUSES[0]);
+        setWallet(d.wallet ?? '');
+        setPaymentMethod(d.paymentMethod ?? 'COD');
+        setDeposit(String(d.deposit ?? ''));
+        setShippingFee(String(d.shippingFee ?? ''));
+        if (Array.isArray(d.items) && d.items.length > 0) setItems(d.items);
+        if (d.imageUrl) { setImageUrl(d.imageUrl); setImagePreviewUrl(d.imageUrl); }
+      } catch (e) {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderForm] load edit data error:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [editId]);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
+
+  const resetForm = () => {
+    setRawText('');
+    setCustomerName(''); setPhone(''); setVillage(''); setDistrict('');
+    setItems([{ id: Date.now().toString(), name: '', qty: 1, cost: 0, price: 0 }]);
+    setDeposit(''); setShippingFee(''); setPaymentMethod('COD');
+    setImageUrl('');
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl('');
+    }
+    setMessage({ type: '', text: '' });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: '❌ ກະລຸນາເລືອກໄຟລ໌ຮູບພາບເທົ່ານັ້ນ' });
+      return;
+    }
+
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreviewUrl(previewUrl);
+    setImageUrl('');
+    setIsUploading(true);
+    setMessage({ type: '', text: '' });
+
+    // 🔥 Compress image before upload to prevent Next.js 413 Payload Too Large error
+    const compressImage = (file: File, maxWidth = 1200): Promise<File> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new window.Image();
+          img.src = event.target?.result as string;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(file);
+
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) return resolve(file);
+                resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }));
+              },
+              'image/jpeg',
+              0.8
+            );
+          };
+          img.onerror = () => resolve(file);
+        };
+        reader.onerror = () => resolve(file);
+      });
+    };
+
+    try {
+      const compressedFile = await compressImage(file);
+      const formData = new FormData();
+      formData.append('file', compressedFile);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || res.statusText || 'Upload failed');
+      }
+
+      if (data.url) {
+        setImageUrl(data.url);
+        setMessage({ type: 'success', text: '✅ ອັບໂຫຼດຮູບສຳເລັດ!' });
+        setTimeout(() => setMessage({ type: '', text: '' }), 2500);
+      } else {
+        throw new Error(data.error || 'Unknown upload response');
+      }
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      setMessage({ type: 'error', text: `❌ ເກີດຂໍ້ຜິດພາດໃນການອັບໂຫຼດຮູບ: ${err instanceof Error ? err.message : 'Unknown error'}` });
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleItemImageUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: '❌ ກະລຸນາເລືອກໄຟລ໌ຮູບພາບເທົ່ານັ້ນ' });
+      return;
+    }
+
+    setUploadingItemId(id);
+    try {
+      // Compress image before upload to prevent Next.js 413 Payload Too Large error
+      const compressedFile = await new Promise<File>((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new window.Image();
+          img.src = event.target?.result as string;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxWidth = 800; // Smaller size for item images
+            let { width, height } = img;
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => {
+              if (blob) {
+                resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+              } else {
+                resolve(file);
+              }
+            }, 'image/jpeg', 0.8);
+          };
+          img.onerror = () => resolve(file);
+        };
+        reader.onerror = () => resolve(file);
+      });
+
+      const formData = new FormData();
+      formData.append('file', compressedFile);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      
+      if (data.url) {
+        updateItem(id, 'imageUrl', data.url);
+      } else {
+        throw new Error('Unknown upload response');
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') console.error('Item image upload error:', err);
+      setMessage({ type: 'error', text: '❌ ອັບໂຫຼດຮູບລົ້ມເຫຼວ (Upload failed)' });
+    } finally {
+      setUploadingItemId(null);
+      e.target.value = '';
+    }
+  };
+  const removeImage = () => {
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl('');
+    }
+    setImageUrl('');
+  };
+
+  // --- AI Parser Logic ---
+  const handleParseData = () => {
+    if (!rawText.trim()) return;
+    let t = rawText;
+
+    // 1. Phone
+    const phoneMatch = t.match(/(?:ເບີໂທ|ໂທ|tel)[:\s]*([0-9\s]+)/i) || t.match(/(020|030)\d{7,8}/);
+    if (phoneMatch) setPhone(phoneMatch[1].replace(/\s/g, ''));
+
+    // 2. Date
+    const dateMatch = t.match(/ຮັບອໍເດີ\s*(\d{1,2}\/\d{1,2}\/\d{4})/);
+    if (dateMatch) setOrderDate(dateMatch[1]);
+
+    // 3. Customer Info (if any)
+    const nameMatch = t.match(/(?:ຊື່ລູກຄ້າ|ຊື່|Name)[:\s]*([^\n]+)/i);
+    if (nameMatch) setCustomerName(nameMatch[1].trim());
+
+    const villageMatch = t.match(/(?:ບ້ານ|ບ\.)[:\s]*([^\n ,]+)/i);
+    if (villageMatch) setVillage(villageMatch[1].trim());
+    const districtMatch = t.match(/(?:ເມືອງ|ມ\.)[:\s]*([^\n ,]+)/i);
+    if (districtMatch) setDistrict(districtMatch[1].trim());
+
+    // 4. Transport
+    if (t.toUpperCase().includes('ANOUSITH') || t.includes('ອານຸສິດ') || t.includes('ສາຂາ')) setTransport('ANOUSITH Express');
+    else if (t.toUpperCase().includes('HAL') || t.includes('ຮຸ່ງອາລຸນ')) setTransport('HAL Express');
+
+    // 5. Deposit and Payment Status
+    // Notice the spelling: ມັດຈໍາ (joh jum) vs ມັດຈຳ (sara am)
+    const depositMatch = t.match(/(?:ມັດຈຳ|ວາງມັດຈຳ|ມັດຈໍາ|ມັດຈໍາແລ້ວ)[:\s]*([\d,]+)/);
+    if (depositMatch) setDeposit(depositMatch[1].replace(/,/g, ''));
+
+    if (t.includes('ຈ່າຍແລ້ວ') || t.includes('ໂອນແລ້ວ') || t.includes('ຈ່າຍເຕັມ')) setPaymentMethod('ຈ່າຍແລ້ວ');
+
+    // 6. Items
+    const lines = t.split('\n');
+    const newItems: OrderItem[] = [];
+    
+    // Ignore meta-lines when parsing items
+    const ignoreWords = [
+      'ຊື່:', 'ຊື່ລູກຄ້າ', 'ເບີໂທ', 'tel:', 'tel ', 'ບ້ານ:', 'ເມືອງ:', 'ແຂວງ:', 'ສາຂາ',
+      'ມັດຈຳ', 'ມັດຈໍາ', 'ໂອນ', 'ຈ່າຍ', 'ລວມຍອດ', 'ຍອດຄົງເຫຼືອ', 
+      'ຮັບອໍເດີ', 'ອໍເດີໃຊ້ເວລາ', 'ຊ້າ', 'ໄວ', 'ງົດເລັ່ງ', 'ເຄື່ອງມາແລ້ວ',
+      'ສຸ່ມແຈກ', 'ຂອບໃຈ'
+    ];
+
+    lines.forEach(line => {
+      const isIgnore = ignoreWords.some(w => line.includes(w)) || line.startsWith('•') || line.startsWith('-') || line.includes('---');
+      if (!isIgnore && line.trim().length > 3) {
+        
+        // Extract QTY
+        let qty = 1;
+        const qtyMatch = line.match(/(?:x|X)\s*(\d+)|\s*(\d+)\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ)/);
+        if (qtyMatch) qty = Number(qtyMatch[1] || qtyMatch[2]);
+
+        // Extract Price (looks for numbers like 169,000 or 169000 at the end usually)
+        let price = 0;
+        const priceMatch = line.match(/[:\s](\d{2,3}(?:,\d{3})+|\d{4,})/);
+        if (priceMatch) price = Number(priceMatch[1].replace(/,/g, ''));
+
+        // Extract Name
+        let name = line.replace(/(?:x|X)\s*\d+|\s*\d+\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ)/g, '')
+                       .replace(/[:\s]\d{2,3}(?:,\d{3})+|[:\s]\d{4,}/g, '') // remove price
+                       .replace(/ກີບ|kip|ລວມ/gi, '')
+                       .replace(/^\d+\.\s*/, '') // remove numbering like "1. "
+                       .trim();
+        name = name.replace(/^[-*:\s]+|[:\s]+$/g, ''); // trim special chars at ends
+
+        if (name && price > 0) {
+          newItems.push({ id: Date.now().toString() + Math.random(), name, qty, cost: 0, price });
+        }
+      }
+    });
+
+    if (newItems.length > 0) setItems(newItems);
+    setMessage({ type: 'success', text: '✨ ດຶງຂໍ້ມູນສຳເລັດແລ້ວ! ກະລຸນາກວດສອບຄວາມຖືກຕ້ອງ.' });
+    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+  };
+
+  // --- Items Logic ---
+  const updateItem = (id: string, fieldName: keyof OrderItem, val: string | number) => {
+    setItems(items.map(item => item.id === id ? { ...item, [fieldName]: val } : item));
+  };
+  const removeItem = (id: string) => {
+    if (items.length > 1) setItems(items.filter(item => item.id !== id));
+  };
+  const addItem = () => {
+    setItems(prev => [...prev, { id: Date.now().toString(), name: '', qty: 1, cost: 0, price: 0 }]);
+  };
+
+  const selectStockItem = (item: StockItem) => {
+    const emptyRowIndex = items.findIndex(i => !i.name && !i.cost && !i.price);
+    const newItems = [...items

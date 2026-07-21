@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -66,6 +66,9 @@ export default function OrderSettings() {
   const [fetching,        setFetching]        = useState(true);
   const [message,         setMessage]         = useState<{ type: 'success' | 'error' | ''; text: string }>({ type: '', text: '' });
 
+  // ── Cleanup ref for toast timeout ────────────────────────────────────
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Load from Firestore ───────────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -83,11 +86,15 @@ export default function OrderSettings() {
           setDarkDefault(d.darkDefault || false);
         }
       } catch (e) {
-        console.error(e);
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderSettings] load error:', e);
+        setMessage({ type: 'error', text: '⚠️ ໂຫລດການຕັ້ງຄ່າບໍ່ສຳເລັດ ກະລຸນາລອງໃໝ່ອີກຄັ້ງ' });
       } finally {
         setFetching(false);
       }
     })();
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, []);
 
   // ── Save to Firestore ─────────────────────────────────────────────────
@@ -98,20 +105,25 @@ export default function OrderSettings() {
     try {
       await setDoc(doc(db, 'system', 'settings'), {
         shopName, shopPhone,
-        exchangeRate: Number(exchangeRate),
+        exchangeRate: parseFloat(exchangeRate) || 0,
         shippingTime,
-        defaultDeposit: Number(defaultDeposit),
+        defaultDeposit: parseFloat(defaultDeposit) || 0,
         availableSizes,
         showProfit, darkDefault,
         updatedAt: new Date(),
       });
       // Also save shopName/shopPhone to localStorage for copy-text use
       if (typeof window !== 'undefined') {
-        localStorage.setItem('shopName',  shopName);
-        localStorage.setItem('shopPhone', shopPhone);
+        try {
+          localStorage.setItem('shopName',  shopName);
+          localStorage.setItem('shopPhone', shopPhone);
+        } catch {
+          // localStorage may be unavailable in restricted environments
+        }
       }
       setMessage({ type: 'success', text: '✅ ບັນທຶກການຕັ້ງຄ່າລະບົບສຳເລັດແລ້ວ!' });
-      setTimeout(() => setMessage({ type: '', text: '' }), 3500);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setMessage({ type: '', text: '' }), 3500);
     } catch {
       setMessage({ type: 'error', text: 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່' });
     } finally {

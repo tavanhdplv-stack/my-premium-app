@@ -25,9 +25,12 @@ export default function OrdersListPage() {
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const ordersArray: Order[] = [];
       querySnapshot.forEach((doc) => {
-        ordersArray.push({ id: doc.id, ...doc.data() } as Order);
+        const d: any = doc.data();
+        const createdAtVal = (d.createdAt && d.createdAt.seconds) ? d.createdAt.seconds * 1000 : (d.createdAtClient || Date.now());
+        ordersArray.push({ id: doc.id, ...d, __createdAtVal: createdAtVal } as Order & { __createdAtVal?: number });
       });
-      setOrders(ordersArray);
+      ordersArray.sort((a: any, b: any) => (b.__createdAtVal || 0) - (a.__createdAtVal || 0));
+      setOrders(ordersArray as Order[]);
       setLoading(false);
     });
 

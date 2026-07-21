@@ -12,6 +12,7 @@
   --accent: #6366f1;
   --accent-glow: rgba(99, 102, 241, 0.25);
   --premium-gold: #d4a853;
+  --premium-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
 }
 
 .dark {
@@ -23,6 +24,7 @@
   --accent: #818cf8;
   --accent-glow: rgba(129, 140, 248, 0.2);
   --premium-gold: #e8c872;
+  --premium-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
 }
 
 @theme inline {
@@ -134,10 +136,17 @@ body {
   backdrop-filter: blur(24px);
   border: 1px solid var(--border);
   border-radius: 1.25rem;
-  box-shadow: 0 8px 40px -12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--premium-shadow);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.dark .premium-card {
-  box-shadow: 0 8px 40px -12px rgba(0, 0, 0, 0.4);
+
+.premium-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 45px -10px rgba(99, 102, 241, 0.15);
+}
+
+.dark .premium-card:hover {
+  box-shadow: 0 14px 45px -10px rgba(99, 102, 241, 0.25);
 }
 
 .premium-gradient-text {

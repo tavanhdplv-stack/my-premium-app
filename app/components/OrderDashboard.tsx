@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { db } from '@/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
+import OtherExpenses from './OtherExpenses';
 
 // --- Wallet types (shared with OrderWallet) ---
 interface WalletDoc {
@@ -156,6 +157,14 @@ const formatNumber = (num: number | string) => {
 
 function parseOrderDate(str?: string): { day: number; month: number; year: number } | null {
   if (!str) return null;
+  // Handle ISO format YYYY-MM-DD or YYYY-MM-DDT...
+  if (/^\d{4}-\d{2}/.test(str)) {
+    const [yearStr, monthStr, dayStr] = str.substring(0, 10).split('-');
+    const year = Number(yearStr), month = Number(monthStr), day = Number(dayStr);
+    if (!year || !month) return null;
+    return { day, month, year };
+  }
+  // Handle DD/MM/YYYY
   const p = str.split('/');
   if (p.length !== 3) return null;
   const day = Number(p[0]),
@@ -303,42 +312,71 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
   // Real‑time listeners from Firestore
   useEffect(() => {
     // Orders
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
-      setOrders(
-        snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<OrderDoc, 'id'>) }))
-      );
-      setLoading(false);
-    });
+    const unsubOrders = onSnapshot(
+      collection(db, 'orders'),
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => {
+          const data = d.data();
+          const createdAtVal = (data.createdAt && data.createdAt.seconds) ? data.createdAt.seconds * 1000 : (data.createdAtClient || Date.now());
+          return { id: d.id, ...(data as Omit<OrderDoc, 'id'>), __createdAtVal: createdAtVal } as OrderDoc & { __createdAtVal?: number };
+        });
+        list.sort((a, b) => ((b.__createdAtVal as number) || 0) - ((a.__createdAtVal as number) || 0));
+        setOrders(list);
+        setLoading(false);
+      },
+      (err) => {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] orders error:', err);
+        setLoading(false);
+      }
+    );
     // Wallets
-    const unsubWallets = onSnapshot(collection(db, 'wallets'), (snapshot) => {
-      const list: WalletDoc[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        name: d.data().name,
-        type: d.data().type,
-        sharePercent: d.data().sharePercent ?? 50,
-      }));
-      list.sort((a, b) => (a.type === 'W-COMP' ? -1 : b.type === 'W-COMP' ? 1 : 0));
-      setWallets(list);
-    });
-    // Transactions
-    const unsubTrans = onSnapshot(collection(db, 'transactions'), (snapshot) => {
-      setWalletTransactions(
-        snapshot.docs.map((d) => ({
+    const unsubWallets = onSnapshot(
+      collection(db, 'wallets'),
+      (snapshot) => {
+        const list: WalletDoc[] = snapshot.docs.map((d) => ({
           id: d.id,
-          walletId: d.data().walletId,
+          name: d.data().name,
           type: d.data().type,
-          amount: Number(d.data().amount) || 0,
-          note: d.data().note || '',
-          date: d.data().date || new Date().toISOString(),
-        }))
-      );
-    });
+          sharePercent: d.data().sharePercent ?? 50,
+        }));
+        list.sort((a, b) => (a.type === 'W-COMP' ? -1 : b.type === 'W-COMP' ? 1 : 0));
+        setWallets(list);
+      },
+      (err) => {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] wallets error:', err);
+      }
+    );
+    // Transactions
+    const unsubTrans = onSnapshot(
+      collection(db, 'transactions'),
+      (snapshot) => {
+        setWalletTransactions(
+          snapshot.docs.map((d) => ({
+            id: d.id,
+            walletId: d.data().walletId,
+            type: d.data().type,
+            amount: Number(d.data().amount) || 0,
+            note: d.data().note || '',
+            date: d.data().date || new Date().toISOString(),
+          }))
+        );
+      },
+      (err) => {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] transactions error:', err);
+      }
+    );
     // Stocks
-    const unsubStocks = onSnapshot(collection(db, 'stocks'), (snapshot) => {
-      setStocks(
-        snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StockItem, 'id'>) }))
-      );
-    });
+    const unsubStocks = onSnapshot(
+      collection(db, 'stocks'),
+      (snapshot) => {
+        setStocks(
+          snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StockItem, 'id'>) }))
+        );
+      },
+      (err) => {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] stocks error:', err);
+      }
+    );
     return () => { unsubOrders(); unsubWallets(); unsubTrans(); unsubStocks(); };
   }, []);
 
@@ -531,17 +569,12 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
       .slice(0, 8);
   }, [orders]);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400 dark:text-slate-500">
-        <div className="w-8 h-8 border-2 border-slate-200 dark:border-slate-700 border-t-violet-500 rounded-full animate-spin" />
-        <p className="text-sm font-medium">ກຳລັງໂຫຼດຂໍ້ມູນແດຊບອດ...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="animate-[fadeIn_0.35s_ease-out] space-y-6 lg:space-y-8">
+    <div className={`animate-[fadeIn_0.35s_ease-out] space-y-6 lg:space-y-8 transition-opacity duration-500 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+      
+      {/* Other Expenses Widget */}
+      <OtherExpenses />
+
       {/* Header + filters */}
       <div className={`${card} ${pad} relative overflow-hidden`}>
         <div className="absolute -right-16 -top-16 w-56 h-56 bg-violet-100/60 dark:bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -796,105 +829,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
         </div>
       )}
 
-      {/* Recent orders table */}
-      <div className={`${card} ${pad}`}>
-        <div className="flex items-center justify-between mb-5">
-          <div className={sectionTitle}>
-            <span className={`${chip} bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-300`}>
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75z" />
-              </svg>
-            </span>
-            ອໍເດີລ່າສຸດ
-          </div>
-          {onViewAll && (
-            <button
-              onClick={onViewAll}
-              className="text-xs font-bold text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 flex items-center gap-1 transition-colors"
-            >
-              ເບິ່ງທັງໝົດ
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-              </svg>
-            </button>
-          )}
-        </div>
 
-        {recentOrders.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 dark:text-slate-500">
-            <p className="text-sm font-medium">ຍັງບໍ່ມີອໍເດີ</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto -mx-2">
-            <table className="w-full min-w-[640px]">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-white/8">
-                  {['ລູກຄ້າ', 'ສິນຄ້າ', 'ວັນທີ', 'ສະຖານະ', 'ຍອດເງິນ'].map((h) => (
-                    <th
-                      key={h}
-                      className="text-left text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider py-3 px-3 first:pl-2"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentOrders.map((order) => {
-                  const statusMeta = STATUS_META.find((s) => s.value === order.status);
-                  const darkChip = STATUS_CHIP_DARK[order.status || ''] || '';
-                  return (
-                    <tr
-                      key={order.id}
-                      className="border-b border-slate-50 dark:border-white/5 hover:bg-slate-50/80 dark:hover:bg-white/3 transition-colors group"
-                    >
-                      <td className="py-3.5 px-3 first:pl-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-                            {(order.customerName || '?').charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                              {order.customerName || '—'}
-                            </p>
-                            {order.phone && (
-                              <p className="text-[11px] text-slate-400 dark:text-slate-500">{order.phone}</p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <p className="text-sm text-slate-600 dark:text-slate-300 truncate max-w-[180px]">
-                          {getProductSummary(order.items)}
-                        </p>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
-                          {order.orderDate || '—'}
-                        </p>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            statusMeta?.chip || 'bg-slate-100 text-slate-600'
-                          } ${darkChip}`}
-                        >
-                          {statusMeta?.label || order.status || '—'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <p className="text-sm font-bold tabular-nums text-slate-900 dark:text-white">
-                          {formatNumber(order.price || 0)} ₭
-                        </p>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
       {/* Order status widget */}
       <div className={`${card} ${pad}`}>

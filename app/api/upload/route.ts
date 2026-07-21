@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file');
+    const widthField = formData.get('width');
+    const resizeWidth = widthField ? Number(String(widthField)) : undefined;
 
     if (!file || typeof (file as { arrayBuffer?: unknown }).arrayBuffer !== 'function') {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -36,8 +38,12 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+      const options: any = { folder: 'tawan-orders', resource_type: 'image' };
+      if (resizeWidth && Number.isFinite(resizeWidth) && resizeWidth > 0) {
+        options.transformation = [{ width: resizeWidth, crop: 'scale' }];
+      }
       cloudinary.uploader
-        .upload_stream({ folder: 'tawan-orders', resource_type: 'image' }, (error, uploadResult) => {
+        .upload_stream(options, (error, uploadResult) => {
           if (error) reject(error);
           else if (!uploadResult?.secure_url) reject(new Error('Upload failed'));
           else resolve(uploadResult);

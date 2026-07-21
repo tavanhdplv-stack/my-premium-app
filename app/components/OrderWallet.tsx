@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '@/firebase';
-import { collection, onSnapshot, addDoc, setDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
 
 // --- Interfaces ---
 interface Wallet {
@@ -42,6 +42,7 @@ export default function OrderWallet() {
   const [showTransModal, setShowTransModal] = useState<{ type: 'income' | 'expense'; walletId: string } | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<Wallet | null>(null);
   const [showProfitSplit, setShowProfitSplit] = useState(false);
+  const [expandedWalletId, setExpandedWalletId] = useState<string | null>('W-COMP');
 
   // Form States
   const [newWalletName, setNewWalletName] = useState('');
@@ -309,115 +310,102 @@ export default function OrderWallet() {
             return (
               <div
                 key={wallet.id}
-                className={`rounded-2xl p-5 shadow-xl border transition-all duration-200 relative group ${
+                className={`rounded-3xl p-5 sm:p-6 shadow-2xl border backdrop-blur-xl transition-all duration-300 relative group overflow-hidden ${
                   isMain
-                    ? 'bg-gradient-to-br from-slate-900 to-indigo-950 border-indigo-500/50'
-                    : 'bg-white/[0.03] border-white/10 hover:border-white/20'
+                    ? 'bg-gradient-to-br from-indigo-950/90 to-slate-900/95 border-indigo-500/30 hover:border-indigo-400/50 hover:shadow-indigo-500/20'
+                    : 'bg-white/[0.04] border-white/10 hover:border-white/20 hover:bg-white/[0.08]'
                 }`}
               >
+                {/* Background decorative glow */}
                 {isMain && (
-                  <span className="absolute top-4 right-4 text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                    👑 ກະເປົາຫຼັກ
-                  </span>
+                  <div className="absolute -right-20 -top-20 w-48 h-48 bg-indigo-500/20 blur-[50px] rounded-full pointer-events-none" />
                 )}
 
-                <div className="mb-4">
-                  <h3 className="text-lg font-bold text-white">{wallet.name}</h3>
-                  <p className="text-[10px] text-slate-500 font-mono">{wallet.id}</p>
+                {/* Header */}
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2 tracking-wide">
+                      {isMain ? (
+                        <svg className="w-5 h-5 text-amber-400 drop-shadow-md" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l1.22 3.76h3.96l-3.2 2.33 1.22 3.76L10 9.53l-3.2 2.32 1.22-3.76-3.2-2.33h3.96L10 2z"/></svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                      )}
+                      {wallet.name}
+                    </h3>
+                    <p className="text-[10px] text-slate-400/80 font-mono mt-1 opacity-70">ID: {wallet.id}</p>
+                  </div>
+                  {isMain && (
+                    <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1.25 rounded-full font-bold uppercase tracking-wider backdrop-blur-md shadow-sm">
+                      Main Wallet
+                    </span>
+                  )}
                 </div>
 
-                <div className="mb-4">
-                  <span className="text-xs text-slate-400">ຍອດຄົງເຫຼືອ ({monthFilter === 'all' ? 'ທັງໝົດ' : monthFilter})</span>
-                  <p className={`text-3xl font-black font-mono ${stats.bal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {stats.bal.toLocaleString()} ₭
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-                  <div className="bg-black/20 rounded-lg p-2">
-                    <p className="text-[10px] text-slate-400">ທຶນແທ້</p>
-                    <p className="text-xs font-bold text-blue-300">{stats.capital.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-black/20 rounded-lg p-2">
-                    <p className="text-[10px] text-slate-400">ຮັບເຂົ້າ</p>
-                    <p className="text-xs font-bold text-emerald-400">+{stats.in.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-black/20 rounded-lg p-2">
-                    <p className="text-[10px] text-slate-400">ຈ່າຍອອກ</p>
-                    <p className="text-xs font-bold text-rose-400">-{stats.out.toLocaleString()}</p>
+                {/* Balance */}
+                <div className="mb-6 relative z-10">
+                  <span className="text-[11px] text-slate-400/90 uppercase tracking-widest font-bold">
+                    ຍອດຄົງເຫຼືອ ({monthFilter === 'all' ? 'ທັງໝົດ' : monthFilter})
+                  </span>
+                  <div className="flex items-end gap-1.5 mt-1">
+                    <p className={`text-4xl sm:text-5xl font-black tabular-nums tracking-tight drop-shadow-sm ${stats.bal >= 0 ? 'text-white' : 'text-rose-400'}`}>
+                      {stats.bal.toLocaleString()}
+                    </p>
+                    <span className={`text-lg font-bold mb-1.5 ${stats.bal >= 0 ? 'text-slate-300' : 'text-rose-400/70'}`}>₭</span>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mb-6 relative z-10">
+                  <div className="bg-slate-950/40 rounded-2xl p-3 border border-white/5 backdrop-blur-sm shadow-inner transition-colors group-hover:bg-slate-950/50">
+                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                      <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      ທຶນແທ້
+                    </div>
+                    <p className="text-sm sm:text-base font-bold text-blue-100 tabular-nums">{stats.capital.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-emerald-950/20 rounded-2xl p-3 border border-emerald-500/10 backdrop-blur-sm shadow-inner transition-colors group-hover:bg-emerald-950/30">
+                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-emerald-500/90 uppercase font-bold tracking-wider">
+                      <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                      ຮັບເຂົ້າ
+                    </div>
+                    <p className="text-sm sm:text-base font-bold text-emerald-400 tabular-nums">+{stats.in.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-rose-950/20 rounded-2xl p-3 border border-rose-500/10 backdrop-blur-sm shadow-inner transition-colors group-hover:bg-rose-950/30">
+                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-rose-500/90 uppercase font-bold tracking-wider">
+                      <svg className="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
+                      ຈ່າຍອອກ
+                    </div>
+                    <p className="text-sm sm:text-base font-bold text-rose-400 tabular-nums">-{stats.out.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 relative z-10 pt-4 border-t border-white/10">
                   <button
                     onClick={() => setShowTransModal({ type: 'income', walletId: wallet.id })}
-                    className="flex-1 text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-2 rounded-lg hover:bg-emerald-500/20 font-bold transition"
+                    className="flex-1 flex flex-col sm:flex-row items-center justify-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-2.5 sm:py-3 rounded-xl hover:bg-emerald-500/20 hover:border-emerald-500/40 font-bold transition-all active:scale-95"
                   >
-                    ເຕີມທຶນ
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    <span>ເຕີມເງິນ</span>
                   </button>
                   <button
                     onClick={() => setShowTransModal({ type: 'expense', walletId: wallet.id })}
-                    className="flex-1 text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 py-2 rounded-lg hover:bg-rose-500/20 font-bold transition"
+                    className="flex-1 flex flex-col sm:flex-row items-center justify-center gap-1.5 text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 py-2.5 sm:py-3 rounded-xl hover:bg-rose-500/20 hover:border-rose-500/40 font-bold transition-all active:scale-95"
                   >
-                    ຖອນອອກ
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4"/></svg>
+                    <span>ຖອນອອກ</span>
                   </button>
                   <button
                     onClick={() => setShowDetailsModal(wallet)}
-                    className="text-xs bg-white/5 text-slate-300 border border-white/10 py-2 px-3 rounded-lg hover:bg-white/10 transition"
+                    className="flex-[1.2] flex flex-col sm:flex-row items-center justify-center gap-1.5 text-xs bg-white text-slate-900 py-2.5 sm:py-3 rounded-xl hover:bg-slate-100 font-extrabold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
                   >
-                    ລາຍລະອຽດ
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>ບິນລາຍລະອຽດ</span>
                   </button>
                 </div>
               </div>
             );
           })
-        )}
-      </div>
-
-      {/* Recent Transactions Summary */}
-      <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5 shadow-xl">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4 pb-2 border-b border-white/5">
-          📋 ລາຍການທຸລະກຳລ່າສຸດ
-        </h3>
-        {transactions.length === 0 ? (
-          <p className="text-center py-8 text-slate-500 text-sm">ຍັງບໍ່ມີລາຍການທຸລະກຳ</p>
-        ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-            {transactions.slice(0, 15).map((t) => {
-              const wallet = wallets.find((w) => w.id === t.walletId);
-              return (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between text-sm py-2 border-b border-white/5 last:border-0"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`w-2 h-2 rounded-full shrink-0 ${
-                        t.type === 'income'
-                          ? 'bg-emerald-400'
-                          : t.type === 'profit_split'
-                          ? 'bg-amber-400'
-                          : 'bg-rose-400'
-                      }`}
-                    />
-                    <div>
-                      <p className="text-slate-200 font-medium">{t.note || (t.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນອອກ')}</p>
-                      <p className="text-[10px] text-slate-500">
-                        {wallet?.name || t.walletId} · {new Date(t.date).toLocaleDateString('lo-LA')}
-                      </p>
-                    </div>
-                  </div>
-                  <span
-                    className={`font-mono font-bold text-sm ${
-                      t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'
-                    }`}
-                  >
-                    {t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()} ₭
-                  </span>
-                </div>
-              );
-            })}
-          </div>
         )}
       </div>
 
@@ -548,92 +536,260 @@ export default function OrderWallet() {
         </div>
       )}
 
-      {/* Wallet Details Modal */}
+      {/* Wallet Details Modal — Statement/Invoices */}
       {showDetailsModal && (
         <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
           onClick={() => setShowDetailsModal(null)}
         >
           <div
-            className="bg-slate-900 border border-white/10 rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center mb-4">
+            {/* ── Header ── */}
+            <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-slate-100 shrink-0">
               <div>
-                <h3 className="text-xl font-bold text-white">ປະຫວັດກະເປົາ: {showDetailsModal.name}</h3>
-                <p className="text-xs text-slate-500">{showDetailsModal.id}</p>
+                <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
+                  <span className="text-xl">📋</span>
+                  ລາຍລະອຽດບິນ &amp; ການເຄື່ອນໄຫວ (Statement/Invoices)
+                </h3>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                    🏦 ກະເປົາ: {showDetailsModal.name}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
+                    <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    ສະແດງສະຫຼຸບ
+                  </span>
+                </div>
               </div>
-              <button onClick={() => setShowDetailsModal(null)} className="text-slate-400 hover:text-white text-2xl">
-                &times;
+              <button
+                onClick={() => setShowDetailsModal(null)}
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors shrink-0 text-xl font-light"
+              >
+                ×
               </button>
             </div>
 
-            {/* Stats summary */}
-            {(() => {
-              const allStats = getWalletStats(showDetailsModal.id, 'all');
-              return (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                  <div className="bg-slate-800/60 rounded-lg p-3 text-center">
-                    <p className="text-[10px] text-slate-400 mb-1">ຍອດຄົງເຫຼືອ</p>
-                    <p className={`text-lg font-bold font-mono ${allStats.bal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {allStats.bal.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="bg-slate-800/60 rounded-lg p-3 text-center">
-                    <p className="text-[10px] text-slate-400 mb-1">ທຶນລົງ</p>
-                    <p className="text-lg font-bold font-mono text-blue-300">{allStats.capital.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-slate-800/60 rounded-lg p-3 text-center">
-                    <p className="text-[10px] text-slate-400 mb-1">ຮັບເຂົ້າທັງໝົດ</p>
-                    <p className="text-lg font-bold font-mono text-emerald-400">+{allStats.in.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-slate-800/60 rounded-lg p-3 text-center">
-                    <p className="text-[10px] text-slate-400 mb-1">ຈ່າຍອອກທັງໝົດ</p>
-                    <p className="text-lg font-bold font-mono text-rose-400">-{allStats.out.toLocaleString()}</p>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* ── Table Body ── */}
+            <div className="flex-1 overflow-auto">
+              {(() => {
+                // Build combined history
+                const history: any[] = [];
 
-            {/* Transaction history */}
-            <h4 className="text-sm font-bold text-slate-300 mb-3">ລາຍການທຸລະກຳ</h4>
-            {getWalletTransactions(showDetailsModal.id).length === 0 ? (
-              <p className="text-center py-6 text-slate-500 text-sm">ຍັງບໍ່ມີລາຍການ</p>
-            ) : (
-              <div className="space-y-2">
-                {getWalletTransactions(showDetailsModal.id).map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex items-center justify-between text-sm py-2 border-b border-white/5"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${
-                          t.type === 'income'
-                            ? 'bg-emerald-400'
-                            : t.type === 'profit_split'
-                            ? 'bg-amber-400'
-                            : 'bg-rose-400'
-                        }`}
-                      />
-                      <div>
-                        <p className="text-slate-200">{t.note || t.type}</p>
-                        <p className="text-[10px] text-slate-500">
-                          {new Date(t.date).toLocaleString('lo-LA')}
-                        </p>
-                      </div>
+                // Manual transactions
+                getWalletTransactions(showDetailsModal.id).forEach(t => {
+                  history.push({
+                    id: t.id,
+                    date: new Date(t.date),
+                    rowType: 'trans',
+                    typeLabel: t.type === 'income' ? 'ຮັບເຂົ້າ / ເຕີມທຶນ'
+                             : t.type === 'profit_split' ? 'ປັນຜົນຮຸ້ນສ່ວນ'
+                             : 'ຄ່າໃຊ້ຈ່າຍອື່ນໆ',
+                    typeColor: t.type === 'income' ? 'text-emerald-600 font-bold'
+                             : t.type === 'profit_split' ? 'text-amber-600 font-bold'
+                             : 'text-slate-600',
+                    detail: t.note || '-',
+                    subDetail: null,
+                    badges: [],
+                    inAmt: t.type === 'income' ? t.amount : null,
+                    outAmt: t.type !== 'income' ? t.amount : null,
+                    rawId: t.id,
+                  });
+                });
+
+                // Orders for this wallet
+                orders.forEach(o => {
+                  if (o.status === 'ຍົກເລີກອໍເດີ') return;
+                  let match = false;
+                  if (showDetailsModal.type === 'W-COMP') {
+                    match = !o.wallet || o.wallet.includes('ບໍລິສັດ') || o.wallet.includes('BCEL') || o.wallet.includes('W-COMP');
+                  } else {
+                    const cleanName = showDetailsModal.name.split(/[(\s]/)[0];
+                    match = !!o.wallet?.includes(cleanName);
+                  }
+                  if (!match) return;
+
+                  const income = o.paymentMethod === 'ຈ່າຍແລ້ວ'
+                    ? (Number(o.price) || 0)
+                    : (Number(o.deposit) || 0);
+                  const cost = (Number(o.totalCost) || 0) + (Number(o.shippingFee) || 0) + (Number(o.totalExpenses) || 0);
+                  if (income === 0 && cost === 0) return;
+
+                  const d = o.createdAt?.seconds
+                    ? new Date(o.createdAt.seconds * 1000)
+                    : (o.orderDate ? new Date(o.orderDate) : new Date());
+
+                  const itemsStr = Array.isArray(o.items)
+                    ? o.items.map((i: any) => `${i.name} (x${i.qty})`).join(', ')
+                    : '';
+
+                  const badges: any[] = [];
+                  if (o.status) {
+                    const isGreen = o.status === 'ປິດບິນແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ';
+                    badges.push({
+                      text: o.status,
+                      cls: isGreen
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                        : 'bg-amber-50 text-amber-600 border-amber-200',
+                    });
+                  }
+                  if (cost > 0) {
+                    badges.push({ text: 'ລົງທຶນສັ່ງເຄື່ອງ', cls: 'bg-rose-50 text-rose-600 border-rose-200' });
+                  }
+
+                  history.push({
+                    id: o.id,
+                    date: d,
+                    rowType: 'order',
+                    typeLabel: 'ບິນອໍເດີ',
+                    typeColor: 'text-blue-600 font-bold',
+                    detail: `[${o.id.slice(-10)}] ${o.customerName || ''}`.trim(),
+                    subDetail: itemsStr,
+                    badges,
+                    inAmt: income > 0 ? income : null,
+                    outAmt: cost > 0 ? cost : null,
+                    rawId: null,
+                  });
+                });
+
+                history.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+                if (history.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 mb-3 opacity-30">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v6h6v10H6z"/>
+                      </svg>
+                      <p className="text-sm font-medium">ຍັງບໍ່ມີການເຄື່ອນໄຫວ</p>
                     </div>
-                    <span
-                      className={`font-mono font-bold ${
-                        t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()} ₭
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+                  );
+                }
+
+                return (
+                  <table className="w-full text-sm border-collapse">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-slate-50 border-b-2 border-slate-200 text-slate-600">
+                        <th className="px-4 py-3 text-left font-bold whitespace-nowrap">ວັນທີ</th>
+                        <th className="px-4 py-3 text-left font-bold whitespace-nowrap">ປະເພດ</th>
+                        <th className="px-4 py-3 text-left font-bold">ລາຍລະອຽດ (Invoice Details)</th>
+                        <th className="px-4 py-3 text-right font-bold whitespace-nowrap text-emerald-600">ຮັບເຂົ້າ (₭)</th>
+                        <th className="px-4 py-3 text-right font-bold whitespace-nowrap text-rose-600">ຫັກອອກ (₭)</th>
+                        <th className="px-4 py-3 text-center font-bold whitespace-nowrap">ຈັດການ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.map((h, i) => (
+                        <tr
+                          key={`${h.id}-${i}`}
+                          className={`border-b border-slate-100 transition-colors ${
+                            h.rowType === 'order'
+                              ? 'hover:bg-blue-50/40'
+                              : 'hover:bg-slate-50/80'
+                          }`}
+                        >
+                          {/* Date */}
+                          <td className="px-4 py-3.5 text-slate-500 text-xs whitespace-nowrap align-top pt-4">
+                            {h.date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </td>
+
+                          {/* Type */}
+                          <td className={`px-4 py-3.5 whitespace-nowrap align-top pt-4 text-[13px] ${h.typeColor}`}>
+                            {h.typeLabel}
+                          </td>
+
+                          {/* Detail */}
+                          <td className="px-4 py-3.5 min-w-[200px] align-top">
+                            <div className="font-semibold text-slate-800 text-[13px]">{h.detail}</div>
+                            {h.subDetail && (
+                              <div className="text-[11px] text-slate-400 mt-0.5">{h.subDetail}</div>
+                            )}
+                            {h.badges && h.badges.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {h.badges.map((b: any, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-bold ${b.cls}`}
+                                  >
+                                    {b.cls.includes('emerald') && '✅ '}{b.text}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Income */}
+                          <td className="px-4 py-3.5 text-right align-top pt-4">
+                            {h.inAmt != null ? (
+                              <span className="font-bold text-emerald-600 tabular-nums">
+                                +{h.inAmt.toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+
+                          {/* Expense */}
+                          <td className="px-4 py-3.5 text-right align-top pt-4">
+                            {h.outAmt != null ? (
+                              <span className="font-bold text-rose-500 tabular-nums">
+                                -{h.outAmt.toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 py-3.5 text-center align-top pt-3.5">
+                            {h.rowType === 'trans' ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  title="ລຶບ"
+                                  onClick={() => {
+                                    if (confirm('ລຶບລາຍການນີ້?')) deleteDoc(doc(db, 'transactions', h.rawId));
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all"
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                  </svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                title="ດູລາຍລະອຽດ"
+                                className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-200 transition-all mx-auto"
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+                                </svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+
+            {/* ── Footer ── */}
+            <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
+              <p className="text-xs text-slate-400">
+                ລາຍການທຸລະກຳທັງໝົດຂອງ <span className="font-bold text-slate-600">{showDetailsModal.name}</span>
+              </p>
+              <button
+                onClick={() => setShowDetailsModal(null)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition-colors text-sm"
+              >
+                ປິດໜ້າຈໍ
+              </button>
+            </div>
           </div>
         </div>
       )}

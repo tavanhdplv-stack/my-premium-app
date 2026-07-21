@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { db } from '@/firebase';
 import {
-  collection, addDoc, serverTimestamp, query,
-  orderBy, onSnapshot, updateDoc, deleteDoc, doc,
+  collection, addDoc, serverTimestamp,
+  onSnapshot, updateDoc, deleteDoc, doc,
 } from 'firebase/firestore';
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -36,6 +36,8 @@ export default function OrderStock() {
   const [notes, setNotes]             = useState('');
   const [imageFile, setImageFile]     = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [imageSizeOption, setImageSizeOption] = useState<'small' | 'medium' | 'large'>('medium');
+  const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
   const [dragActive, setDragActive]   = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0); // 0–100
   const [loading, setLoading]         = useState(false);
@@ -47,19 +49,51 @@ export default function OrderStock() {
   const [listLoading, setListLoading] = useState(true);
   const [search, setSearch]           = useState('');
   const [deletingId, setDeletingId]   = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [editingId, setEditingId]     = useState<string | null>(null);
 
   // Revoke object URL on unmount / change
   useEffect(() => {
     return () => { if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl); };
   }, [imagePreviewUrl]);
 
+  // Close preview modal on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreviewModalUrl(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Real-time Firestore listener
   useEffect(() => {
-    const q = query(collection(db, 'stocks'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setStocks(snap.docs.map(d => ({ id: d.id, ...d.data() } as StockItem)));
-      setListLoading(false);
-    });
+    const q = collection(db, 'stocks');
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const docs = snap.docs.map(d => {
+          const ddata = d.data();
+          const createdAt = ddata.createdAt as { seconds?: number } | null;
+          const createdAtVal = createdAt?.seconds ? createdAt.seconds * 1000 : (ddata.createdAtClient as number || Date.now());
+          return {
+            id: d.id,
+            itemName: ddata.itemName || '',
+            quantity: typeof ddata.quantity === 'number' ? ddata.quantity : 0,
+            costPrice: typeof ddata.costPrice === 'number' ? ddata.costPrice : 0,
+            sellingPrice: typeof ddata.sellingPrice === 'number' ? ddata.sellingPrice : 0,
+            imageUrl: ddata.imageUrl || '',
+            notes: ddata.notes || '',
+            __createdAtVal: createdAtVal,
+          } as StockItem & { __createdAtVal: number };
+        });
+        docs.sort((a, b) => (b as StockItem & { __createdAtVal: number }).__createdAtVal - (a as StockItem & { __createdAtVal: number }).__createdAtVal);
+        setStocks(docs as StockItem[]);
+        setListLoading(false);
+      },
+      (err) => {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderStock] snapshot error:', err);
+        setListLoading(false);
+      }
+    );
     return () => unsub();
   }, []);
 
@@ -88,8 +122,51 @@ export default function OrderStock() {
 
   // ── Upload to Cloudinary via API route ─────────────────────────────
   const uploadImage = async (file: File): Promise<string> => {
+    // 🔥 Compress image before upload to prevent Next.js 413 Payload Too Large error
+    const compressImage = (file: File, maxWidth = 1200): Promise<File> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new window.Image();
+          img.src = event.target?.result as string;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(file);
+
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) return resolve(file);
+                resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }));
+              },
+              'image/jpeg',
+              0.8
+            );
+          };
+          img.onerror = () => resolve(file);
+        };
+        reader.onerror = () => resolve(file);
+      });
+    };
+
+    const compressedFile = await compressImage(file);
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', compressedFile);
+    // pass desired width to API: small=400, medium=800, large=1400
+    const sizeMap: Record<string, number> = { small: 400, medium: 800, large: 1400 };
+    formData.append('width', String(sizeMap[imageSizeOption]));
 
     setUploadProgress(10);
     const response = await fetch('/api/upload', { method: 'POST', body: formData });
@@ -117,33 +194,64 @@ export default function OrderStock() {
     setMessage({ type: '', text: '' });
 
     try {
-      let finalImageUrl = '';
+      let finalImageUrl = editingId ? stocks.find(s => s.id === editingId)?.imageUrl || '' : '';
       if (imageFile) {
         finalImageUrl = await uploadImage(imageFile);
       }
 
-      await addDoc(collection(db, 'stocks'), {
-        itemName: itemName.trim(),
-        quantity: Number(quantity),
-        costPrice: costPrice ? Number(costPrice) : 0,
-        sellingPrice: Number(sellingPrice),
-        imageUrl: finalImageUrl,
-        notes: notes.trim(),
-        createdAt: serverTimestamp(),
-      });
+      if (editingId) {
+        await updateDoc(doc(db, 'stocks', editingId), {
+          itemName: itemName.trim(),
+          quantity: Number(quantity),
+          costPrice: costPrice ? Number(costPrice) : 0,
+          sellingPrice: Number(sellingPrice),
+          imageUrl: finalImageUrl,
+          notes: notes.trim(),
+        });
+        setMessage({ type: 'success', text: '✅ ແກ້ໄຂຂໍ້ມູນສິນຄ້າສຳເລັດແລ້ວ!' });
+      } else {
+        await addDoc(collection(db, 'stocks'), {
+          itemName: itemName.trim(),
+          quantity: Number(quantity),
+          costPrice: costPrice ? Number(costPrice) : 0,
+          sellingPrice: Number(sellingPrice),
+          imageUrl: finalImageUrl,
+          notes: notes.trim(),
+          createdAt: serverTimestamp(),
+          createdAtClient: Date.now(),
+        });
+        setMessage({ type: 'success', text: '✅ ບັນທຶກສິນຄ້າເຂົ້າສາງສຳເລັດແລ້ວ!' });
+      }
 
-      setMessage({ type: 'success', text: '✅ ບັນທຶກສິນຄ້າເຂົ້າສາງສຳເລັດແລ້ວ!' });
       // Reset
-      setItemName(''); setQuantity(''); setCostPrice(''); setSellingPrice(''); setNotes('');
-      setImageFile(null); setImagePreviewUrl(''); setUploadProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      resetForm();
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV !== 'production') console.error(err);
       setMessage({ type: 'error', text: `ເກີດຂໍ້ຜິດພາດ: ${err instanceof Error ? err.message : 'ບໍ່ສາມາດບັນທຶກໄດ້'}` });
       setUploadProgress(0);
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setItemName(''); setQuantity(''); setCostPrice(''); setSellingPrice(''); setNotes('');
+    setImageFile(null); setImagePreviewUrl(''); setUploadProgress(0);
+    setImageSizeOption('medium');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleEdit = (item: StockItem) => {
+    setEditingId(item.id);
+    setItemName(item.itemName);
+    setQuantity(item.quantity.toString());
+    setCostPrice(item.costPrice ? item.costPrice.toString() : '');
+    setSellingPrice(item.sellingPrice ? item.sellingPrice.toString() : '');
+    setNotes(item.notes || '');
+    setImageFile(null);
+    setImagePreviewUrl(item.imageUrl || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // ── Quick quantity update ───────────────────────────────────────────
@@ -201,6 +309,17 @@ export default function OrderStock() {
           )}
         </div>
       </div>
+      {/* Preview modal */}
+      {previewModalUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setPreviewModalUrl(null)}>
+          <div className="max-w-[90%] max-h-[90%] p-4" onClick={(e) => e.stopPropagation()}>
+            <img src={previewModalUrl} alt="Preview" className="max-w-full max-h-[80vh] rounded-2xl shadow-lg" />
+            <div className="mt-3 text-right">
+              <button onClick={() => setPreviewModalUrl(null)} className="px-3 py-2 bg-white/90 rounded-lg text-sm">ปิด</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
@@ -215,7 +334,7 @@ export default function OrderStock() {
               </svg>
             </div>
             <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-              ເພີ່ມສິນຄ້າໃໝ່
+              {editingId ? 'ແກ້ໄຂສິນຄ້າ' : 'ເພີ່ມສິນຄ້າໃໝ່'}
             </span>
           </div>
 
@@ -282,6 +401,14 @@ export default function OrderStock() {
                     <p className="absolute bottom-2 left-3 text-white text-xs font-medium drop-shadow">
                       {imageFile?.name}
                     </p>
+                    <div className="absolute top-2 left-3 flex items-center gap-2">
+                      <select value={imageSizeOption} onChange={e => setImageSizeOption(e.target.value as any)} className="text-xs bg-white/80 rounded-md px-2 py-1">
+                        <option value="small">Small</option>
+                        <option value="medium">Medium</option>
+                        <option value="large">Large</option>
+                      </select>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setPreviewModalUrl(imagePreviewUrl); }} className="text-xs bg-white/80 rounded-md px-2 py-1">ขยาย</button>
+                    </div>
                   </div>
                 ) : (
                   /* ── Placeholder ── */
@@ -373,25 +500,36 @@ export default function OrderStock() {
               </div>
             )}
 
-            {/* Submit */}
-            <button type="submit" disabled={loading} className={`${primaryBtn} w-full`}>
-              {loading ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  {uploadProgress > 0 ? `ອັບໂຫຼດ ${uploadProgress}%...` : 'ກຳລັງບັນທຶກ...'}
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                  </svg>
-                  ບັນທຶກເຂົ້າສາງ
-                </>
+            {/* Submit & Cancel */}
+            <div className="flex gap-2">
+              <button type="submit" disabled={loading} className={`${primaryBtn} flex-1`}>
+                {loading ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    {uploadProgress > 0 ? `ອັບໂຫຼດ ${uploadProgress}%...` : 'ກຳລັງບັນທຶກ...'}
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                    </svg>
+                    {editingId ? 'ບັນທຶກການແກ້ໄຂ' : 'ບັນທຶກເຂົ້າສາງ'}
+                  </>
+                )}
+              </button>
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="px-4 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors"
+                >
+                  ຍົກເລີກ
+                </button>
               )}
-            </button>
+            </div>
           </form>
         </div>
 
@@ -553,18 +691,29 @@ export default function OrderStock() {
                           <span className="text-xs text-slate-400 truncate block">{item.notes || '—'}</span>
                         </td>
 
-                        {/* Delete */}
+                        {/* Manage */}
                         <td className="py-3 px-2 text-center">
-                          <button
-                            onClick={() => handleDelete(item.id)}
-                            disabled={deletingId === item.id}
-                            className={`${iconBtn} bg-slate-100 dark:bg-white/8 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 mx-auto`}
-                            title="ລຶບສິນຄ້ານີ້"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                            </svg>
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className={`${iconBtn} bg-slate-100 dark:bg-white/8 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400`}
+                              title="ແກ້ໄຂສິນຄ້າ"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.89 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.89l12.683-12.683a4.5 4.5 0 011.13-1.89z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              disabled={deletingId === item.id}
+                              className={`${iconBtn} bg-slate-100 dark:bg-white/8 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400`}
+                              title="ລຶບສິນຄ້ານີ້"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                              </svg>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

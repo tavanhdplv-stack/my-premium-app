@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { db } from '@/firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, increment } from 'firebase/firestore';
+import type { Agent } from '@/app/types';
 
 // --- Constants ---
 const PROVINCES = [
@@ -23,12 +24,22 @@ const STATUSES = [
 ];
 // WALLETS is now loaded dynamically from Firestore (see state below)
 
+interface StockItem {
+  id: string;
+  itemName: string;
+  quantity: number;
+  costPrice: number;
+  sellingPrice: number;
+  imageUrl: string;
+}
+
 interface OrderItem {
   id: string;
   name: string;
   qty: number;
   cost: number;
   price: number;
+  imageUrl?: string;
 }
 
 interface Expense {
@@ -134,10 +145,67 @@ interface WalletOption {
   name: string;
 }
 
-export default function OrderForm({ editId }: { editId?: string }) {
+export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { editId?: string, preSelectedAgentId?: string, onSuccess?: () => void }) {
   // --- State ---
   const [rawText, setRawText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  
+  // Stock data
+  const [stocks, setStocks] = useState<StockItem[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentId, setAgentId] = useState<string>('');
+  const [showStockDropdown, setShowStockDropdown] = useState<string | null>(null);
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [stockSearch, setStockSearch] = useState('');
+
+  const handleSelectFromStock = (stock: StockItem) => {
+    const newItem: OrderItem = {
+      id: Date.now().toString(),
+      name: stock.itemName,
+      qty: 1,
+      cost: stock.costPrice,
+      price: stock.sellingPrice,
+      imageUrl: stock.imageUrl
+    };
+    if (items.length === 1 && items[0].name === '' && items[0].cost === 0 && items[0].price === 0) {
+      setItems([newItem]);
+    } else {
+      setItems([...items, newItem]);
+    }
+    setShowStockModal(false);
+    setStockSearch('');
+  };
+
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'stocks'), (snapshot) => {
+      const data = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          itemName: d.itemName || '',
+          quantity: Number(d.quantity) || 0,
+          costPrice: Number(d.costPrice) || 0,
+          sellingPrice: Number(d.sellingPrice) || 0,
+          imageUrl: d.imageUrl || ''
+        } as StockItem;
+      });
+      setStocks(data);
+    });
+    return () => unsub();
+  }, []);
+
+
+
+  useEffect(() => {
+    const unsubAgents = onSnapshot(collection(db, 'agents'), (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Agent));
+      setAgents(data);
+    });
+    return () => unsubAgents();
+  }, []);
+
   const [message, setMessage] = useState({ type: '', text: '' });
 
   // Dynamic wallets from Firestore
@@ -150,6 +218,7 @@ export default function OrderForm({ editId }: { editId?: string }) {
   const [village, setVillage] = useState('');
   const [district, setDistrict] = useState('');
   const [province, setProvince] = useState(PROVINCES[0]);
+  const [orderedBy, setOrderedBy] = useState('');
 
   const [orderDate, setOrderDate] = useState(new Date().toLocaleDateString('en-GB'));
   const [status, setStatus] = useState(STATUSES[0]);
@@ -190,7 +259,7 @@ export default function OrderForm({ editId }: { editId?: string }) {
 
   const resetForm = () => {
     setRawText('');
-    setCustomerName(''); setPhone(''); setVillage(''); setDistrict('');
+    setCustomerName(''); setPhone(''); setAgentId(''); setVillage(''); setDistrict('');
     setItems([{ id: Date.now().toString(), name: '', qty: 1, cost: 0, price: 0 }]);
     setDeposit(''); setShippingFee(''); setPaymentMethod('COD');
     setExpenses([]); setExpenseName(''); setExpenseAmount('');
@@ -317,9 +386,94 @@ export default function OrderForm({ editId }: { editId?: string }) {
 
   // --- Items Logic ---
   const updateItem = (id: string, fieldName: keyof OrderItem, val: string | number) => {
-    setItems(items.map(item => item.id === id ? { ...item, [fieldName]: val } : item));
+    setItems(prev => prev.map(item => item.id === id ? { ...item, [fieldName]: val } : item));
   };
+
+  const applyStockToItem = (id: string, stock: StockItem) => {
+    setItems(prev => prev.map(item => 
+      item.id === id 
+        ? { ...item, name: stock.itemName, cost: stock.costPrice || 0, price: stock.sellingPrice || 0, imageUrl: stock.imageUrl || '' }
+        : item
+    ));
+    setShowStockDropdown(null);
+  };
+
+  const handleItemImageUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingItemId(id);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!res.ok) throw new Error('Upload failed');
+      
+      const data = await res.json();
+      updateItem(id, 'imageUrl', data.url);
+      
+      setMessage({ type: 'success', text: 'ອັບໂຫຼດຮູບສຳເລັດ' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setMessage({ type: 'error', text: 'ເກີດຂໍ້ຜິດພາດໃນການອັບໂຫຼດຮູບ' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    } finally {
+      setUploadingItemId(null);
+    }
+  };
+
+
+  const handleBulkImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    setLoading(true);
+    setMessage({ type: 'info', text: 'ກຳລັງອັບໂຫຼດຮູບພາບ...' });
+    
+    try {
+      const newItems: OrderItem[] = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (res.ok) {
+          const data = await res.json();
+          newItems.push({
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            name: '',
+            qty: 1,
+            cost: 0,
+            price: 0,
+            imageUrl: data.url
+          });
+        }
+      }
+      
+      setItems(prev => {
+        if (prev.length === 1 && prev[0].name === '' && prev[0].cost === 0 && prev[0].price === 0 && !prev[0].imageUrl) {
+          return newItems;
+        }
+        return [...prev, ...newItems];
+      });
+      
+      setMessage({ type: 'success', text: `ອັບໂຫຼດສຳເລັດ ${newItems.length} ຮູບພາບ!` });
+    } catch (error) {
+      console.error(error);
+      setMessage({ type: 'error', text: 'ເກີດຂໍ້ຜິດພາດໃນການອັບໂຫຼດບາງຮູບພາບ' });
+    } finally {
+      setLoading(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
   const removeItem = (id: string) => {
+
     if (items.length > 1) setItems(items.filter(item => item.id !== id));
   };
   const addItem = () => {
@@ -369,10 +523,20 @@ export default function OrderForm({ editId }: { editId?: string }) {
         totalProfit,
         totalExpenses,
         imageUrl: imageUrl || '',
+        agentId: agentId || null,
+        isPreOrder: agentId ? true : false,
+        orderedBy: orderedBy || '',
       });
+      
+      if (agentId && totalSales > 0) {
+        const agentRef = doc(db, 'agents', agentId);
+        await updateDoc(agentRef, {
+          totalSales: increment(totalSales)
+        });
+      }
 
       setMessage({ type: 'success', text: '🎉 ບັນທຶກອໍເດີສຳເລັດແລ້ວ!' });
-      setTimeout(() => resetForm(), 2000);
+      setTimeout(() => { resetForm(); if (onSuccess) onSuccess(); }, 2000);
     } catch (error) {
       console.error(error);
       setMessage({ type: 'error', text: '❌ ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ.' });
@@ -383,7 +547,7 @@ export default function OrderForm({ editId }: { editId?: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50 animate-[fadeIn_0.35s_ease-out]">
-      {/* Floating status toast — never shifts layout */}
+      {/* Floating status toast */}
       {message.text && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[60] animate-[toastIn_0.2s_ease-out]">
           <div
@@ -398,497 +562,481 @@ export default function OrderForm({ editId }: { editId?: string }) {
         </div>
       )}
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 pt-8 pb-28 lg:pb-16">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-28 lg:pb-16 flex flex-col gap-5 lg:gap-6">
         {/* Page header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-7 lg:mb-9">
-          <div>
-            <h1 className="text-2xl sm:text-[28px] font-extrabold tracking-tight text-slate-900">
-              {editId ? 'ແກ້ໄຂອໍເດີ' : 'ບັນທຶກອໍເດີໃໝ່'}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <button onClick={resetForm} className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+            </button>
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+              {editId ? 'ແກ້ໄຂອໍເດີ' : 'ສ້າງບິນໃໝ່'}
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              ປ້ອນຂໍ້ມູນລູກຄ້າ ແລະ ລາຍການສິນຄ້າໃຫ້ຄົບຖ້ວນ — ລະບົບຄິດໄລ່ກຳໄລໃຫ້ອັດຕະໂນມັດ
-            </p>
           </div>
-          <button onClick={resetForm} className={`${ghostBtn} self-start sm:self-auto`}>
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-            </svg>
-            ລ້າງຂໍ້ມູນ
-          </button>
-        </div>
-
-        {/* AI parser — full-width entry point above the two-column workspace */}
-        <div className={`${card} ${pad} mb-6 lg:mb-8`}>
-          <div className="flex flex-col md:flex-row md:items-end gap-4">
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <div className={`${chip} bg-violet-50 text-violet-600 mt-6`}>
-                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09l2.846.813-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold text-slate-800 mb-0.5">ດຶງຂໍ້ມູນອັດຕະໂນມັດ</h3>
-                <p className="text-xs text-slate-400 mb-2">
-                  ວາງຂໍ້ຄວາມແຊັດຈາກລູກຄ້າ — ລະບົບຄົ້ນຫາຊື່, ເບີ, ທີ່ຢູ່ ແລະ ລາຍການສິນຄ້າໃຫ້ອັດຕະໂນມັດ
-                </p>
-                <textarea
-                  rows={2}
-                  value={rawText}
-                  onChange={(e) => setRawText(e.target.value)}
-                  placeholder="ວາງຂໍ້ຄວາມແຊັດຈາກລູກຄ້າທີ່ນີ້..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm text-slate-700 placeholder-slate-400 outline-none focus:bg-white focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 transition-colors resize-none"
-                />
-              </div>
-            </div>
-            <button onClick={handleParseData} className={`${primaryBtn} w-full md:w-auto shrink-0`}>
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09l2.846.813-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-              </svg>
-              ດຶງຂໍ້ມູນ
+          <div className="flex items-center gap-2">
+            <button onClick={resetForm} className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+            </button>
+            <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.909A2.25 2.25 0 012.25 8.643V6.75m19.5 0v10.5A2.25 2.25 0 0119.5 19.5h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.909A2.25 2.25 0 012.25 8.643V6.75" /></svg>
             </button>
           </div>
         </div>
 
-        {/* Two-column workspace: task flow (left) + sticky order ticket (right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-          {/* ---------------- LEFT: data entry flow ---------------- */}
-          <div className="lg:col-span-8 flex flex-col gap-6 lg:gap-8">
-            {/* Customer info */}
-            <section className={`${card} ${pad} focus-within:border-violet-200 focus-within:ring-2 focus-within:ring-violet-100 transition-colors`}>
-              <div className={`${sectionTitle} mb-5 pb-4 border-b border-slate-100`}>
-                <span className={`${chip} bg-emerald-50 text-emerald-600`}>
-                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                  </svg>
-                </span>
-                ຂໍ້ມູນລູກຄ້າ
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="col-span-2">
-                  <label className={label}>ຊື່ລູກຄ້າ</label>
-                  <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="ກະລຸນາປ້ອນຊື່..." className={field} />
-                </div>
-                <div className="col-span-2">
-                  <label className={label}>ເບີໂທຕິດຕໍ່</label>
-                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="020 xxxxxxxx" className={field} />
-                </div>
-                <div>
-                  <label className={label}>ບ້ານ</label>
-                  <input type="text" value={village} onChange={e => setVillage(e.target.value)} className={field} />
-                </div>
-                <div>
-                  <label className={label}>ເມືອງ</label>
-                  <input type="text" value={district} onChange={e => setDistrict(e.target.value)} className={field} />
-                </div>
-                <div>
-                  <label className={label}>ແຂວງ</label>
-                  <SelectField value={province} onChange={setProvince} options={PROVINCES} />
-                </div>
-                <div>
-                  <label className={label}>ຂົນສົ່ງ</label>
-                  <SelectField value={transport} onChange={setTransport} options={TRANSPORTS} className="font-bold text-violet-700" />
-                </div>
-              </div>
-            </section>
+        {/* AI Parser Card */}
+        <section className={`${card} p-3 sm:p-4 flex flex-col md:flex-row items-center gap-4 relative overflow-hidden`}>
+          <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-400"></div>
+          <div className="flex items-center gap-4 shrink-0 pl-2 w-full md:w-auto">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M12.012 2c-5.506 0-9.98 4.475-9.98 9.982 0 1.944.545 3.84 1.55 5.518L2 22l4.646-1.55a9.929 9.929 0 005.366 1.551h.004c5.505 0 9.98-4.476 9.98-9.983 0-5.507-4.475-9.982-9.98-9.982z"/></svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800">ນຳເຂົ້າອັດຕະໂນມັດ</p>
+              <p className="text-xs text-slate-400">ວາງຂໍ້ຄວາມຈາກລູກຄ້າ</p>
+            </div>
+          </div>
+          <input
+            type="text"
+            value={rawText}
+            onChange={(e) => setRawText(e.target.value)}
+            placeholder="ວາງຂໍ້ຄວາມທີ່ນີ້..."
+            className="flex-1 h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm text-slate-700 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-400 transition-colors w-full"
+          />
+          <button onClick={handleParseData} className="h-12 px-6 rounded-xl bg-[#0f172a] hover:bg-slate-800 text-white text-sm font-bold transition-all duration-150 shrink-0 w-full md:w-auto flex items-center justify-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09l2.846.813-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
+            ດຶງຂໍ້ມູນ
+          </button>
+        </section>
 
-            {/* Product image upload */}
-            <section className={`${card} ${pad}`}>
-              <div className={`${sectionTitle} mb-5 pb-4 border-b border-slate-100`}>
-                <span className={`${chip} bg-violet-50 text-violet-600`}>
-                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                  </svg>
-                </span>
-                ຮູບພາບສິນຄ້າ
-              </div>
+        {/* Customer Info Card */}
+        <section className={`${card} ${pad}`}>
+          {/* Section Header */}
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-blue-500"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm0-13a3 3 0 100 6 3 3 0 000-6zm0 4a1 1 0 110-2 1 1 0 010 2zm-4.5 5c0-1.527 2.128-2.5 4.5-2.5s4.5.973 4.5 2.5v1h-9v-1z"/></svg>
+            </div>
+            <div>
+              <h2 className="text-sm font-extrabold text-slate-800">ຂໍ້ມູນລູກຄ້າ ແລະ ການຈັດສົ່ງ</h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">ກອກຂໍ້ມູນລູກຄ້າ, ຕົວແທນ ແລະ ທີ່ຢູ່ຈັດສົ່ງ</p>
+            </div>
+          </div>
 
-              {imageSource ? (
-                <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group">
-                  <img
-                    src={imageSource}
-                    alt="ຮູບສິນຄ້າ"
-                    className="w-full max-h-64 object-contain"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                    <label className="cursor-pointer px-4 py-2 rounded-lg bg-white/90 text-sm font-bold text-slate-700 hover:bg-white transition-colors">
-                      ປ່ຽນຮູບ
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        disabled={isUploading}
-                        className="hidden"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={removeImage}
-                      disabled={isUploading}
-                      className="px-4 py-2 rounded-lg bg-rose-500/90 text-white text-sm font-bold hover:bg-rose-600 transition-colors"
-                    >
-                      ລຶບ
-                    </button>
-                  </div>
-                  <div className="px-3 py-2 bg-white border-t border-slate-100">
-                    {isUploading ? (
-                      <p className="text-[11px] text-slate-500 font-semibold truncate">↻ ກຳລັງອັບໂຫຼດຮູບ...</p>
-                    ) : imageUrl ? (
-                      <p className="text-[11px] text-emerald-600 font-semibold truncate">✓ ອັບໂຫຼດສຳເລັດ — ພ້ອມບັນທຶກ</p>
-                    ) : (
-                      <p className="text-[11px] text-slate-500 font-semibold truncate">🖼️ ດູເຊິ່ງຮູບພາບກ່ອນອັບໂຫຼດ</p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <label
-                  className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 cursor-pointer transition-all duration-200
-                    ${isUploading
-                      ? 'border-violet-300 bg-violet-50/50 cursor-wait'
-                      : 'border-slate-200 bg-slate-50 hover:border-violet-400 hover:bg-violet-50/30'
-                    }`}
+          {/* Row 1: Agent + Orderer + Customer Name + Phone */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div>
+              <label className={label}>🤝 ຕົວແທນ (Agent)</label>
+              <div className="relative">
+                <select 
+                  value={agentId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setAgentId(val);
+                    const ag = agents.find(a => a.id === val);
+                    if (ag) {
+                      setCustomerName(ag.agentName);
+                      setPhone(ag.phone);
+                    }
+                  }}
+                  className={`${field} appearance-none pr-8 ${agentId ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold' : ''}`}
                 >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    disabled={isUploading}
-                    className="hidden"
-                  />
-                  {isUploading ? (
-                    <>
-                      <div className="w-10 h-10 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
-                      <p className="text-sm font-bold text-violet-600">ກຳລັງອັບໂຫຼດໄປ Cloudinary...</p>
-                      <p className="text-xs text-slate-400">ກະລຸນາລໍຖ້າສັກຄູ່...</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-12 h-12 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center">
-                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                        </svg>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-sm font-bold text-slate-700">ຄລິກເພື່ອເລືອກຮູບພາບ</p>
-                        <p className="text-xs text-slate-400 mt-1">PNG, JPG, WEBP — ອັບໂຫຼດໄປ Cloudinary</p>
-                      </div>
-                    </>
+                  <option value="">— ລູກຄ້າທົ່ວໄປ —</option>
+                  {agents.map(ag => <option key={ag.id} value={ag.id}>{ag.agentName} ({ag.level})</option>)}
+                </select>
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
+              </div>
+            </div>
+
+            <div>
+              <label className={label}>👤 ຜູ້ສັ່ງ (ໃຜຄີຍ)</label>
+              <input type="text" value={orderedBy} onChange={e => setOrderedBy(e.target.value)} placeholder="ຊື່ຜູ້ຄີຍອໍເດີ" className={`${field} bg-indigo-50/60`} />
+            </div>
+
+            <div>
+              <label className={label}>📦 ຊື່ລູກຄ້າ (ຜູ້ຮັບ)</label>
+              <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="ຊື່ຜູ້ຮັບສິນຄ້າ" className={field} />
+            </div>
+
+            <div>
+              <label className={label}>📞 ເບີໂທຕິດຕໍ່</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="020-XXXXXXXX" className={field} />
+            </div>
+          </div>
+
+          {/* Row 2: Transport + Village + District + Province */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className={label}>🚚 ຂົນສົ່ງ</label>
+              <div className="relative">
+                <SelectField value={transport} onChange={setTransport} options={TRANSPORTS} className="text-violet-600 font-bold bg-violet-50/60" />
+              </div>
+            </div>
+
+            <div>
+              <label className={label}>🏘️ ບ້ານ</label>
+              <input type="text" value={village} onChange={e => setVillage(e.target.value)} placeholder="ຊື່ບ້ານ" className={field} />
+            </div>
+
+            <div>
+              <label className={label}>🌆 ເມືອງ</label>
+              <input type="text" value={district} onChange={e => setDistrict(e.target.value)} placeholder="ຊື່ເມືອງ" className={field} />
+            </div>
+
+            <div>
+              <label className={label}>🗺️ ແຂວງ</label>
+              <SelectField value={province} onChange={setProvince} options={PROVINCES} className="" />
+            </div>
+          </div>
+        </section>
+
+        {/* Order Items Card */}
+        <section className={`${card} ${pad}`}>
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-2 text-sm font-extrabold text-slate-800">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-indigo-500"><path d="M21 7.24a2.25 2.25 0 00-1.12-1.95l-6.75-3.9a2.25 2.25 0 00-2.26 0l-6.75 3.9A2.25 2.25 0 003 7.24v9.52a2.25 2.25 0 001.12 1.95l6.75 3.9a2.25 2.25 0 002.26 0l6.75-3.9A2.25 2.25 0 0021 16.76V7.24zm-9 11.26L5.25 14.6V9.4l6.75 3.9v5.2zm1.5-6.06L6.75 8.54l6.75-3.9 6.75 3.9-6.75 3.9zm.75 6.06v-5.2l6.75-3.9v5.2l-6.75 3.9z"/></svg>
+              ລາຍການສິນຄ້າ
+              <span className="ml-1 normal-case tracking-normal text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                {items.length} ລາຍການ
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer h-9 px-3.5 rounded-lg bg-sky-50 text-sky-600 text-xs font-bold hover:bg-sky-100 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5.04-6.71l-2.75 3.54-1.96-2.36L6.5 17h11l-3.54-4.71z"/></svg>
+                ອັບໂຫຼດຫຼາຍຮູບ
+                <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkImageUpload} />
+              </label>
+              <button onClick={() => setShowStockModal(true)} className="h-9 px-3.5 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold hover:bg-emerald-100 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                ເພີ່ມຈາກສະຕັອກ
+              </button>
+              <button onClick={addItem} className="h-9 px-3.5 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-bold hover:bg-indigo-100 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                ເພີ່ມລາຍການ
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {items.map((item) => {
+              const itemProfit = (item.price - item.cost) * item.qty;
+              return (
+                <div key={item.id} className="relative bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-violet-300/80 hover:shadow-md transition-all duration-200 group">
+                  {items.length > 1 && (
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      title="ລຶບລາຍການ"
+                      className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 bg-white/80 rounded-full p-1.5 hover:bg-rose-50 transition-colors z-10"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                    </button>
                   )}
-                </label>
-              )}
-            </section>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
+                    {/* Image Uploader & Name */}
+                    <div className="lg:col-span-5 flex items-start gap-4 pr-6 lg:pr-0">
+                      <div className="w-20 h-20 shrink-0 relative rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-violet-50/50 hover:border-violet-300 transition-all duration-200 overflow-hidden group/img">
+                        {item.imageUrl ? (
+                          <>
+                            <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                            <button onClick={() => updateItem(item.id, 'imageUrl', '')} className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity" title="ລຶບຮູບ">
+                              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                          </>
+                        ) : uploadingItemId === item.id ? (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="w-5 h-5 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+                          </div>
+                        ) : (
+                          <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer text-slate-400 group-hover/img:text-violet-600 transition-colors" title="ເພີ່ມຮູບ">
+                            <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 mb-1"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
+                            <span className="text-[10px] font-bold">ເພີ່ມຮູບ</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleItemImageUpload(item.id, e)} disabled={uploadingItemId !== null} />
+                          </label>
+                        )}
+                      </div>
+                      <div className="flex-1 mt-1 min-w-0 relative">
+                        <label className={label}>ຊື່ສິນຄ້າ</label>
+                        <input
+                          type="text"
+                          value={item.name}
+                          onFocus={() => setShowStockDropdown(item.id)}
+                          onBlur={() => setTimeout(() => setShowStockDropdown(null), 200)}
+                          onChange={(e) => {
+                            updateItem(item.id, 'name', e.target.value);
+                            setShowStockDropdown(item.id);
+                          }}
+                          placeholder="ເຊັ່ນ: ເສື້ອຢືດ..."
+                          className={`${field} font-bold text-slate-800 focus:bg-white w-full`}
+                        />
+                        {showStockDropdown === item.id && (
+                          <div className="absolute z-20 left-0 right-0 top-[100%] mt-1 max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-100">
+                            {stocks.filter(s => (s.itemName || "").toLowerCase().includes((item.name || "").toLowerCase())).length === 0 ? (
+                              <div className="p-4 text-center text-xs text-slate-500">ບໍ່ພົບສິນຄ້າໃນສະຕັອກ</div>
+                            ) : (
+                              stocks.filter(s => (s.itemName || "").toLowerCase().includes((item.name || "").toLowerCase())).map(stock => (
+                                <div
+                                  key={stock.id}
+                                  className="flex items-center gap-3 p-3 hover:bg-violet-50 cursor-pointer transition-colors"
+                                  onClick={() => applyStockToItem(item.id, stock)}
+                                >
+                                  {stock.imageUrl ? (
+                                    <img src={stock.imageUrl} className="w-10 h-10 rounded-lg object-cover bg-slate-100 shrink-0" alt="" />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-slate-300"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-bold text-slate-800 truncate">{stock.itemName}</div>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">ສະຕັອກ: {stock.quantity}</span>
+                                      <span className="text-[10px] text-slate-500">ລາຄາ: {new Intl.NumberFormat('lo-LA').format(stock.sellingPrice)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-            {/* Order items */}
-            <section className={`${card} ${pad}`}>
-              <div className="flex items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100">
-                <div className={sectionTitle}>
-                  <span className={`${chip} bg-blue-50 text-blue-600`}>
-                    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                    </svg>
-                  </span>
-                  ລາຍການສິນຄ້າ
-                  <span className="normal-case tracking-normal text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                    {items.length} ລາຍການ
-                  </span>
-                </div>
-                <button onClick={addItem} className="h-9 px-3.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
-                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                  ເພີ່ມລາຍການ
-                </button>
-              </div>
-
-              {/* Desktop column headers */}
-              <div className="hidden lg:grid grid-cols-12 gap-3 px-3 pb-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                <div className="col-span-4">ຊື່ສິນຄ້າ</div>
-                <div className="col-span-1 text-center">ຈຳນວນ</div>
-                <div className="col-span-2 text-right">ຕົ້ນທຶນ (₭)</div>
-                <div className="col-span-2 text-right">ລາຄາຂາຍ (₭)</div>
-                <div className="col-span-2 text-right">ກຳໄລ</div>
-                <div className="col-span-1" />
-              </div>
-
-              {/* Desktop rows */}
-              <div className="hidden lg:block rounded-xl overflow-hidden border border-slate-100 divide-y divide-slate-100">
-                {items.map((item) => {
-                  const itemProfit = (item.price - item.cost) * item.qty;
-                  return (
-                    <div key={item.id} className="grid grid-cols-12 gap-3 items-center px-3 py-2.5 hover:bg-slate-50/80 transition-colors group">
-                      <div className="col-span-4">
-                        <input type="text" value={item.name} onChange={(e) => updateItem(item.id, 'name', e.target.value)} placeholder="ເຊັ່ນ: ເສື້ອຢືດ..." className={`${field} h-10`} />
+                    {/* Financials Grid */}
+                    <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-4 items-start">
+                      <div>
+                        <label className={label}>ຈຳນວນ</label>
+                        <input type="number" min="1" value={item.qty} onChange={(e) => updateItem(item.id, 'qty', Number(e.target.value))} className={`${field} text-center tabular-nums font-bold text-slate-800 w-full`} />
                       </div>
-                      <div className="col-span-1">
-                        <input type="number" min="1" value={item.qty} onChange={(e) => updateItem(item.id, 'qty', Number(e.target.value))} className={`${field} h-10 text-center tabular-nums`} />
+                      <div>
+                        <label className={`${label} text-rose-500`}>ຕົ້ນທຶນ</label>
+                        <MoneyInput value={item.cost} onChange={(v) => updateItem(item.id, 'cost', Number(v))} placeholder="0" className="font-semibold text-rose-500 w-full" />
                       </div>
-                      <div className="col-span-2">
-                        <MoneyInput value={item.cost} onChange={(v) => updateItem(item.id, 'cost', Number(v))} className="h-10" />
+                      <div>
+                        <label className={label}>ລາຄາຂາຍ</label>
+                        <MoneyInput value={item.price} onChange={(v) => updateItem(item.id, 'price', Number(v))} placeholder="0" className="font-semibold text-slate-900 w-full" />
                       </div>
-                      <div className="col-span-2">
-                        <MoneyInput value={item.price} onChange={(v) => updateItem(item.id, 'price', Number(v))} className="h-10" />
-                      </div>
-                      <div className="col-span-2 text-right">
-                        <span className={`text-sm font-extrabold tabular-nums ${itemProfit > 0 ? 'text-emerald-600' : itemProfit < 0 ? 'text-rose-500' : 'text-slate-400'}`}>
+                      <div className="flex flex-col h-[70px] justify-end pb-1.5 sm:items-end">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">ກຳໄລ</span>
+                        <span className={`text-base font-extrabold tabular-nums tracking-tight ${itemProfit > 0 ? 'text-emerald-600' : itemProfit < 0 ? 'text-rose-500' : 'text-slate-400'}`}>
                           {itemProfit > 0 && '+'}{formatNumber(itemProfit)}
                         </span>
                       </div>
-                      <div className="col-span-1 flex justify-center">
-                        {items.length > 1 && (
-                          <button
-                            onClick={() => removeItem(item.id)}
-                            aria-label="ລຶບລາຍການ"
-                            title="ລຶບລາຍການ"
-                            className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity duration-150 p-1.5 rounded-lg hover:bg-rose-50"
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Mobile cards */}
-              <div className="lg:hidden space-y-3">
-                {items.map((item) => {
-                  const itemProfit = (item.price - item.cost) * item.qty;
-                  return (
-                    <div key={item.id} className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-3">
-                      <input type="text" value={item.name} onChange={(e) => updateItem(item.id, 'name', e.target.value)} placeholder="ຊື່ສິນຄ້າ..." className={field} />
-                      <div className="grid grid-cols-3 gap-2">
-                        <input type="number" min="1" value={item.qty} onChange={(e) => updateItem(item.id, 'qty', Number(e.target.value))} placeholder="ຈຳນວນ" className={`${field} text-center tabular-nums`} />
-                        <MoneyInput value={item.cost} onChange={(v) => updateItem(item.id, 'cost', Number(v))} placeholder="ຕົ້ນທຶນ" />
-                        <MoneyInput value={item.price} onChange={(v) => updateItem(item.id, 'price', Number(v))} placeholder="ລາຄາ" />
-                      </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-200/70">
-                        <span className="text-xs font-semibold text-slate-500">
-                          ກຳໄລ: <span className={`font-extrabold tabular-nums ${itemProfit > 0 ? 'text-emerald-600' : itemProfit < 0 ? 'text-rose-500' : 'text-slate-400'}`}>{formatNumber(itemProfit)}</span>
-                        </span>
-                        {items.length > 1 && (
-                          <button onClick={() => removeItem(item.id)} className="text-rose-500 hover:text-rose-600 text-xs font-bold">
-                            ລຶບລາຍການ
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Shipping fee */}
-              <div className="mt-6 pt-5 border-t border-dashed border-slate-200 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-slate-300">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.63c0-.621-.504-1.125-1.125-1.125H4.125C3.504 5.818 3 6.322 3 6.943v10.982a1.125 1.125 0 001.125 1.125h1.5m8.25-13.5V18.75m0-13.5h-2.25" />
-                  </svg>
-                  <label className="text-sm font-semibold text-slate-600">ຄ່າຂົນສົ່ງບິນນີ້</label>
+                  </div>
                 </div>
-                <MoneyInput value={shippingFee} onChange={setShippingFee} className="w-32 sm:w-40" />
-              </div>
-            </section>
+              );
+            })}
+          </div>
 
-            {/* Other expenses */}
-            <section className={`${card} ${pad} bg-gradient-to-br from-rose-50/50 via-white to-white border-rose-100`}>
-              <div className={`${sectionTitle} mb-5 pb-4 border-b border-rose-100/70`}>
-                <span className={`${chip} bg-rose-100 text-rose-600`}>
-                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3" />
-                  </svg>
-                </span>
-                ລາຍຈ່າຍອື່ນໆ
+          <div className="mt-6 pt-5 border-t border-dashed border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-sm font-semibold text-slate-600">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.63c0-.621-.504-1.125-1.125-1.125H4.125C3.504 5.818 3 6.322 3 6.943v10.982a1.125 1.125 0 001.125 1.125h1.5m8.25-13.5V18.75m0-13.5h-2.25" /></svg>
+              ຄ່າຂົນສົ່ງບິນນີ້
+            </div>
+            <MoneyInput value={shippingFee} onChange={setShippingFee} className="w-32 sm:w-40" />
+          </div>
+        </section>
+
+        {/* Order Details Card */}
+        <section className={`${card} ${pad}`}>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-500"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ວັນທີຮັບອໍເດີ</label>
               </div>
-              <div className="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  value={expenseName}
-                  onChange={e => setExpenseName(e.target.value)}
-                  placeholder="ຄ່າຫຍັງ..."
-                  className={`${field} flex-1 bg-white/80 border-rose-200 focus:border-rose-400 focus:ring-rose-500/10`}
-                />
-                <MoneyInput
-                  value={expenseAmount}
-                  onChange={setExpenseAmount}
-                  className="w-24 bg-white/80 border-rose-200 focus:border-rose-400 focus:ring-rose-500/10"
-                />
+              <input type="text" value={orderDate} onChange={e => setOrderDate(e.target.value)} className={`${field} font-bold text-slate-800 text-center`} />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-400"><path d="M20 12c0-1.1.9-2 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v4c1.1 0 2 .9 2 2s-.9 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2zm-7 2h-2v-2h2v2zm0-4h-2V8h2v2z"/></svg>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ສະຖານະອໍເດີ</label>
+              </div>
+              <SelectField value={status} onChange={setStatus} options={STATUSES} className="font-bold text-blue-600 bg-blue-50/50" />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-purple-500"><path d="M21 7.28V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2.28A2 2 0 0022 15V9a2 2 0 00-1-1.72zM20 15h-4V9h4v6zM5 19V5h14v2h-6c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h6v2H5z"/></svg>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ກະເປົາຮັບເງິນ</label>
+              </div>
+              <SelectField value={wallet} onChange={setWallet} options={walletOptions.length > 0 ? walletOptions.map(w => w.name) : ['—']} className="font-semibold text-purple-700 bg-purple-50/50" />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-emerald-500"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ການຊຳລະ</label>
+              </div>
+              <div className="flex bg-slate-100 p-1 rounded-xl gap-1 h-11">
                 <button
                   type="button"
-                  onClick={addExpense}
-                  disabled={!expenseName || !expenseAmount}
-                  aria-label="ເພີ່ມລາຍຈ່າຍ"
-                  className="w-11 h-11 shrink-0 rounded-xl bg-rose-500 text-white shadow-md shadow-rose-500/20 hover:bg-rose-600 active:scale-90 transition-all duration-150 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setPaymentMethod('COD')}
+                  className={`flex-1 h-full text-[13px] font-bold rounded-lg transition-all duration-150 ${paymentMethod === 'COD' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
+                  <span className="flex items-center justify-center gap-1.5">
+                    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.63c0-.621-.504-1.125-1.125-1.125H4.125C3.504 5.818 3 6.322 3 6.943v10.982a1.125 1.125 0 001.125 1.125h1.5m8.25-13.5V18.75m0-13.5h-2.25" /></svg>
+                    COD
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('ຈ່າຍແລ້ວ')}
+                  className={`flex-1 h-full text-[13px] font-bold rounded-lg transition-all duration-150 ${paymentMethod === 'ຈ່າຍແລ້ວ' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <span className="flex items-center justify-center gap-1.5">
+                    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                    ຈ່າຍແລ້ວ
+                  </span>
                 </button>
               </div>
+            </div>
 
-              {expenses.length === 0 ? (
-                <p className="text-xs text-center text-rose-400/70 py-6 border border-dashed border-rose-200/70 rounded-xl">ຍັງບໍ່ມີລາຍຈ່າຍ</p>
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-amber-500"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.87 0 .53-.39 1.64-2.1 1.64-1.64 0-2.1-.92-2.16-1.7H8.22c.07 1.63 1.25 2.82 2.68 3.19V19h2.34v-1.65c1.76-.32 2.92-1.41 2.92-2.96 0-2.36-1.89-3.07-3.85-3.53z"/></svg>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ຍອດມັດຈຳ (₭)</label>
+              </div>
+              <MoneyInput value={deposit} onChange={setDeposit} className="text-amber-600 bg-amber-50/50" />
+            </div>
+          </div>
+        </section>
+
+        {/* Summary & Save Card */}
+        <section className={`${card} ${pad} overflow-hidden relative`}>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+          <div className="relative flex flex-col xl:flex-row items-center justify-between gap-8 xl:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-10 w-full xl:w-auto flex-1">
+              <div className="flex flex-col items-center xl:items-start text-center xl:text-left">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">ຍອດຂາຍ</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-slate-800 tabular-nums">
+                  {formatNumber(totalSales)} <span className="text-lg">K</span>
+                </span>
+              </div>
+              <div className="flex flex-col items-center xl:items-start text-center xl:text-left">
+                <span className="text-[11px] font-bold text-amber-500 uppercase tracking-widest mb-1">ມັດຈຳ</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-amber-500 tabular-nums">
+                  {formatNumber(deposit || 0)} <span className="text-lg">K</span>
+                </span>
+              </div>
+              <div className="flex flex-col items-center xl:items-start text-center xl:text-left">
+                <span className="text-[11px] font-bold text-rose-500 uppercase tracking-widest mb-1">ຕົ້ນທຶນ</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-rose-500 tabular-nums">
+                  {formatNumber(totalOutlay)} <span className="text-lg">K</span>
+                </span>
+              </div>
+              <div className="flex flex-col items-center xl:items-start text-center xl:text-left">
+                <span className={`text-[11px] font-bold uppercase tracking-widest mb-1 ${totalProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>ກຳໄລຄາດໝາຍ</span>
+                <span className={`text-3xl sm:text-4xl font-black tabular-nums tracking-tight ${totalProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {totalProfit > 0 && '+'}{formatNumber(totalProfit)} <span className="text-xl">K</span>
+                </span>
+              </div>
+            </div>
+            
+            <div className="w-full xl:w-auto shrink-0">
+              <button onClick={handleSave} disabled={loading || uploadingItemId !== null} className="w-full xl:w-56 h-14 sm:h-16 text-lg rounded-[20px] bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all">
+                {loading ? (
+                  <>
+                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ກຳລັງບັນທຶກ...
+                  </>
+                ) : uploadingItemId !== null ? (
+                  <>
+                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ອັບໂຫຼດຮູບ...
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l4.5-6.3z" clipRule="evenodd" />
+                    </svg>
+                    {editId ? 'ບັນທຶກການແກ້ໄຂ' : 'ບັນທຶກ'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      {/* Stock Selection Modal */}
+      {showStockModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">ເລືອກສິນຄ້າຈາກສະຕັອກ</h3>
+                  <p className="text-xs text-slate-500">ຄລິກທີ່ສິນຄ້າເພື່ອເພີ່ມລົງໃນບິນ</p>
+                </div>
+              </div>
+              <button onClick={() => setShowStockModal(false)} className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            
+            {/* Search */}
+            <div className="p-4 border-b border-slate-100">
+              <div className="relative">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                <input
+                  type="text"
+                  value={stockSearch}
+                  onChange={e => setStockSearch(e.target.value)}
+                  placeholder="ຄົ້ນຫາຊື່ສິນຄ້າ..."
+                  className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-emerald-400 outline-none transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50">
+              {stocks.filter(s => (s.itemName || "").toLowerCase().includes((stockSearch || "").toLowerCase())).length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center text-slate-300">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                  </div>
+                  <p className="text-slate-500 font-bold">ບໍ່ພົບສິນຄ້າທີ່ຄົ້ນຫາ</p>
+                </div>
               ) : (
-                <div className="space-y-1.5">
-                  {expenses.map(exp => (
-                    <div key={exp.id} className="flex items-center justify-between gap-3 text-sm bg-white/80 px-3.5 py-2.5 rounded-xl border border-rose-100/70 shadow-sm">
-                      <span className="text-rose-700 font-medium truncate">{exp.name}</span>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="font-bold tabular-nums text-rose-600">{formatNumber(exp.amount)} ₭</span>
-                        <button onClick={() => removeExpense(exp.id)} aria-label="ລຶບລາຍຈ່າຍ" className="text-rose-300 hover:text-rose-600 transition-colors">
-                          <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {stocks.filter(s => (s.itemName || "").toLowerCase().includes((stockSearch || "").toLowerCase())).map(stock => (
+                    <div
+                      key={stock.id}
+                      onClick={() => handleSelectFromStock(stock)}
+                      className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all active:scale-95"
+                    >
+                      {stock.imageUrl ? (
+                        <img src={stock.imageUrl} className="w-14 h-14 rounded-lg object-cover bg-slate-50 shrink-0" alt="" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg bg-slate-50 flex items-center justify-center text-slate-300 shrink-0 border border-slate-100">
+                          <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-slate-800 text-sm truncate">{stock.itemName}</div>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            ສະຕັອກ: {stock.quantity}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            ₭{new Intl.NumberFormat('lo-LA').format(stock.sellingPrice)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </section>
-          </div>
-
-          {/* ---------------- RIGHT: sticky order ticket ---------------- */}
-          <div className="lg:col-span-4">
-            <div className="lg:sticky lg:top-6">
-              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm shadow-slate-200/60 overflow-hidden">
-                {/* perforated ticket edge — the one deliberate flourish */}
-                <div
-                  className="h-2"
-                  style={{
-                    backgroundImage:
-                      'repeating-linear-gradient(90deg, #7c3aed 0 10px, transparent 10px 18px)',
-                    opacity: 0.85,
-                  }}
-                />
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-5">
-                    <div>
-                      <p className="text-[11px] font-bold text-violet-500 uppercase tracking-widest">ໃບສັ່ງອໍເດີ</p>
-                      <p className="text-sm font-bold text-slate-800 mt-0.5">{editId ? `ອໍເດີ #${editId}` : 'ອໍເດີໃໝ່'}</p>
-                    </div>
-                    <span className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
-                      <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                      </svg>
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mb-5">
-                    <div>
-                      <label className={label}>ວັນທີຮັບ</label>
-                      <input type="text" value={orderDate} onChange={e => setOrderDate(e.target.value)} className={`${field} text-center font-bold tabular-nums`} />
-                    </div>
-                    <div>
-                      <label className={label}>ສະຖານະ</label>
-                      <SelectField value={status} onChange={setStatus} options={STATUSES} className="font-bold" />
-                    </div>
-                  </div>
-
-                  <div className="mb-5">
-                    <label className={label}>ວິທີຊຳລະເງິນ</label>
-                    <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('COD')}
-                        className={`flex-1 h-9 text-sm font-bold rounded-lg transition-all duration-150 ${paymentMethod === 'COD' ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                      >
-                        ປາຍທາງ (COD)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('ຈ່າຍແລ້ວ')}
-                        className={`flex-1 h-9 text-sm font-bold rounded-lg transition-all duration-150 ${paymentMethod === 'ຈ່າຍແລ້ວ' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                      >
-                        ຈ່າຍແລ້ວ
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mb-5">
-                    <div>
-                      <label className={label}>ຍອດມັດຈຳ</label>
-                      <MoneyInput value={deposit} onChange={setDeposit} className="text-amber-600" />
-                    </div>
-                    <div>
-                      <label className={label}>ຮັບເຂົ້າກະເປົາ</label>
-                      <SelectField value={wallet} onChange={setWallet} options={walletOptions.length > 0 ? walletOptions.map(w => w.name) : ['—']} className="font-semibold" />
-                    </div>
-                  </div>
-
-                  <div className="border-t border-dashed border-slate-200 -mx-6 mb-5" />
-
-                  <div className="space-y-2.5 mb-5 text-sm">
-                    <div className="flex justify-between text-slate-500">
-                      <span>ຍອດຂາຍລວມ</span>
-                      <span className="font-bold text-slate-800 tabular-nums">{formatNumber(totalSales)} ₭</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500">
-                      <span>ຕົ້ນທຶນ + ສົ່ງ + ລາຍຈ່າຍ</span>
-                      <span className="font-bold text-rose-500 tabular-nums">-{formatNumber(totalOutlay)} ₭</span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-dashed border-slate-200 -mx-6 mb-5" />
-
-                  <div className={`rounded-2xl p-4 mb-5 border ${totalProfit >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
-                    <p className={`text-[11px] font-bold uppercase tracking-widest mb-1 ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      ກຳໄລຄາດໝາຍ
-                    </p>
-                    <p className={`text-3xl font-extrabold tabular-nums ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {totalProfit > 0 && '+'}{formatNumber(totalProfit)} <span className="text-base font-bold">₭</span>
-                    </p>
-                  </div>
-
-                  <button onClick={handleSave} disabled={loading || isUploading} className={`${primaryBtn} w-full h-12 text-base`}>
-                    {loading ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ກຳລັງບັນທຶກ...
-                      </>
-                    ) : isUploading ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ກຳລັງອັບໂຫຼດຮູບ...
-                      </>
-                    ) : (
-                      <>
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                          <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
-                        </svg>
-                        {editId ? 'ບັນທຶກການແກ້ໄຂ' : 'ບັນທຶກອໍເດີໃໝ່'}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Mobile sticky action bar — mirrors the ticket's totals + save, always in reach */}
-      <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-8px_24px_-8px_rgba(15,23,42,0.08)]">
-        <div className="px-4 py-3 flex items-center gap-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ກຳໄລຄາດໝາຍ</p>
-            <p className={`text-lg font-extrabold tabular-nums truncate ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {totalProfit > 0 && '+'}{formatNumber(totalProfit)} ₭
-            </p>
-          </div>
-          <button onClick={handleSave} disabled={loading || isUploading} className={`${primaryBtn} shrink-0 px-6`}>
-            {loading || isUploading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
-              </svg>
-            )}
-            ບັນທຶກ
-          </button>
-        </div>
-      </div>
-
+      )}
     </div>
   );
-}
+}

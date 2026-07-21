@@ -69,13 +69,39 @@ const Icon = ({ name, className }: { name: string; className?: string }) => {
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [orderCount, setOrderCount] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const [editOrderId, setEditOrderId] = useState<string | null>(null);
+  const [preSelectedAgentId, setPreSelectedAgentId] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
-      setOrderCount(snapshot.size);
-    });
+    const unsubscribe = onSnapshot(
+      collection(db, 'orders'),
+      (snapshot) => setOrderCount(snapshot.size),
+      () => {} // silently ignore errors in the nav badge count
+    );
     return () => unsubscribe();
   }, []);
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setSidebarOpen(false); // close mobile sidebar on tab change
+    if (tab === 'add') setEditOrderId(null); // Clear edit ID when explicitly clicking 'Add'
+  };
+
+  const handleEditOrder = (id: string) => {
+    setEditOrderId(id);
+    setActiveTab('add');
+  };
+
+  // Bottom nav shows 5 most important tabs on mobile
+  const bottomNavItems: { id: TabType; label: string; icon: string }[] = [
+    { id: 'dashboard', label: 'ໜ້າຫຼັກ', icon: 'dashboard' },
+    { id: 'add', label: 'ເພີ່ມ', icon: 'add' },
+    { id: 'list', label: 'ລາຍການ', icon: 'list' },
+    { id: 'stock', label: 'ສາງ', icon: 'stock' },
+    { id: 'wallet', label: 'ເງິນ', icon: 'wallet' },
+  ];
 
   return (
     <div className="relative min-h-screen bg-[#F8FAFC] dark:bg-[#030712] font-lao text-slate-800 dark:text-slate-100 flex overflow-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/50 selection:text-indigo-900 dark:selection:text-indigo-100 transition-colors duration-300">
@@ -86,15 +112,34 @@ export default function DashboardPage() {
         <div className="absolute top-[30%] left-[30%] w-[30vw] h-[30vw] rounded-full bg-gradient-to-br from-amber-200/20 to-rose-200/20 dark:from-amber-500/8 dark:to-rose-500/5 blur-[100px]" />
       </div>
 
-      {/* SIDEBAR */}
-      <aside className="relative w-[280px] bg-white/60 dark:bg-slate-900/60 backdrop-blur-2xl border-r border-white/80 dark:border-white/5 shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-none flex flex-col z-20 transition-colors duration-300">
-        <div className="px-8 py-8">
+      {/* ─── MOBILE OVERLAY BACKDROP ───────────────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* ─── SIDEBAR ────────────────────────────────────────────────────── */}
+      <aside
+        className={`
+          fixed lg:relative inset-y-0 left-0
+          ${sidebarExpanded ? 'w-[280px]' : 'w-[280px] lg:w-[88px]'}
+          bg-white/90 dark:bg-slate-900/90 lg:bg-white/60 lg:dark:bg-slate-900/60
+          backdrop-blur-2xl border-r border-white/80 dark:border-white/5
+          shadow-[4px_0_24px_rgba(0,0,0,0.08)] dark:shadow-[4px_0_24px_rgba(0,0,0,0.3)] lg:shadow-[4px_0_24px_rgba(0,0,0,0.02)]
+          flex flex-col z-40 transition-[width,transform] duration-300 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+      >
+        <div className={`py-8 transition-all duration-300 ${!sidebarExpanded ? 'px-8 lg:px-2 flex lg:justify-center' : 'px-8'}`}>
           <div className="flex items-center gap-3">
-            <div className="relative w-11 h-11 rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-amber-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <div className="relative w-11 h-11 shrink-0 rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-amber-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
               <span className="text-white text-xl font-bold tracking-wider">T</span>
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-white dark:border-slate-900 rounded-full" />
             </div>
-            <div>
+            <div className={`whitespace-nowrap overflow-hidden transition-[width,opacity] duration-300 ${!sidebarExpanded ? 'lg:w-0 lg:opacity-0' : 'w-[150px] opacity-100'}`}>
               <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-none">
                 Tawan East
               </h1>
@@ -105,8 +150,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <nav className="flex flex-col gap-1.5 flex-1 px-4 py-2">
-          <p className="px-4 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+        <nav className="flex flex-col gap-1.5 flex-1 px-4 py-2 overflow-y-auto no-scrollbar overflow-x-hidden">
+          <p className={`px-4 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 whitespace-nowrap transition-opacity duration-300 ${!sidebarExpanded ? 'lg:opacity-0' : 'opacity-100'}`}>
             ເມນູຫຼັກ
           </p>
           {navConfig.map((item) => {
@@ -114,24 +159,26 @@ export default function DashboardPage() {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleTabChange(item.id)}
+                title={!sidebarExpanded ? item.label : undefined}
                 className={`group relative flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ease-out
                   ${
                     isActive
                       ? 'bg-gradient-to-r from-indigo-600 to-violet-600 shadow-md shadow-indigo-600/25 text-white'
                       : 'text-slate-500 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white hover:shadow-sm'
-                  }`}
+                  }
+                  ${!sidebarExpanded ? 'lg:justify-center lg:px-0' : ''}`}
               >
                 <Icon
                   name={item.icon}
-                  className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}
+                  className={`w-5 h-5 transition-transform duration-300 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}
                 />
-                <span className={`text-[15px] font-medium tracking-wide ${isActive ? 'font-semibold' : ''}`}>
+                <span className={`text-[15px] font-medium tracking-wide whitespace-nowrap overflow-hidden transition-[width,opacity] duration-300 ${isActive ? 'font-semibold' : ''} ${!sidebarExpanded ? 'lg:w-0 lg:opacity-0' : 'lg:w-[130px] lg:opacity-100 text-left'}`}>
                   {item.label}
                 </span>
                 {item.id === 'list' && orderCount > 0 && (
                   <span
-                    className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                    className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full transition-all duration-300 ${!sidebarExpanded ? 'lg:hidden' : ''} ${
                       isActive
                         ? 'bg-white/20 text-white border border-white/30'
                         : 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-500/30'
@@ -145,14 +192,14 @@ export default function DashboardPage() {
           })}
         </nav>
 
-        <div className="p-6 mt-auto">
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/70 dark:bg-white/5 backdrop-blur-md border border-white/80 dark:border-white/10 shadow-sm hover:shadow-md transition-all cursor-pointer group">
-            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700">
+        <div className={`p-6 mt-auto transition-all duration-300 ${!sidebarExpanded ? 'lg:px-2 lg:py-6' : 'p-6'}`}>
+          <div className={`flex items-center gap-3 p-3 rounded-2xl bg-white/70 dark:bg-white/5 backdrop-blur-md border border-white/80 dark:border-white/10 shadow-sm hover:shadow-md transition-all cursor-pointer group ${!sidebarExpanded ? 'lg:justify-center' : ''}`} title="Admin Tawan">
+            <div className="w-10 h-10 shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700">
               <div className="w-full h-full rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-sm font-bold">
                 A
               </div>
             </div>
-            <div className="flex-1 min-w-0">
+            <div className={`flex-1 min-w-0 overflow-hidden whitespace-nowrap transition-[width,opacity] duration-300 ${!sidebarExpanded ? 'lg:w-0 lg:opacity-0' : 'w-[120px] opacity-100'}`}>
               <p className="text-[14px] font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                 Admin Tawan
               </p>
@@ -162,23 +209,42 @@ export default function DashboardPage() {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative z-10">
-        <header className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-b border-white/60 dark:border-white/5 px-10 py-5 flex items-center justify-between z-20 shadow-[0_4px_24px_-12px_rgba(0,0,0,0.05)] sticky top-0 transition-colors duration-300">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              {navConfig.find((n) => n.id === activeTab)?.label}
-            </h2>
-            <p className="text-[14px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-              ພາບລວມ ແລະ ການຈັດການຂໍ້ມູນລ່າສຸດ — Tawan East Shop
-            </p>
+      {/* ─── MAIN CONTENT ────────────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative z-10 min-w-0">
+        {/* Header */}
+        <header className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-b border-white/60 dark:border-white/5 px-4 sm:px-6 lg:px-10 py-4 lg:py-5 flex items-center justify-between z-20 shadow-[0_4px_24px_-12px_rgba(0,0,0,0.05)] sticky top-0 transition-colors duration-300">
+          {/* Hamburger button (visible on all screens now) */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (window.innerWidth < 1024) {
+                  setSidebarOpen(true);
+                } else {
+                  setSidebarExpanded(!sidebarExpanded);
+                }
+              }}
+              aria-label="ເປີດປິດເມນູ"
+              className="w-10 h-10 rounded-xl bg-white/60 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-white/10 transition-all shadow-sm hover:shadow-md"
+            >
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 transition-transform duration-300 ${!sidebarExpanded ? 'rotate-180' : ''}`}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+            <div>
+              <h2 className="text-xl lg:text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                {navConfig.find((n) => n.id === activeTab)?.label}
+              </h2>
+              <p className="text-[13px] lg:text-[14px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium hidden sm:block">
+                ພາບລວມ ແລະ ການຈັດການຂໍ້ມູນລ່າສຸດ — Tawan East Shop
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 lg:gap-3">
             <ThemeToggle />
             <button
-              onClick={() => setActiveTab('add')}
-              className="text-[14px] font-semibold text-white px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl hover:shadow-lg hover:shadow-indigo-500/30 transition-all flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+              onClick={() => handleTabChange('add')}
+              className="text-[13px] lg:text-[14px] font-semibold text-white px-3 lg:px-5 py-2 lg:py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl hover:shadow-lg hover:shadow-indigo-500/30 transition-all flex items-center gap-1.5 hover:-translate-y-0.5 active:translate-y-0"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -188,20 +254,21 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <div className="flex-1 p-6 lg:p-10 overflow-y-auto">
+        {/* Content */}
+        <div className="flex-1 p-3 sm:p-6 lg:p-10 overflow-y-auto pb-24 lg:pb-10">
           <div className="max-w-7xl mx-auto">
             <div
               key={activeTab}
               className="premium-card p-1 min-h-[500px] animate-subtle-fade"
             >
-              <div className="bg-white/90 dark:bg-slate-900/60 rounded-[20px] p-4 sm:p-6 h-full shadow-inner shadow-slate-100/50 dark:shadow-none min-h-[500px] transition-colors duration-300">
+              <div className="bg-white/90 dark:bg-slate-900/60 rounded-[20px] p-3 sm:p-6 h-full shadow-inner shadow-slate-100/50 dark:shadow-none min-h-[500px] transition-colors duration-300">
                 {activeTab === 'dashboard' && (
-                  <OrderDashboard onViewAll={() => setActiveTab('list')} />
+                  <OrderDashboard onViewAll={() => handleTabChange('list')} />
                 )}
-                {activeTab === 'add' && <OrderForm />}
-                {activeTab === 'list' && <OrderList />}
+                {activeTab === 'add' && <OrderForm editId={editOrderId || undefined} preSelectedAgentId={preSelectedAgentId || undefined} onSuccess={() => { setEditOrderId(null); setPreSelectedAgentId(null); handleTabChange('list'); }} />}
+                {activeTab === 'list' && <OrderList onEdit={handleEditOrder} />}
                 {activeTab === 'stock' && <OrderStock />}
-                {activeTab === 'agent' && <OrderAgent />}
+                {activeTab === 'agent' && <OrderAgent onCreateOrder={(agId) => { setPreSelectedAgentId(agId); handleTabChange('add'); }} onEdit={handleEditOrder} />}
                 {activeTab === 'wallet' && <OrderWallet />}
                 {activeTab === 'settings' && <OrderSettings />}
               </div>
@@ -209,6 +276,52 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+
+      {/* ─── MOBILE BOTTOM NAVIGATION ────────────────────────────────────── */}
+      <nav
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/8 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="flex items-center justify-around px-2 py-2">
+          {bottomNavItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabChange(item.id)}
+                className={`relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 ${
+                  isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
+                }`}
+              >
+                {isActive && (
+                  <span className="absolute inset-0 rounded-xl bg-indigo-50 dark:bg-indigo-500/10" />
+                )}
+                <Icon name={item.icon} className="relative w-5 h-5" />
+                <span className="relative text-[10px] font-semibold">{item.label}</span>
+                {item.id === 'list' && orderCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-indigo-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                    {orderCount > 99 ? '99+' : orderCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          {/* More button — opens sidebar to access agent/settings */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className={`relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 ${
+              !bottomNavItems.find(i => i.id === activeTab)
+                ? 'text-indigo-600 dark:text-indigo-400'
+                : 'text-slate-400 dark:text-slate-500'
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+            <span className="text-[10px] font-semibold">ເພີ່ມເຕີມ</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

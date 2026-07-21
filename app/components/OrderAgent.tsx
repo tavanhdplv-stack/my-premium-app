@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '@/firebase';
 import {
   collection, addDoc, serverTimestamp,
-  query, orderBy, onSnapshot, doc, updateDoc, deleteDoc,
+  onSnapshot, doc, updateDoc, deleteDoc,
 } from 'firebase/firestore';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ const LEVEL_CFG = {
   },
 } as const;
 
-export default function OrderAgent() {
+export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: (agentId: string) => void, onEdit?: (orderId: string) => void }) {
   // ── Form state ──────────────────────────────────────────────────────────
   const [agentName,    setAgentName]    = useState('');
   const [phone,        setPhone]        = useState('');
@@ -56,31 +56,55 @@ export default function OrderAgent() {
   const [loading,      setLoading]      = useState(false);
   const [message,      setMessage]      = useState<{ type: 'success' | 'error' | ''; text: string }>({ type: '', text: '' });
 
-  // ── List state ──────────────────────────────────────────────────────────
+  // ── List state ────────────────────────────────────────────
   const [agents,      setAgents]      = useState<Agent[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [search,      setSearch]      = useState('');
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Fetch orders for agent history
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'orders'), snap => {
+      const mapped = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setOrders(mapped);
+    });
+    return () => unsub();
+  }, []);
+
 
   // Real-time listener
   useEffect(() => {
-    const q = query(collection(db, 'agents'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const mapped = snap.docs.map(d => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          agentName: data.agentName ?? '',
-          phone: data.phone ?? '',
-          level: (data.level as Agent['level']) ?? 'General',
-          totalSales: data.totalSales ?? 0,
-          notes: data.notes ?? '',
-          createdAt: data.createdAt ? { seconds: (data.createdAt as any).seconds ?? 0 } : undefined,
-        } as Agent;
-      });
-      setAgents(mapped);
-      setListLoading(false);
-    });
+    const q = collection(db, 'agents');
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const mapped = snap.docs.map(d => {
+          const data = d.data();
+          const createdAt = data.createdAt as { seconds?: number } | null;
+          return {
+            id: d.id,
+            agentName: data.agentName ?? '',
+            phone: data.phone ?? '',
+            level: (data.level as Agent['level']) ?? 'General',
+            totalSales: data.totalSales ?? 0,
+            notes: data.notes ?? '',
+            createdAt: createdAt ? { seconds: createdAt.seconds ?? 0 } : undefined,
+            __createdAtVal: createdAt?.seconds ? createdAt.seconds * 1000 : Date.now(),
+          } as Agent & { __createdAtVal: number };
+        });
+        mapped.sort((a, b) => b.__createdAtVal - a.__createdAtVal);
+        setAgents(mapped);
+        setListLoading(false);
+      },
+      (err) => {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderAgent] snapshot error:', err);
+        setListLoading(false);
+      }
+    );
     return () => unsub();
   }, []);
 
@@ -119,12 +143,12 @@ export default function OrderAgent() {
     catch (e) { console.error(e); }
   };
 
-  // ── Delete agent ─────────────────────────────────────────────────────────
+  // ── Delete agent (uses confirmDeleteId state instead of native confirm) ──
   const handleDelete = async (id: string) => {
-    if (!confirm('ຕ້ອງການລຶບຕົວແທນນີ້ອອກຈາກລະບົບແທ້ບໍ?')) return;
     setDeletingId(id);
+    setConfirmDeleteId(null);
     try { await deleteDoc(doc(db, 'agents', id)); }
-    catch { alert('ລຶບບໍ່ສຳເລັດ'); }
+    catch { setMessage({ type: 'error', text: 'ລົບບໍ່ສຳເລັດ ກະລຸນາລອງໃໝ່' }); }
     finally { setDeletingId(null); }
   };
 
@@ -307,7 +331,7 @@ export default function OrderAgent() {
                   {filtered.map(agent => {
                     const cfg = LEVEL_CFG[agent.level] || LEVEL_CFG.General;
                     return (
-                      <tr key={agent.id} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${deletingId === agent.id ? 'opacity-50' : ''}`}>
+                      <tr key={agent.id} onClick={() => setSelectedAgent(agent)} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${deletingId === agent.id ? 'opacity-50' : ''}`}>
                         {/* Avatar + Name */}
                         <td className="py-3.5 px-2">
                           <div className="flex items-center gap-2.5">
@@ -345,8 +369,7 @@ export default function OrderAgent() {
                         </td>
                         {/* Delete */}
                         <td className="py-3.5 px-2 text-center">
-                          <button
-                            onClick={() => handleDelete(agent.id)}
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(agent.id); }}
                             disabled={deletingId === agent.id}
                             className="w-7 h-7 rounded-lg flex items-center justify-center mx-auto bg-slate-100 dark:bg-white/8 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-all"
                           >
@@ -364,6 +387,155 @@ export default function OrderAgent() {
           )}
         </div>
       </div>
+
+      {/* Agent Profile Modal */}
+      {selectedAgent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedAgent(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-[scaleIn_0.2s_ease-out]" onClick={e => e.stopPropagation()}>
+             {/* Header */}
+             <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/10">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-sm font-black">{selectedAgent.agentName.charAt(0)}</span>
+                    ໂປຣໄຟລ໌ຕົວແທນ: {selectedAgent.agentName}
+                  </h3>
+                  <div className="flex gap-2 mt-2">
+                    <span className={LEVEL_CFG[selectedAgent.level].badge + ' px-2 py-0.5 rounded text-xs font-bold'}>{LEVEL_CFG[selectedAgent.level].label}</span>
+                    <span className="text-xs text-slate-500">📞 {selectedAgent.phone}</span>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedAgent(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-2xl w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10">&times;</button>
+             </div>
+
+             {/* Content */}
+             <div className="flex-1 overflow-y-auto p-5 bg-slate-50/50 dark:bg-slate-800/30">
+               <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-white/10">
+                    <div className="text-xs text-slate-500 mb-1">ຍອດຂາຍສະສົມທັງໝົດ</div>
+                    <div className="text-lg font-bold text-emerald-500">{selectedAgent.totalSales.toLocaleString()} ₭</div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-white/10">
+                    <div className="text-xs text-slate-500 mb-1">ຈຳນວນອໍເດີທັງໝົດ</div>
+                    <div className="text-lg font-bold text-blue-500">
+                      {orders.filter(o => o.agentId === selectedAgent.id).length} ບິນ
+                    </div>
+                  </div>
+               </div>
+
+               <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">ປະຫວັດບິນອໍເດີ (Order History)</h4>
+               
+               {(() => {
+                  const agentOrders = orders.filter(o => o.agentId === selectedAgent.id).sort((a,b) => {
+                     const d1 = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.orderDate ? new Date(a.orderDate).getTime() : 0);
+                     const d2 = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.orderDate ? new Date(b.orderDate).getTime() : 0);
+                     return d2 - d1;
+                  });
+
+                  if(agentOrders.length === 0) return <p className="text-center py-10 text-slate-500">ຍັງບໍ່ມີອໍເດີ</p>;
+
+                  return (
+                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-white/10">
+                           <tr>
+                             <th className="px-4 py-3 font-bold">ວັນທີ</th>
+                             <th className="px-4 py-3 font-bold">ອໍເດີ ID</th>
+                             <th className="px-4 py-3 font-bold w-full">ລາຍການສິນຄ້າ</th>
+                             <th className="px-4 py-3 font-bold text-right">ຕົ້ນທຶນ (₭)</th>
+                             <th className="px-4 py-3 font-bold text-right">ຍອດຂາຍ (₭)</th>
+                             <th className="px-4 py-3 font-bold text-right">ກຳໄລ (₭)</th>
+                             <th className="px-4 py-3 font-bold text-center">ສະຖານະ</th>
+                             <th className="px-4 py-3 font-bold text-center">ຈັດການ</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                          {agentOrders.map((o, idx) => {
+                            const statuses = [
+                              'ລໍຖ້າຈ່າຍເງິນ', 'ຈ່າຍແລ້ວ', 'ລໍຖ້າເຄື່ອງເຂົ້າ', 'ເຄື່ອງເຂົ້າແລ້ວ',
+                              'ກຳລັງຈັດສົ່ງ', 'ໄດ້ຮັບເງິນແລ້ວ', 'ປິດບິນແລ້ວ', 'ຍົກເລີກອໍເດີ', 'ສົ່ງເຄມ'
+                            ];
+                            return (
+                            <tr key={`${o.id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                              <td className="px-4 py-4 text-slate-600 dark:text-slate-400 align-top">
+                                {o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toLocaleDateString('en-GB') : (o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-GB') : '-')}
+                              </td>
+                              <td className="px-4 py-4 font-bold text-blue-600 dark:text-blue-400 align-top">[{o.id.slice(-8)}]</td>
+                              <td className="px-4 py-4 whitespace-normal min-w-[250px] align-top">
+                                <div className="flex items-start gap-3">
+                                  {(() => {
+                                    const imgUrl = o.imageUrl || (o.items && o.items.length > 0 && o.items[0].imageUrl);
+                                    return imgUrl ? (
+                                      <img src={imgUrl} alt="Product" className="w-10 h-10 object-cover rounded-lg shadow-sm border border-slate-100 cursor-pointer hover:opacity-80 transition-opacity shrink-0" onClick={() => setSelectedImage(imgUrl)} />
+                                    ) : (
+                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 shrink-0">
+                                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                    </div>
+                                    );
+                                  })()}
+                                  <div>
+                                    <div className="font-bold text-slate-800 dark:text-slate-200">{o.customerName || '-'}</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {o.items ? o.items.map((i:any) => `${i.name} (x${i.qty})`).join(', ') : ''}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 text-right font-bold text-rose-500 align-top">
+                                {(Number(o.totalCost) || 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-4 text-right font-bold text-blue-500 align-top">
+                                {(Number(o.price) || 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-4 text-right font-bold text-emerald-500 align-top">
+                                {(Number(o.totalProfit) || 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-4 text-center align-top">
+                                <select 
+                                  value={o.status || 'ລໍຖ້າຈ່າຍເງິນ'}
+                                  onChange={async (e) => {
+                                    try {
+                                      await updateDoc(doc(db, 'orders', o.id), { status: e.target.value });
+                                    } catch(err) {
+                                      console.error("Error updating status:", err);
+                                    }
+                                  }}
+                                  className={`appearance-none outline-none text-[10px] font-bold px-2 py-1 rounded border cursor-pointer ${
+                                    o.status === 'ປິດບິນແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ' 
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}
+                                >
+                                  {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </td>
+                              <td className="px-4 py-4 text-center align-top">
+                                <button onClick={() => { setSelectedAgent(null); if(onEdit) onEdit(o.id); }} title="ແກ້ໄຂອໍເດີ"
+                                  className="w-8 h-8 mx-auto flex items-center justify-center rounded-lg bg-slate-100 hover:bg-violet-100 text-slate-500 hover:text-violet-600 transition-all">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                </button>
+                              </td>
+                            </tr>
+                          )})}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+               })()}
+
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={() => setSelectedImage(null)}>
+          <button className="absolute top-6 right-6 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors">
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+          <img src={selectedImage} alt="Preview" className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 }
