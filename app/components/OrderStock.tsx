@@ -629,7 +629,10 @@ export default function OrderStock() {
                       >
                         {/* Image */}
                         <td className="py-3 px-2">
-                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 relative shrink-0">
+                          <div 
+                            className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 relative shrink-0 cursor-pointer hover:ring-2 hover:ring-violet-500 transition-all"
+                            onClick={() => item.imageUrl?.startsWith('http') && setPreviewModalUrl(item.imageUrl)}
+                          >
                             {item.imageUrl?.startsWith('http') ? (
                               <Image
                                 src={item.imageUrl}
