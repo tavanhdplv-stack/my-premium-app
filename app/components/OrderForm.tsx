@@ -657,12 +657,11 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
               <p className="text-xs text-slate-400 dark:text-slate-500">ວາງຂໍ້ຄວາມຈາກລູກຄ້າ</p>
             </div>
           </div>
-          <input
-            type="text"
+          <textarea
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             placeholder="ວາງຂໍ້ຄວາມທີ່ນີ້..."
-            className="flex-1 h-12 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors w-full"
+            className="flex-1 h-12 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors w-full resize-none"
           />
           <button onClick={handleParseData} className="h-12 px-6 rounded-xl bg-[#0f172a] hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-sm font-bold transition-all duration-150 shrink-0 w-full md:w-auto flex items-center justify-center gap-2">
             <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09l2.846.813-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
