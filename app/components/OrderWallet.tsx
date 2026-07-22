@@ -317,7 +317,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                 className={`rounded-3xl p-5 sm:p-6 shadow-2xl border backdrop-blur-xl transition-all duration-300 relative group overflow-hidden ${
                   isMain
                     ? 'bg-gradient-to-br from-indigo-950/90 to-slate-900/95 border-indigo-500/30 hover:border-indigo-400/50 hover:shadow-indigo-500/20'
-                    : 'bg-white/[0.04] border-white/10 hover:border-white/20 hover:bg-white/[0.08]'
+                    : 'bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/[0.08]'
                 }`}
               >
                 {/* Background decorative glow */}
@@ -328,7 +328,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                 {/* Header */}
                 <div className="flex justify-between items-start mb-6">
                   <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2 tracking-wide">
+                    <h3 className={`text-xl font-bold flex items-center gap-2 tracking-wide ${isMain ? 'text-white' : 'text-slate-800 dark:text-white'}`}>
                       {isMain ? (
                         <svg className="w-5 h-5 text-amber-400 drop-shadow-md" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l1.22 3.76h3.96l-3.2 2.33 1.22 3.76L10 9.53l-3.2 2.32 1.22-3.76-3.2-2.33h3.96L10 2z"/></svg>
                       ) : (
@@ -351,10 +351,10 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                     ຍອດຄົງເຫຼືອ ({monthFilter === 'all' ? 'ທັງໝົດ' : monthFilter})
                   </span>
                   <div className="flex items-end gap-1.5 mt-1">
-                    <p className={`text-4xl sm:text-5xl font-black tabular-nums tracking-tight drop-shadow-sm ${stats.bal >= 0 ? 'text-white' : 'text-rose-400'}`}>
+                    <p className={`text-4xl sm:text-5xl font-black tabular-nums tracking-tight drop-shadow-sm ${stats.bal >= 0 ? (isMain ? 'text-white' : 'text-slate-800 dark:text-white') : 'text-rose-500 dark:text-rose-400'}`}>
                       {stats.bal.toLocaleString()}
                     </p>
-                    <span className={`text-lg font-bold mb-1.5 ${stats.bal >= 0 ? 'text-slate-300' : 'text-rose-400/70'}`}>₭</span>
+                    <span className={`text-lg font-bold mb-1.5 ${stats.bal >= 0 ? (isMain ? 'text-slate-300' : 'text-slate-400 dark:text-slate-300') : 'text-rose-500/70 dark:text-rose-400/70'}`}>₭</span>
                   </div>
                 </div>
 
@@ -362,29 +362,29 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                 <div className="space-y-2.5 mb-6 relative z-10">
                   {/* Capital (Partner Only) */}
                   {!isMain && (
-                    <div className="flex justify-between items-center bg-slate-950/40 rounded-xl px-4 py-3 border border-white/5 backdrop-blur-sm">
-                      <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-blue-400 font-bold tracking-wider">
+                    <div className="flex justify-between items-center bg-slate-100 dark:bg-slate-950/40 rounded-xl px-4 py-3 border border-slate-200 dark:border-white/5 backdrop-blur-sm">
+                      <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-blue-600 dark:text-blue-400 font-bold tracking-wider">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         ຍອດເງິນຕົ້ນແທ້:
                       </div>
-                      <p className="text-sm sm:text-base font-bold text-blue-100 tabular-nums">+{stats.capital.toLocaleString()}</p>
+                      <p className="text-sm sm:text-base font-bold text-blue-700 dark:text-blue-100 tabular-nums">+{stats.capital.toLocaleString()}</p>
                     </div>
                   )}
                   {/* In */}
-                  <div className="flex justify-between items-center bg-emerald-950/20 rounded-xl px-4 py-3 border border-emerald-500/10 backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-emerald-500/90 font-bold tracking-wider">
+                  <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/20 rounded-xl px-4 py-3 border border-emerald-200 dark:border-emerald-500/10 backdrop-blur-sm">
+                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-emerald-600 dark:text-emerald-500/90 font-bold tracking-wider">
                       <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
                       ຮັບເຂົ້າສະສົມ (In):
                     </div>
-                    <p className="text-sm sm:text-base font-bold text-emerald-400 tabular-nums">+{stats.in.toLocaleString()}</p>
+                    <p className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">+{stats.in.toLocaleString()}</p>
                   </div>
                   {/* Out */}
-                  <div className="flex justify-between items-center bg-rose-950/20 rounded-xl px-4 py-3 border border-rose-500/10 backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-rose-500/90 font-bold tracking-wider">
+                  <div className="flex justify-between items-center bg-rose-50 dark:bg-rose-950/20 rounded-xl px-4 py-3 border border-rose-200 dark:border-rose-500/10 backdrop-blur-sm">
+                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-rose-600 dark:text-rose-500/90 font-bold tracking-wider">
                       <svg className="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
                       ຈ່າຍອອກ (Out):
                     </div>
-                    <p className="text-sm sm:text-base font-bold text-rose-400 tabular-nums">-{stats.out.toLocaleString()}</p>
+                    <p className="text-sm sm:text-base font-bold text-rose-600 dark:text-rose-400 tabular-nums">-{stats.out.toLocaleString()}</p>
                   </div>
                 </div>
 
