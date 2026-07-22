@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { db } from '@/firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import type { Agent } from '@/app/types';
+import { Handshake, User, Package, Phone, Truck, Home, Building2, MapPin, Sparkles, CheckCircle2, XCircle, FileImage, ImagePlus, Check, Trash2, Calendar, Map, Hash, CreditCard } from 'lucide-react';
 
 // --- Constants ---
 const PROVINCES = [
@@ -54,7 +55,7 @@ interface Expense {
 // =====================================================================
 const card = 'bg-white dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm dark:shadow-none';
 const pad = 'p-5 sm:p-6 lg:p-7';
-const label = 'block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
+const label = 'flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
 const field =
   'w-full h-11 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-colors duration-150 focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:focus:ring-violet-500/20';
 const sectionTitle = 'flex items-center gap-2.5 text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide';
@@ -320,7 +321,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setMessage({ type: 'error', text: '❌ ກະລຸນາເລືອກໄຟລ໌ຮູບພາບເທົ່ານັ້ນ' });
+      setMessage({ type: 'error', text: 'ກະລຸນາເລືອກໄຟລ໌ຮູບພາບເທົ່ານັ້ນ' });
       return;
     }
 
@@ -350,7 +351,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
       if (data.url) {
         setImageUrl(data.url);
-        setMessage({ type: 'success', text: '✅ ອັບໂຫຼດຮູບສຳເລັດ!' });
+        setMessage({ type: 'success', text: 'ອັບໂຫຼດຮູບສຳເລັດ!' });
         setTimeout(() => setMessage({ type: '', text: '' }), 2500);
       } else {
         throw new Error(data.error || 'Unknown upload response');
@@ -430,7 +431,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     if (newItems.length > 0) {
       setItems(newItems);
     }
-    setMessage({ type: 'success', text: '✨ ດຶງຂໍ້ມູນສຳເລັດແລ້ວ! ກະລຸນາກວດສອບຄວາມຖືກຕ້ອງ.' });
+    setMessage({ type: 'success', text: 'ດຶງຂໍ້ມູນສຳເລັດແລ້ວ! ກະລຸນາກວດສອບຄວາມຖືກຕ້ອງ.' });
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
@@ -582,7 +583,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           ...orderData,
           updatedAt: serverTimestamp(),
         });
-        setMessage({ type: 'success', text: '✅ ແກ້ໄຂອໍເດີສຳເລັດແລ້ວ!' });
+        setMessage({ type: 'success', text: 'ແກ້ໄຂອໍເດີສຳເລັດແລ້ວ!' });
       } else {
         // Create new order
         await addDoc(collection(db, 'orders'), {
@@ -595,13 +596,13 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             totalSales: increment(totalSales)
           });
         }
-        setMessage({ type: 'success', text: '🎉 ບັນທຶກອໍເດີສຳເລັດແລ້ວ!' });
+        setMessage({ type: 'success', text: 'ບັນທຶກອໍເດີສຳເລັດແລ້ວ!' });
       }
 
       setTimeout(() => { resetForm(); if (onSuccess) onSuccess(); }, 2000);
     } catch (error) {
       console.error(error);
-      setMessage({ type: 'error', text: '❌ ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ.' });
+      setMessage({ type: 'error', text: 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ.' });
     } finally {
       setLoading(false);
     }
@@ -685,7 +686,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           {/* Row 1: Agent + Orderer + Customer Name + Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div>
-              <label className={label}>🤝 ຕົວແທນ (Agent)</label>
+              <label className={label}><Handshake className="w-3.5 h-3.5" /> ຕົວແທນ (Agent)</label>
               <div className="relative">
                 <select 
                   value={agentId}
@@ -708,17 +709,17 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             </div>
 
             <div>
-              <label className={label}>👤 ຜູ້ສັ່ງ (ໃຜຄີຍ)</label>
+              <label className={label}><User className="w-3.5 h-3.5" /> ຜູ້ສັ່ງ (ໃຜຄີຍ)</label>
               <input type="text" value={orderedBy} onChange={e => setOrderedBy(e.target.value)} placeholder="ຊື່ຜູ້ຄີຍອໍເດີ" className={`${field} bg-indigo-50/60 dark:bg-indigo-500/10`} />
             </div>
 
             <div>
-              <label className={label}>📦 ຊື່ລູກຄ້າ (ຜູ້ຮັບ)</label>
+              <label className={label}><Package className="w-3.5 h-3.5" /> ຊື່ລູກຄ້າ (ຜູ້ຮັບ)</label>
               <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="ຊື່ຜູ້ຮັບສິນຄ້າ" className={field} />
             </div>
 
             <div>
-              <label className={label}>📞 ເບີໂທຕິດຕໍ່</label>
+              <label className={label}><Phone className="w-3.5 h-3.5" /> ເບີໂທຕິດຕໍ່</label>
               <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="020-XXXXXXXX" className={field} />
             </div>
           </div>
@@ -726,24 +727,24 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           {/* Row 2: Transport + Village + District + Province */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className={label}>🚚 ຂົນສົ່ງ</label>
+              <label className={label}><Truck className="w-3.5 h-3.5" /> ຂົນສົ່ງ</label>
               <div className="relative">
                 <SelectField value={transport} onChange={setTransport} options={TRANSPORTS} className="text-violet-600 dark:text-violet-400 font-bold bg-violet-50/60 dark:bg-violet-500/10" />
               </div>
             </div>
 
             <div>
-              <label className={label}>🏘️ ບ້ານ</label>
+              <label className={label}><Home className="w-3.5 h-3.5" /> ບ້ານ</label>
               <input type="text" value={village} onChange={e => setVillage(e.target.value)} placeholder="ຊື່ບ້ານ" className={field} />
             </div>
 
             <div>
-              <label className={label}>🌆 ເມືອງ</label>
+              <label className={label}><Building2 className="w-3.5 h-3.5" /> ເມືອງ</label>
               <input type="text" value={district} onChange={e => setDistrict(e.target.value)} placeholder="ຊື່ເມືອງ" className={field} />
             </div>
 
             <div>
-              <label className={label}>🗺️ ແຂວງ</label>
+              <label className={label}><MapPin className="w-3.5 h-3.5" /> ແຂວງ</label>
               <SelectField value={province} onChange={setProvince} options={PROVINCES} className="" />
             </div>
           </div>
