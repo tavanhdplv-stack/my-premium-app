@@ -377,8 +377,11 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     if (!rawText.trim()) return;
     let t = rawText;
 
-    const phoneMatch = t.match(/(020|030)\d{7,8}/);
+    const phoneMatch = t.match(/(?:020|20|030|30)\d{7,8}/);
     if (phoneMatch) setPhone(phoneMatch[0]);
+
+    const dateMatch = t.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+    if (dateMatch) setOrderDate(dateMatch[1]);
 
     const nameMatch = t.match(/(?:ຊື່ລູກຄ້າ|ຊື່|Name)[:\s]*([^\n]+)/i);
     if (nameMatch) setCustomerName(nameMatch[1].trim());
@@ -391,33 +394,33 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     if (t.toUpperCase().includes('ANOUSITH') || t.includes('ອານຸສິດ') || t.includes('ສາຂາ')) setTransport('ANOUSITH Express');
     else if (t.toUpperCase().includes('HAL') || t.includes('ຮຸ່ງອາລຸນ')) setTransport('HAL Express');
 
-    const depositMatch = t.match(/(?:ມັດຈຳ|ວາງມັດຈຳ)[:\s]*([\d,]+)/);
+    const depositMatch = t.match(/(?:ມັດຈຳ|ມັດຈໍາ|ວາງມັດຈຳ)[^\d]*([\d,]+)/);
     if (depositMatch) setDeposit(depositMatch[1].replace(/,/g, ''));
 
-    if (t.includes('ຈ່າຍແລ້ວ') || t.includes('ໂອນແລ້ວ')) setPaymentMethod('ຈ່າຍແລ້ວ');
+    if (t.includes('ຈ່າຍແລ້ວ') || t.includes('ໂອນແລ້ວ') || t.includes('ມັດຈຳແລ້ວ') || t.includes('ມັດຈําແລ້ວ')) setPaymentMethod('ຈ່າຍແລ້ວ');
 
     const lines = t.split('\n');
     const newItems: OrderItem[] = [];
-    const ignoreWords = ['ຊື່', 'ເບີ', 'ບ້ານ', 'ເມືອງ', 'ແຂວງ', 'ມັດຈຳ', 'ສາຂາ', 'ໂອນ', 'ຈ່າຍ'];
+    const ignoreWords = ['ຊື່', 'ເບີ', 'ບ້ານ', 'ເມືອງ', 'ແຂວງ', 'ມັດຈຳ', 'ມັດຈํา', 'ສາຂາ', 'ໂອນ', 'ຈ່າຍ', 'ລວມຍອດ', 'ຍອດຄົງເຫຼືອ', 'ຮັບອໍເດີ', 'ອໍເດີໃຊ້ເວລາ', 'ຊ້າ ຫຼື ໄວ', 'ງົດເລັ່ງ', 'ເຄື່ອງມາແລ້ວ', 'ບາງອໍເດີ', 'ຂອບໃຈ'];
 
     lines.forEach(line => {
       const isIgnore = ignoreWords.some(w => line.includes(w));
       if (!isIgnore && line.length > 3) {
         let qty = 1;
-        const qtyMatch = line.match(/(?:x|X)\s*(\d+)|\s*(\d+)\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ)/);
+        const qtyMatch = line.match(/(?:x|X)\s*(\d+)|\s*(\d+)\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ|ໃບ)/);
         if (qtyMatch) qty = Number(qtyMatch[1] || qtyMatch[2]);
 
         let price = 0;
         const priceMatch = line.match(/(\d{2,3}(?:,\d{3})+|\d{4,})/);
         if (priceMatch) price = Number(priceMatch[1].replace(/,/g, ''));
 
-        let name = line.replace(/(?:x|X)\s*\d+|\s*\d+\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ)/g, '')
+        let name = line.replace(/(?:x|X)\s*\d+|\s*\d+\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ|ໃບ)/g, '')
                        .replace(/\d{2,3}(?:,\d{3})+|\d{4,}/g, '')
-                       .replace(/ກີບ|kip|ລວມ/gi, '')
+                       .replace(/ກີບ|kip|ລວມ|₭/gi, '')
                        .trim();
-        name = name.replace(/^[-*:\s]+/, '');
+        name = name.replace(/^[-*:\s\d.]+|[-*:\s]+$/g, '');
 
-        if (name) {
+        if (name && price > 0) {
           newItems.push({ id: Date.now().toString() + Math.random(), name, qty, cost: 0, price });
         }
       }
