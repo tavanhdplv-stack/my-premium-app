@@ -288,25 +288,25 @@ export default function DashboardPage() {
 
       {/* ─── MOBILE BOTTOM NAVIGATION ────────────────────────────────────── */}
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/8 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] dark:shadow-[0_-10px_40px_rgba(0,0,0,0.3)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="flex items-center justify-around px-2 py-2">
+        <div className="flex items-center justify-around px-2 py-3">
           {bottomNavItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
-                className={`relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 ${
+                className={`relative flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all duration-200 ${
                   isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
                 }`}
               >
                 {isActive && (
                   <span className="absolute inset-0 rounded-xl bg-indigo-50 dark:bg-indigo-500/10" />
                 )}
-                <Icon name={item.icon} className="relative w-5 h-5" />
-                <span className="relative text-[10px] font-semibold">{item.label}</span>
+                <Icon name={item.icon} className="relative w-6 h-6 mb-1" />
+                <span className="relative text-[11px] font-bold">{item.label}</span>
                 {item.id === 'list' && orderCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-indigo-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
                     {orderCount > 99 ? '99+' : orderCount}
@@ -318,16 +318,16 @@ export default function DashboardPage() {
           {/* More button — opens sidebar to access agent/settings */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className={`relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 ${
+            className={`relative flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all duration-200 ${
               !bottomNavItems.find(i => i.id === activeTab)
                 ? 'text-indigo-600 dark:text-indigo-400'
                 : 'text-slate-400 dark:text-slate-500'
             }`}
           >
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-6 h-6 mb-1">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
-            <span className="text-[10px] font-semibold">ເພີ່ມເຕີມ</span>
+            <span className="text-[11px] font-bold">ເພີ່ມເຕີມ</span>
           </button>
         </div>
       </nav>
