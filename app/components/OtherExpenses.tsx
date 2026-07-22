@@ -123,7 +123,34 @@ export default function OtherExpenses() {
           </div>
           <div className="w-full md:w-[150px]">
             <label className={label}>ຈຳນວນເງິນ (₭)</label>
-            <input type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} className={field} />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              placeholder="0" 
+              value={
+                (() => {
+                  if (amount === null || amount === undefined || amount === '') return '';
+                  const str = String(amount);
+                  const parts = str.split('.');
+                  const intPart = parts[0].replace(/[^0-9-]/g, '');
+                  const decPart = parts.length > 1 ? '.' + parts[1].replace(/[^0-9]/g, '') : '';
+                  let formattedInt = intPart;
+                  if (intPart !== '' && intPart !== '-') {
+                    formattedInt = BigInt(intPart).toLocaleString('en-US');
+                  }
+                  return formattedInt + decPart;
+                })()
+              } 
+              onChange={e => {
+                const raw = e.target.value.replace(/,/g, '');
+                if (raw === '' || raw === '-') {
+                  setAmount(raw);
+                } else if (/^-?\d*\.?\d*$/.test(raw)) {
+                  setAmount(raw);
+                }
+              }} 
+              className={field} 
+            />
           </div>
           <div className="w-full md:w-[200px]">
             <label className={label}>ຫັກຈາກກະເປົາ</label>

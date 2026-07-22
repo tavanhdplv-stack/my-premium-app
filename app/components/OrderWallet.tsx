@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '@/firebase';
-import { collection, onSnapshot, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, setDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 // --- Interfaces ---
 interface Wallet {
@@ -31,7 +31,11 @@ interface WalletStats {
 }
 
 // --- Component ---
-export default function OrderWallet() {
+interface OrderWalletProps {
+  onEditOrder?: (orderId: string) => void;
+}
+
+export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -354,53 +358,72 @@ export default function OrderWallet() {
                   </div>
                 </div>
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mb-6 relative z-10">
-                  <div className="bg-slate-950/40 rounded-2xl p-3 border border-white/5 backdrop-blur-sm shadow-inner transition-colors group-hover:bg-slate-950/50">
-                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                      <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                      ທຶນແທ້
+                {/* Stats List (Vertical layout to prevent overflow) */}
+                <div className="space-y-2.5 mb-6 relative z-10">
+                  {/* Capital (Partner Only) */}
+                  {!isMain && (
+                    <div className="flex justify-between items-center bg-slate-950/40 rounded-xl px-4 py-3 border border-white/5 backdrop-blur-sm">
+                      <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-blue-400 font-bold tracking-wider">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        ຍອດເງິນຕົ້ນແທ້:
+                      </div>
+                      <p className="text-sm sm:text-base font-bold text-blue-100 tabular-nums">+{stats.capital.toLocaleString()}</p>
                     </div>
-                    <p className="text-sm sm:text-base font-bold text-blue-100 tabular-nums">{stats.capital.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-emerald-950/20 rounded-2xl p-3 border border-emerald-500/10 backdrop-blur-sm shadow-inner transition-colors group-hover:bg-emerald-950/30">
-                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-emerald-500/90 uppercase font-bold tracking-wider">
-                      <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
-                      ຮັບເຂົ້າ
+                  )}
+                  {/* In */}
+                  <div className="flex justify-between items-center bg-emerald-950/20 rounded-xl px-4 py-3 border border-emerald-500/10 backdrop-blur-sm">
+                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-emerald-500/90 font-bold tracking-wider">
+                      <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                      ຮັບເຂົ້າສະສົມ (In):
                     </div>
                     <p className="text-sm sm:text-base font-bold text-emerald-400 tabular-nums">+{stats.in.toLocaleString()}</p>
                   </div>
-                  <div className="bg-rose-950/20 rounded-2xl p-3 border border-rose-500/10 backdrop-blur-sm shadow-inner transition-colors group-hover:bg-rose-950/30">
-                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-rose-500/90 uppercase font-bold tracking-wider">
-                      <svg className="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
-                      ຈ່າຍອອກ
+                  {/* Out */}
+                  <div className="flex justify-between items-center bg-rose-950/20 rounded-xl px-4 py-3 border border-rose-500/10 backdrop-blur-sm">
+                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-rose-500/90 font-bold tracking-wider">
+                      <svg className="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
+                      ຈ່າຍອອກ (Out):
                     </div>
                     <p className="text-sm sm:text-base font-bold text-rose-400 tabular-nums">-{stats.out.toLocaleString()}</p>
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2 relative z-10 pt-4 border-t border-white/10">
-                  <button
-                    onClick={() => setShowTransModal({ type: 'income', walletId: wallet.id })}
-                    className="flex-1 flex flex-col sm:flex-row items-center justify-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-2.5 sm:py-3 rounded-xl hover:bg-emerald-500/20 hover:border-emerald-500/40 font-bold transition-all active:scale-95"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                    <span>ເຕີມເງິນ</span>
-                  </button>
-                  <button
-                    onClick={() => setShowTransModal({ type: 'expense', walletId: wallet.id })}
-                    className="flex-1 flex flex-col sm:flex-row items-center justify-center gap-1.5 text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 py-2.5 sm:py-3 rounded-xl hover:bg-rose-500/20 hover:border-rose-500/40 font-bold transition-all active:scale-95"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4"/></svg>
-                    <span>ຖອນອອກ</span>
-                  </button>
+                {/* Actions (2 Rows) */}
+                <div className="relative z-10 pt-4 border-t border-white/10 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowTransModal({ type: 'income', walletId: wallet.id })}
+                      className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-3 rounded-xl font-bold transition-all active:scale-95 ${
+                        isMain 
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/30'
+                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                      <span>{isMain ? 'ຍອດຍົກມາ (ເດີມ)' : 'ເຕີມເງິນ'}</span>
+                    </button>
+                    <button
+                      onClick={() => setShowTransModal({ type: 'expense', walletId: wallet.id })}
+                      className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-3 rounded-xl font-bold transition-all active:scale-95 ${
+                        isMain 
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/30'
+                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                      <span>{isMain ? 'ຖອນກຳໄລອອກ' : 'ຖອນອອກ'}</span>
+                    </button>
+                  </div>
                   <button
                     onClick={() => setShowDetailsModal(wallet)}
-                    className="flex-[1.2] flex flex-col sm:flex-row items-center justify-center gap-1.5 text-xs bg-white text-slate-900 py-2.5 sm:py-3 rounded-xl hover:bg-slate-100 font-extrabold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
+                    className={`w-full flex items-center justify-center gap-2 text-xs py-3.5 rounded-xl font-extrabold transition-all active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.05)] ${
+                      isMain
+                        ? 'bg-white text-indigo-950 hover:bg-slate-100'
+                        : 'bg-slate-800 text-slate-300 border border-white/5 hover:bg-slate-700'
+                    }`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span>ບິນລາຍລະອຽດ</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                    <span>ລາຍລະອຽດ/ປະຫວັດ</span>
                   </button>
                 </div>
               </div>
@@ -652,7 +675,8 @@ export default function OrderWallet() {
                     badges,
                     inAmt: income > 0 ? income : null,
                     outAmt: cost > 0 ? cost : null,
-                    rawId: null,
+                    rawId: o.id,
+                    paymentMethod: o.paymentMethod,
                   });
                 });
 
@@ -748,6 +772,23 @@ export default function OrderWallet() {
                             {h.rowType === 'trans' ? (
                               <div className="flex items-center justify-center gap-1">
                                 <button
+                                  title="ແກ້ໄຂ"
+                                  onClick={() => {
+                                    const newAmt = prompt('ໃສ່ຍອດເງິນໃໝ່ (ກະລຸນາໃສ່ສະເພາະຕົວເລກ):', String(h.inAmt || h.outAmt || 0));
+                                    if (newAmt !== null) {
+                                      const numAmt = Number(newAmt.replace(/,/g, ''));
+                                      if (!isNaN(numAmt)) {
+                                        updateDoc(doc(db, 'transactions', h.rawId), { amount: numAmt });
+                                      }
+                                    }
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-200 transition-all"
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                                  </svg>
+                                </button>
+                                <button
                                   title="ລຶບ"
                                   onClick={() => {
                                     if (confirm('ລຶບລາຍການນີ້?')) deleteDoc(doc(db, 'transactions', h.rawId));
@@ -760,14 +801,32 @@ export default function OrderWallet() {
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                title="ດູລາຍລະອຽດ"
-                                className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-200 transition-all mx-auto"
-                              >
-                                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
-                                </svg>
-                              </button>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  title="ແກ້ໄຂອໍເດີ"
+                                  onClick={() => {
+                                    setShowDetailsModal(null);
+                                    if (onEditOrder) onEditOrder(h.rawId);
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-200 transition-all"
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                                  </svg>
+                                </button>
+                                <button
+                                  title="ດູລາຍລະອຽດ"
+                                  onClick={() => {
+                                    setShowDetailsModal(null);
+                                    if (onEditOrder) onEditOrder(h.rawId);
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 hover:border-blue-200 transition-all mx-auto"
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+                                  </svg>
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>

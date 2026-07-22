@@ -15,13 +15,17 @@ export type FirestoreTimestamp =
   | undefined;
 
 // ─── Helper: safely convert any timestamp variant to a JS Date ────────────────
-export function tsToDate(ts: FirestoreTimestamp): Date | null {
+export function tsToDate(ts: any): Date | null {
   if (!ts) return null;
   if (typeof (ts as Timestamp).toDate === 'function') {
     return (ts as Timestamp).toDate();
   }
   if (typeof (ts as { seconds: number }).seconds === 'number') {
     return new Date((ts as { seconds: number }).seconds * 1000);
+  }
+  if (typeof ts === 'string' || typeof ts === 'number') {
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? null : d;
   }
   return null;
 }

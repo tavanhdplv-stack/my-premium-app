@@ -408,6 +408,8 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
       cost = 0,
       expenses = 0,
       actualCashIn = 0;
+    
+    // 1. Order expenses
     activeOrders.forEach((o) => {
       const price = o.price || 0;
       const orderCost = (o.totalCost || 0) + (o.shippingFee || 0);
@@ -418,6 +420,16 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
       if (o.paymentMethod === 'ຈ່າຍແລ້ວ') actualCashIn += price;
       else if ((o.deposit || 0) > 0) actualCashIn += o.deposit || 0;
     });
+
+    // 2. Manual expenses from OtherExpenses
+    walletTransactions.forEach(t => {
+      if (t.type === 'expense' && !t.note.startsWith('Order #')) {
+        if (!monthFilter || ymOf(t.date) === monthFilter) {
+          expenses += t.amount;
+        }
+      }
+    });
+
     const expectedProfit = revenue - cost - expenses;
     const netProfit = actualCashIn - cost - expenses;
     return {
@@ -431,7 +443,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
       expectedPct: revenue > 0 ? (expectedProfit / revenue) * 100 : 0,
       netPct: revenue > 0 ? (netProfit / revenue) * 100 : 0,
     };
-  }, [activeOrders]);
+  }, [activeOrders, walletTransactions, monthFilter]);
 
   // Status counts – now using the English status values
   const statusCounts = useMemo(() => {

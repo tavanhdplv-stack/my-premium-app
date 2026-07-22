@@ -87,6 +87,10 @@ function tsToDate(ts: any): Date | null {
   if (ts?.toDate) return ts.toDate();
   if (ts instanceof Date) return ts;
   if (typeof ts?.seconds === 'number') return new Date(ts.seconds * 1000);
+  if (typeof ts === 'string' || typeof ts === 'number') {
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? null : d;
+  }
   return null;
 }
 
@@ -634,6 +638,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
   const [theme,        setTheme]        = useState<string>('default');
 
   // ── UI state ──────────────────────────────────────────────────────────
+  const isInitialLoad = useRef(true);
 
   const updateItemStatus = async (orderId: string, itemIdx: number, newStatus: string) => {
     try {
@@ -725,6 +730,21 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
         arr.sort((a: any, b: any) => (b.__createdAtVal || 0) - (a.__createdAtVal || 0));
         setOrders(arr as Order[]);
         setLoading(false);
+
+        // Real-time Toast Notifications
+        if (isInitialLoad.current) {
+          isInitialLoad.current = false;
+        } else if (!snap.metadata.hasPendingWrites) {
+          snap.docChanges().forEach(change => {
+            const data = change.doc.data();
+            const customer = data.customerName || 'ລູກຄ້າ';
+            if (change.type === 'modified') {
+              setToast({ msg: `🔔 ອໍເດີຂອງທ່ານ ${customer} ຖືກອັບເດດສະຖານະ!`, type: 'success' });
+            } else if (change.type === 'added') {
+              setToast({ msg: `🆕 ມີອໍເດີໃໝ່ຈາກທ່ານ ${customer}!`, type: 'success' });
+            }
+          });
+        }
       },
       err => { console.error(err); setLoading(false); }
     );
@@ -782,7 +802,9 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
         (o.items || []).some(i => i.name?.toLowerCase().includes(q));
 
       // Status
-      const matchStatus = statusFilter === 'all' || o.status === statusFilter;
+      const matchStatus = statusFilter === 'all' || 
+                          o.status === statusFilter || 
+                          (o.items || []).some(i => i.status === statusFilter);
 
       // Date
       let matchDate = true;
@@ -925,11 +947,13 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
       
       {/* Lightbox Modal */}
       {previewImage && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={() => setPreviewImage(null)}>
-          <button className="absolute top-4 right-4 sm:top-6 sm:right-6 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors" onClick={() => setPreviewImage(null)}>
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-          <img src={previewImage} alt="Preview" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] cursor-zoom-out" onClick={() => setPreviewImage(null)}>
+          <div className="relative max-w-4xl max-h-[85vh] animate-[zoomIn_0.2s_ease-out]">
+            <button className="absolute -top-3 -right-3 sm:-top-5 sm:-right-5 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full bg-white text-slate-900 hover:bg-rose-500 hover:text-white hover:scale-110 transition-all shadow-2xl z-10" onClick={() => setPreviewImage(null)}>
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <img src={previewImage} alt="Preview" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] ring-1 ring-white/10" />
+          </div>
         </div>
       )}
       {showReset && <ResetModal wallets={wallets} onConfirm={handleReset} onClose={() => setShowReset(false)} />}
@@ -1129,7 +1153,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                           {order.orderedBy && (
                             <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 w-fit border border-amber-200 dark:border-amber-500/30">
                               <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0-2a3 3 0 110-6 3 3 0 010 6zm9 11v-1a5 5 0 00-5-5H8a5 5 0 00-5 5v1a1 1 0 001 1h16a1 1 0 001-1zm-14-1a3 3 0 013-3h6a3 3 0 013 3H7z"/></svg>
-                              ຜູ້ສັ່ງເຄື່ອງ: {order.orderedBy}
+                              {order.orderedBy}
                             </span>
                           )}
                         </div>

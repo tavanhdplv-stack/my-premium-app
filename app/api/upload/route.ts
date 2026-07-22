@@ -6,17 +6,17 @@ export const runtime = 'nodejs';
 
 // Configure once at module level (reads from .env.local)
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "zejld0zt",
+  api_key: process.env.CLOUDINARY_API_KEY || "452719257376477",
+  api_secret: process.env.CLOUDINARY_API_SECRET || "cy8V6U7z3UbWDzsYzQorgNYulpU",
   secure: true,
 });
 
 export async function POST(request: NextRequest) {
   try {
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME || "zejld0zt";
+    const apiKey = process.env.CLOUDINARY_API_KEY || "452719257376477";
+    const apiSecret = process.env.CLOUDINARY_API_SECRET || "cy8V6U7z3UbWDzsYzQorgNYulpU";
 
     if (!cloudName || !apiKey || !apiSecret) {
       return NextResponse.json(

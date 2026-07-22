@@ -11,16 +11,18 @@ import OrderStock from './components/OrderStock';
 import OrderAgent from './components/OrderAgent';
 import OrderWallet from './components/OrderWallet';
 import OrderSettings from './components/OrderSettings';
+import OrderNotes from './components/OrderNotes';
 
-type TabType = 'dashboard' | 'add' | 'list' | 'stock' | 'agent' | 'wallet' | 'settings';
+type TabType = 'dashboard' | 'add' | 'list' | 'stock' | 'agent' | 'wallet' | 'settings' | 'notes';
 
 const navConfig: { id: TabType; label: string; icon: string }[] = [
-  { id: 'dashboard', label: 'ໜ້າຫຼັກ', icon: 'dashboard' },
   { id: 'add', label: 'ເພີ່ມອໍເດີໃໝ່', icon: 'add' },
+  { id: 'dashboard', label: 'ໜ້າຫຼັກ', icon: 'dashboard' },
   { id: 'list', label: 'ລາຍການອໍເດີ', icon: 'list' },
   { id: 'stock', label: 'ສາງສິນຄ້າ', icon: 'stock' },
   { id: 'agent', label: 'ຕົວແທນຈຳໜ່າຍ', icon: 'agent' },
   { id: 'wallet', label: 'ກະເປົາເງິນ', icon: 'wallet' },
+  { id: 'notes', label: 'ໂນ້ດ & ຂໍ້ຄວາມ', icon: 'notes' },
   { id: 'settings', label: 'ຕັ້ງຄ່າ', icon: 'settings' },
 ];
 
@@ -62,12 +64,17 @@ const Icon = ({ name, className }: { name: string; className?: string }) => {
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
+    notes: (
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+      </svg>
+    ),
   };
   return <>{icons[name] || icons['dashboard']}</>;
 };
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>('add');
   const [orderCount, setOrderCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
@@ -96,11 +103,12 @@ export default function DashboardPage() {
 
   // Bottom nav shows 5 most important tabs on mobile
   const bottomNavItems: { id: TabType; label: string; icon: string }[] = [
-    { id: 'dashboard', label: 'ໜ້າຫຼັກ', icon: 'dashboard' },
     { id: 'add', label: 'ເພີ່ມ', icon: 'add' },
+    { id: 'dashboard', label: 'ໜ້າຫຼັກ', icon: 'dashboard' },
     { id: 'list', label: 'ລາຍການ', icon: 'list' },
     { id: 'stock', label: 'ສາງ', icon: 'stock' },
     { id: 'wallet', label: 'ເງິນ', icon: 'wallet' },
+    { id: 'notes', label: 'ໂນ້ດ', icon: 'notes' },
   ];
 
   return (
@@ -269,7 +277,8 @@ export default function DashboardPage() {
                 {activeTab === 'list' && <OrderList onEdit={handleEditOrder} />}
                 {activeTab === 'stock' && <OrderStock />}
                 {activeTab === 'agent' && <OrderAgent onCreateOrder={(agId) => { setPreSelectedAgentId(agId); handleTabChange('add'); }} onEdit={handleEditOrder} />}
-                {activeTab === 'wallet' && <OrderWallet />}
+                {activeTab === 'wallet' && <OrderWallet onEditOrder={handleEditOrder} />}
+                {activeTab === 'notes' && <OrderNotes />}
                 {activeTab === 'settings' && <OrderSettings />}
               </div>
             </div>

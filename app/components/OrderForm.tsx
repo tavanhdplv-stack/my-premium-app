@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { db } from '@/firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import type { Agent } from '@/app/types';
 
 // --- Constants ---
@@ -66,12 +66,22 @@ const ghostBtn =
 
 // --- Pure helpers (module scope — no need to recreate on every render) ---
 const formatNumber = (num: number | string) => {
-  if (!num) return '0';
-  return Number(num).toLocaleString('en-US');
+  if (num === null || num === undefined || num === '') return '';
+  const str = String(num);
+  const parts = str.split('.');
+  const intPart = parts[0].replace(/[^0-9-]/g, '');
+  const decPart = parts.length > 1 ? '.' + parts[1].replace(/[^0-9]/g, '') : '';
+  let formattedInt = intPart;
+  if (intPart !== '' && intPart !== '-') {
+    formattedInt = BigInt(intPart).toLocaleString('en-US');
+  }
+  return formattedInt + decPart;
 };
 const parseNumericInput = (val: string): string | null => {
   const raw = val.replace(/,/g, '');
-  return isNaN(Number(raw)) ? null : raw;
+  if (raw === '' || raw === '-') return raw;
+  if (/^-?\d*\.?\d*$/.test(raw)) return raw;
+  return null;
 };
 
 // --- Reusable field primitives ---
@@ -89,7 +99,7 @@ function MoneyInput({
   return (
     <input
       type="text"
-      inputMode="numeric"
+      inputMode="decimal"
       value={formatNumber(value)}
       onChange={(e) => {
         const raw = parseNumericInput(e.target.value);
@@ -150,7 +160,41 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
   const [rawText, setRawText] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
-  
+
+  // Load existing order for edit
+  useEffect(() => {
+    if (!editId) return;
+    const fetchOrder = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'orders', editId));
+        if (snap.exists()) {
+          const d = snap.data();
+          setCustomerName(d.customerName || '');
+          setPhone(d.phone || '');
+          setTransport(d.transport || TRANSPORTS[0]);
+          setVillage(d.village || '');
+          setDistrict(d.district || '');
+          setProvince(d.province || PROVINCES[0]);
+          setOrderDate(d.orderDate || new Date().toLocaleDateString('en-GB'));
+          setStatus(d.status || STATUSES[0]);
+          setWallet(d.wallet || '');
+          setPaymentMethod(d.paymentMethod || 'COD');
+          setDeposit(d.deposit?.toString() || '');
+          setShippingFee(d.shippingFee?.toString() || '');
+          setItems(d.items?.length ? d.items : [{ id: Date.now().toString(), name: '', qty: 1, cost: 0, price: 0 }]);
+          setExpenses(d.expenses || []);
+          setImageUrl(d.imageUrl || '');
+          setAgentId(d.agentId || '');
+          setOrderedBy(d.orderedBy || '');
+        }
+      } catch (err) {
+        console.error('Error loading order:', err);
+      }
+    };
+    fetchOrder();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   // Stock data
   const [stocks, setStocks] = useState<StockItem[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -505,15 +549,13 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     setLoading(true);
     try {
       const firstItem = items[0] || { name: 'ສິນຄ້າທົ່ວໄປ', price: 0 };
-
-      await addDoc(collection(db, 'orders'), {
+      const orderData = {
         customerName: customerName || 'ລູກຄ້າທົ່ວໄປ',
         productName: firstItem.name,
         size: 'N/A',
         price: Number(totalSales),
         paymentMethod: paymentMethod,
         status: status,
-        createdAt: serverTimestamp(),
         phone, transport, village, district, province, orderDate, wallet,
         deposit: Number(deposit) || 0,
         shippingFee: totalShipping,
@@ -526,16 +568,30 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         agentId: agentId || null,
         isPreOrder: agentId ? true : false,
         orderedBy: orderedBy || '',
-      });
-      
-      if (agentId && totalSales > 0) {
-        const agentRef = doc(db, 'agents', agentId);
-        await updateDoc(agentRef, {
-          totalSales: increment(totalSales)
+      };
+
+      if (editId) {
+        // Update existing order
+        await updateDoc(doc(db, 'orders', editId), {
+          ...orderData,
+          updatedAt: serverTimestamp(),
         });
+        setMessage({ type: 'success', text: '✅ ແກ້ໄຂອໍເດີສຳເລັດແລ້ວ!' });
+      } else {
+        // Create new order
+        await addDoc(collection(db, 'orders'), {
+          ...orderData,
+          createdAt: serverTimestamp(),
+        });
+        if (agentId && totalSales > 0) {
+          const agentRef = doc(db, 'agents', agentId);
+          await updateDoc(agentRef, {
+            totalSales: increment(totalSales)
+          });
+        }
+        setMessage({ type: 'success', text: '🎉 ບັນທຶກອໍເດີສຳເລັດແລ້ວ!' });
       }
 
-      setMessage({ type: 'success', text: '🎉 ບັນທຶກອໍເດີສຳເລັດແລ້ວ!' });
       setTimeout(() => { resetForm(); if (onSuccess) onSuccess(); }, 2000);
     } catch (error) {
       console.error(error);
