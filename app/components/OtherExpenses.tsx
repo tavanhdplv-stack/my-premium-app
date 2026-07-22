@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '@/firebase';
-import { collection, onSnapshot, addDoc, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 interface Wallet {
   id: string;
@@ -28,6 +28,22 @@ export default function OtherExpenses() {
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<ExpenseTransaction[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+
+  const handleUpdateAmount = async (id: string) => {
+    if (!editAmount) return;
+    try {
+      await updateDoc(doc(db, 'transactions', id), {
+        amount: Number(editAmount.replace(/,/g, ''))
+      });
+      setEditingId(null);
+      setEditAmount('');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update amount');
+    }
+  };
 
   useEffect(() => {
     const unsubWallets = onSnapshot(collection(db, 'wallets'), (snap) => {
@@ -190,9 +206,9 @@ export default function OtherExpenses() {
 
       {/* History Modal */}
       {showHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[110] flex flex-col sm:items-center sm:justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowHistory(false)} />
-          <div className="relative w-full max-w-2xl max-h-[80vh] bg-white dark:bg-slate-900 rounded-2xl shadow-xl flex flex-col animate-[fadeIn_0.2s_ease-out]">
+          <div className="relative w-full h-full sm:h-auto max-w-2xl sm:max-h-[85vh] bg-white dark:bg-slate-900 sm:rounded-2xl shadow-xl flex flex-col animate-[fadeIn_0.2s_ease-out]">
             <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/10">
               <h3 className="text-lg font-bold flex items-center gap-2 text-slate-800 dark:text-white">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-[#FF7A50]"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -208,7 +224,7 @@ export default function OtherExpenses() {
                   {history.map(item => {
                     const w = wallets.find(x => x.id === item.walletId);
                     return (
-                      <div key={item.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl transition-colors">
+                      <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl transition-colors gap-3">
                         <div>
                           <div className="font-bold text-sm text-slate-800 dark:text-slate-200">{item.note}</div>
                           <div className="text-[11px] text-slate-500 flex gap-2 mt-0.5">
@@ -217,11 +233,51 @@ export default function OtherExpenses() {
                             <span>ກະເປົາ: {w?.name || 'Unknown'}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <span className="font-extrabold text-rose-500">-{item.amount.toLocaleString()}</span>
-                          <button onClick={() => handleDelete(item.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors">
-                            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-                          </button>
+                        <div className="flex items-center justify-between sm:justify-end gap-3">
+                          {editingId === item.id ? (
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="text"
+                                inputMode="decimal"
+                                value={editAmount}
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/,/g, '');
+                                  if (raw === '' || raw === '-') setEditAmount(raw);
+                                  else if (/^-?\d*\.?\d*$/.test(raw)) setEditAmount(raw);
+                                }}
+                                className="w-24 h-9 px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-right outline-none focus:border-violet-500"
+                              />
+                              <button onClick={() => handleUpdateAmount(item.id)} className="px-3 h-9 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-colors">ບັນທຶກ</button>
+                              <button onClick={() => setEditingId(null)} className="px-3 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300 transition-colors">ຍົກເລີກ</button>
+                            </div>
+                          ) : (
+                            <>
+                              <span 
+                                className="font-extrabold text-rose-500 text-base sm:text-sm cursor-pointer hover:underline"
+                                onClick={() => {
+                                  setEditingId(item.id);
+                                  setEditAmount(String(item.amount));
+                                }}
+                                title="ແຕະເພື່ອແກ້ໄຂ"
+                              >
+                                -{item.amount.toLocaleString()}
+                              </span>
+                              <div className="flex gap-1">
+                                <button 
+                                  onClick={() => {
+                                    setEditingId(item.id);
+                                    setEditAmount(String(item.amount));
+                                  }} 
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors"
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                                </button>
+                                <button onClick={() => handleDelete(item.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors">
+                                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     )
