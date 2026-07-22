@@ -401,11 +401,12 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
     const lines = t.split('\n');
     const newItems: OrderItem[] = [];
-    const ignoreWords = ['ຊື່', 'ເບີ', 'ບ້ານ', 'ເມືອງ', 'ແຂວງ', 'ມັດຈຳ', 'ມັດຈํา', 'ສາຂາ', 'ໂອນ', 'ຈ່າຍ', 'ລວມຍອດ', 'ຍອດຄົງເຫຼືອ', 'ຮັບອໍເດີ', 'ອໍເດີໃຊ້ເວລາ', 'ຊ້າ ຫຼື ໄວ', 'ງົດເລັ່ງ', 'ເຄື່ອງມາແລ້ວ', 'ບາງອໍເດີ', 'ຂອບໃຈ'];
+    
+    // Ignore lines that match summary words
+    const ignoreRegex = /(?:ຊື່|ເບີ|ບ້ານ|ເມືອງ|ແຂວງ|ມັດຈຳ|ມັດຈໍາ|ສາຂາ|ໂອນ|ຈ່າຍ|ລວມຍອດ|ຍອດຄົງເຫຼືອ|ຮັບອໍເດີ|ອໍເດີ|ເວລາ|ຊ້າ|ໄວ|ງົດເລັ່ງ|ເຄື່ອງມາແລ້ວ|ບາງອໍເດີ|ຂອບໃຈ)/i;
 
     lines.forEach(line => {
-      const isIgnore = ignoreWords.some(w => line.includes(w));
-      if (!isIgnore && line.length > 3) {
+      if (!ignoreRegex.test(line) && line.trim().length > 3) {
         let qty = 1;
         const qtyMatch = line.match(/(?:x|X)\s*(\d+)|\s*(\d+)\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ|ໃບ)/);
         if (qtyMatch) qty = Number(qtyMatch[1] || qtyMatch[2]);
@@ -421,12 +422,14 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         name = name.replace(/^[-*:\s\d.]+|[-*:\s]+$/g, '');
 
         if (name && price > 0) {
-          newItems.push({ id: Date.now().toString() + Math.random(), name, qty, cost: 0, price });
+          newItems.push({ id: Math.random().toString(36).substr(2, 9), name, qty, cost: 0, price });
         }
       }
     });
 
-    if (newItems.length > 0) setItems(newItems);
+    if (newItems.length > 0) {
+      setItems(newItems);
+    }
     setMessage({ type: 'success', text: '✨ ດຶງຂໍ້ມູນສຳເລັດແລ້ວ! ກະລຸນາກວດສອບຄວາມຖືກຕ້ອງ.' });
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
