@@ -52,17 +52,17 @@ interface Expense {
 // Design tokens — one source of truth so every field/card/button in the
 // form shares the exact same height, radius, border and focus treatment.
 // =====================================================================
-const card = 'bg-white dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-white/8 shadow-sm dark:shadow-none';
+const card = 'bg-white dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm dark:shadow-none';
 const pad = 'p-5 sm:p-6 lg:p-7';
-const label = 'block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5';
+const label = 'block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
 const field =
-  'w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-sm text-slate-800 placeholder-slate-400 outline-none transition-colors duration-150 focus:bg-white focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10';
-const sectionTitle = 'flex items-center gap-2.5 text-[13px] font-bold text-slate-800 uppercase tracking-wide';
+  'w-full h-11 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-colors duration-150 focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:focus:ring-violet-500/20';
+const sectionTitle = 'flex items-center gap-2.5 text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide';
 const chip = 'w-9 h-9 rounded-xl flex items-center justify-center shrink-0';
 const primaryBtn =
   'inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-violet-600 text-white text-sm font-bold shadow-md shadow-violet-500/25 hover:bg-violet-700 active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:shadow-none disabled:active:scale-100 motion-reduce:transition-none';
 const ghostBtn =
-  'inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 active:scale-[0.98] transition-all duration-150 motion-reduce:transition-none';
+  'inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:border-rose-200 dark:hover:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-600 dark:hover:text-rose-400 active:scale-[0.98] transition-all duration-150 motion-reduce:transition-none';
 
 // --- Pure helpers (module scope — no need to recreate on every render) ---
 const formatNumber = (num: number | string) => {
@@ -602,7 +602,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 animate-[fadeIn_0.35s_ease-out]">
+    <div className="min-h-screen bg-slate-50 dark:bg-transparent animate-[fadeIn_0.35s_ease-out]">
       {/* Floating status toast */}
       {message.text && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[60] animate-[toastIn_0.2s_ease-out]">
@@ -622,18 +622,18 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         {/* Page header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-2">
           <div className="flex items-center gap-3">
-            <button onClick={resetForm} className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50">
+            <button onClick={resetForm} className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
               <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
             </button>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               {editId ? 'ແກ້ໄຂອໍເດີ' : 'ສ້າງບິນໃໝ່'}
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={resetForm} className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50">
+            <button onClick={resetForm} className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
               <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
             </button>
-            <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50">
+            <button className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
               <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.909A2.25 2.25 0 012.25 8.643V6.75m19.5 0v10.5A2.25 2.25 0 0119.5 19.5h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.909A2.25 2.25 0 012.25 8.643V6.75" /></svg>
             </button>
           </div>
@@ -647,8 +647,8 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M12.012 2c-5.506 0-9.98 4.475-9.98 9.982 0 1.944.545 3.84 1.55 5.518L2 22l4.646-1.55a9.929 9.929 0 005.366 1.551h.004c5.505 0 9.98-4.476 9.98-9.983 0-5.507-4.475-9.982-9.98-9.982z"/></svg>
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800">ນຳເຂົ້າອັດຕະໂນມັດ</p>
-              <p className="text-xs text-slate-400">ວາງຂໍ້ຄວາມຈາກລູກຄ້າ</p>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">ນຳເຂົ້າອັດຕະໂນມັດ</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">ວາງຂໍ້ຄວາມຈາກລູກຄ້າ</p>
             </div>
           </div>
           <input
@@ -656,9 +656,9 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             placeholder="ວາງຂໍ້ຄວາມທີ່ນີ້..."
-            className="flex-1 h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm text-slate-700 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-400 transition-colors w-full"
+            className="flex-1 h-12 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors w-full"
           />
-          <button onClick={handleParseData} className="h-12 px-6 rounded-xl bg-[#0f172a] hover:bg-slate-800 text-white text-sm font-bold transition-all duration-150 shrink-0 w-full md:w-auto flex items-center justify-center gap-2">
+          <button onClick={handleParseData} className="h-12 px-6 rounded-xl bg-[#0f172a] hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-sm font-bold transition-all duration-150 shrink-0 w-full md:w-auto flex items-center justify-center gap-2">
             <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09l2.846.813-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
             ດຶງຂໍ້ມູນ
           </button>
@@ -672,7 +672,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-blue-500"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm0-13a3 3 0 100 6 3 3 0 000-6zm0 4a1 1 0 110-2 1 1 0 010 2zm-4.5 5c0-1.527 2.128-2.5 4.5-2.5s4.5.973 4.5 2.5v1h-9v-1z"/></svg>
             </div>
             <div>
-              <h2 className="text-sm font-extrabold text-slate-800">ຂໍ້ມູນລູກຄ້າ ແລະ ການຈັດສົ່ງ</h2>
+              <h2 className="text-sm font-extrabold text-slate-800 dark:text-white">ຂໍ້ມູນລູກຄ້າ ແລະ ການຈັດສົ່ງ</h2>
               <p className="text-[11px] text-slate-400 mt-0.5">ກອກຂໍ້ມູນລູກຄ້າ, ຕົວແທນ ແລະ ທີ່ຢູ່ຈັດສົ່ງ</p>
             </div>
           </div>
@@ -693,7 +693,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                       setPhone(ag.phone);
                     }
                   }}
-                  className={`${field} appearance-none pr-8 ${agentId ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold' : ''}`}
+                  className={`${field} appearance-none pr-8 ${agentId ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-400 font-semibold' : ''}`}
                 >
                   <option value="">— ລູກຄ້າທົ່ວໄປ —</option>
                   {agents.map(ag => <option key={ag.id} value={ag.id}>{ag.agentName} ({ag.level})</option>)}
@@ -704,7 +704,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
             <div>
               <label className={label}>👤 ຜູ້ສັ່ງ (ໃຜຄີຍ)</label>
-              <input type="text" value={orderedBy} onChange={e => setOrderedBy(e.target.value)} placeholder="ຊື່ຜູ້ຄີຍອໍເດີ" className={`${field} bg-indigo-50/60`} />
+              <input type="text" value={orderedBy} onChange={e => setOrderedBy(e.target.value)} placeholder="ຊື່ຜູ້ຄີຍອໍເດີ" className={`${field} bg-indigo-50/60 dark:bg-indigo-500/10`} />
             </div>
 
             <div>
@@ -723,7 +723,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             <div>
               <label className={label}>🚚 ຂົນສົ່ງ</label>
               <div className="relative">
-                <SelectField value={transport} onChange={setTransport} options={TRANSPORTS} className="text-violet-600 font-bold bg-violet-50/60" />
+                <SelectField value={transport} onChange={setTransport} options={TRANSPORTS} className="text-violet-600 dark:text-violet-400 font-bold bg-violet-50/60 dark:bg-violet-500/10" />
               </div>
             </div>
 
@@ -747,24 +747,24 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         {/* Order Items Card */}
         <section className={`${card} ${pad}`}>
           <div className="flex items-center justify-between gap-3 mb-5">
-            <div className="flex items-center gap-2 text-sm font-extrabold text-slate-800">
+            <div className="flex items-center gap-2 text-sm font-extrabold text-slate-800 dark:text-slate-200">
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-indigo-500"><path d="M21 7.24a2.25 2.25 0 00-1.12-1.95l-6.75-3.9a2.25 2.25 0 00-2.26 0l-6.75 3.9A2.25 2.25 0 003 7.24v9.52a2.25 2.25 0 001.12 1.95l6.75 3.9a2.25 2.25 0 002.26 0l6.75-3.9A2.25 2.25 0 0021 16.76V7.24zm-9 11.26L5.25 14.6V9.4l6.75 3.9v5.2zm1.5-6.06L6.75 8.54l6.75-3.9 6.75 3.9-6.75 3.9zm.75 6.06v-5.2l6.75-3.9v5.2l-6.75 3.9z"/></svg>
               ລາຍການສິນຄ້າ
-              <span className="ml-1 normal-case tracking-normal text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+              <span className="ml-1 normal-case tracking-normal text-[11px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                 {items.length} ລາຍການ
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <label className="cursor-pointer h-9 px-3.5 rounded-lg bg-sky-50 text-sky-600 text-xs font-bold hover:bg-sky-100 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
+              <label className="cursor-pointer h-9 px-3.5 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5.04-6.71l-2.75 3.54-1.96-2.36L6.5 17h11l-3.54-4.71z"/></svg>
                 ອັບໂຫຼດຫຼາຍຮູບ
                 <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkImageUpload} />
               </label>
-              <button onClick={() => setShowStockModal(true)} className="h-9 px-3.5 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-bold hover:bg-emerald-100 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
+              <button onClick={() => setShowStockModal(true)} className="h-9 px-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
                 ເພີ່ມຈາກສະຕັອກ
               </button>
-              <button onClick={addItem} className="h-9 px-3.5 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-bold hover:bg-indigo-100 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
+              <button onClick={addItem} className="h-9 px-3.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 ເພີ່ມລາຍການ
               </button>
@@ -775,12 +775,12 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             {items.map((item) => {
               const itemProfit = (item.price - item.cost) * item.qty;
               return (
-                <div key={item.id} className="relative bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-violet-300/80 hover:shadow-md transition-all duration-200 group">
+                <div key={item.id} className="relative bg-white dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-violet-300/80 dark:hover:border-violet-500/80 hover:shadow-md transition-all duration-200 group">
                   {items.length > 1 && (
                     <button
                       onClick={() => removeItem(item.id)}
                       title="ລຶບລາຍການ"
-                      className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 bg-white/80 rounded-full p-1.5 hover:bg-rose-50 transition-colors z-10"
+                      className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 dark:text-slate-500 dark:hover:text-rose-400 bg-white/80 dark:bg-slate-800/80 rounded-full p-1.5 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors z-10"
                     >
                       <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                     </button>
@@ -789,7 +789,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
                     {/* Image Uploader & Name */}
                     <div className="lg:col-span-5 flex items-start gap-4 pr-6 lg:pr-0">
-                      <div className="w-20 h-20 shrink-0 relative rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-violet-50/50 hover:border-violet-300 transition-all duration-200 overflow-hidden group/img">
+                      <div className="w-20 h-20 shrink-0 relative rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-violet-50/50 dark:hover:bg-violet-900/30 hover:border-violet-300 dark:hover:border-violet-500 transition-all duration-200 overflow-hidden group/img">
                         {item.imageUrl ? (
                           <>
                             <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -821,31 +821,31 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                             setShowStockDropdown(item.id);
                           }}
                           placeholder="ເຊັ່ນ: ເສື້ອຢືດ..."
-                          className={`${field} font-bold text-slate-800 focus:bg-white w-full`}
+                          className={`${field} font-bold w-full`}
                         />
                         {showStockDropdown === item.id && (
-                          <div className="absolute z-20 left-0 right-0 top-[100%] mt-1 max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-100">
+                          <div className="absolute z-20 left-0 right-0 top-[100%] mt-1 max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
                             {stocks.filter(s => (s.itemName || "").toLowerCase().includes((item.name || "").toLowerCase())).length === 0 ? (
                               <div className="p-4 text-center text-xs text-slate-500">ບໍ່ພົບສິນຄ້າໃນສະຕັອກ</div>
                             ) : (
                               stocks.filter(s => (s.itemName || "").toLowerCase().includes((item.name || "").toLowerCase())).map(stock => (
                                 <div
                                   key={stock.id}
-                                  className="flex items-center gap-3 p-3 hover:bg-violet-50 cursor-pointer transition-colors"
+                                  className="flex items-center gap-3 p-3 hover:bg-violet-50 dark:hover:bg-violet-900/30 cursor-pointer transition-colors"
                                   onClick={() => applyStockToItem(item.id, stock)}
                                 >
                                   {stock.imageUrl ? (
-                                    <img src={stock.imageUrl} className="w-10 h-10 rounded-lg object-cover bg-slate-100 shrink-0" alt="" />
+                                    <img src={stock.imageUrl} className="w-10 h-10 rounded-lg object-cover bg-slate-100 dark:bg-slate-700 shrink-0" alt="" />
                                   ) : (
-                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-slate-300"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                                    <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-slate-300 dark:text-slate-500"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
                                     </div>
                                   )}
                                   <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-bold text-slate-800 truncate">{stock.itemName}</div>
+                                    <div className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{stock.itemName}</div>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">ສະຕັອກ: {stock.quantity}</span>
-                                      <span className="text-[10px] text-slate-500">ລາຄາ: {new Intl.NumberFormat('lo-LA').format(stock.sellingPrice)}</span>
+                                      <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded">ສະຕັອກ: {stock.quantity}</span>
+                                      <span className="text-[10px] text-slate-500 dark:text-slate-400">ລາຄາ: {new Intl.NumberFormat('lo-LA').format(stock.sellingPrice)}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -860,15 +860,15 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                     <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-4 items-start">
                       <div>
                         <label className={label}>ຈຳນວນ</label>
-                        <input type="number" min="1" value={item.qty} onChange={(e) => updateItem(item.id, 'qty', Number(e.target.value))} className={`${field} text-center tabular-nums font-bold text-slate-800 w-full`} />
+                        <input type="number" min="1" value={item.qty} onChange={(e) => updateItem(item.id, 'qty', Number(e.target.value))} className={`${field} text-center tabular-nums font-bold w-full`} />
                       </div>
                       <div>
-                        <label className={`${label} text-rose-500`}>ຕົ້ນທຶນ</label>
-                        <MoneyInput value={item.cost} onChange={(v) => updateItem(item.id, 'cost', Number(v))} placeholder="0" className="font-semibold text-rose-500 w-full" />
+                        <label className={`${label} text-rose-500 dark:text-rose-400`}>ຕົ້ນທຶນ</label>
+                        <MoneyInput value={item.cost} onChange={(v) => updateItem(item.id, 'cost', Number(v))} placeholder="0" className="font-semibold text-rose-500 dark:text-rose-400 w-full" />
                       </div>
                       <div>
                         <label className={label}>ລາຄາຂາຍ</label>
-                        <MoneyInput value={item.price} onChange={(v) => updateItem(item.id, 'price', Number(v))} placeholder="0" className="font-semibold text-slate-900 w-full" />
+                        <MoneyInput value={item.price} onChange={(v) => updateItem(item.id, 'price', Number(v))} placeholder="0" className="font-semibold w-full" />
                       </div>
                       <div className="flex flex-col h-[70px] justify-end pb-1.5 sm:items-end">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">ກຳໄລ</span>
@@ -883,9 +883,9 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             })}
           </div>
 
-          <div className="mt-6 pt-5 border-t border-dashed border-slate-200 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 text-sm font-semibold text-slate-600">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.63c0-.621-.504-1.125-1.125-1.125H4.125C3.504 5.818 3 6.322 3 6.943v10.982a1.125 1.125 0 001.125 1.125h1.5m8.25-13.5V18.75m0-13.5h-2.25" /></svg>
+          <div className="mt-6 pt-5 border-t border-dashed border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-slate-400 dark:text-slate-500"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.63c0-.621-.504-1.125-1.125-1.125H4.125C3.504 5.818 3 6.322 3 6.943v10.982a1.125 1.125 0 001.125 1.125h1.5m8.25-13.5V18.75m0-13.5h-2.25" /></svg>
               ຄ່າຂົນສົ່ງບິນນີ້
             </div>
             <MoneyInput value={shippingFee} onChange={setShippingFee} className="w-32 sm:w-40" />
@@ -898,37 +898,37 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             <div>
               <div className="flex items-center gap-2 mb-1.5">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-500"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ວັນທີຮັບອໍເດີ</label>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0">ວັນທີຮັບອໍເດີ</label>
               </div>
-              <input type="text" value={orderDate} onChange={e => setOrderDate(e.target.value)} className={`${field} font-bold text-slate-800 text-center`} />
+              <input type="text" value={orderDate} onChange={e => setOrderDate(e.target.value)} className={`${field} font-bold text-center`} />
             </div>
 
             <div>
               <div className="flex items-center gap-2 mb-1.5">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-400"><path d="M20 12c0-1.1.9-2 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v4c1.1 0 2 .9 2 2s-.9 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2zm-7 2h-2v-2h2v2zm0-4h-2V8h2v2z"/></svg>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ສະຖານະອໍເດີ</label>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0">ສະຖານະອໍເດີ</label>
               </div>
-              <SelectField value={status} onChange={setStatus} options={STATUSES} className="font-bold text-blue-600 bg-blue-50/50" />
+              <SelectField value={status} onChange={setStatus} options={STATUSES} className="font-bold text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-500/10" />
             </div>
 
             <div>
               <div className="flex items-center gap-2 mb-1.5">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-purple-500"><path d="M21 7.28V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2.28A2 2 0 0022 15V9a2 2 0 00-1-1.72zM20 15h-4V9h4v6zM5 19V5h14v2h-6c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h6v2H5z"/></svg>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ກະເປົາຮັບເງິນ</label>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0">ກະເປົາຮັບເງິນ</label>
               </div>
-              <SelectField value={wallet} onChange={setWallet} options={walletOptions.length > 0 ? walletOptions.map(w => w.name) : ['—']} className="font-semibold text-purple-700 bg-purple-50/50" />
+              <SelectField value={wallet} onChange={setWallet} options={walletOptions.length > 0 ? walletOptions.map(w => w.name) : ['—']} className="font-semibold text-purple-700 dark:text-purple-400 bg-purple-50/50 dark:bg-purple-500/10" />
             </div>
 
             <div>
               <div className="flex items-center gap-2 mb-1.5">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-emerald-500"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ການຊຳລະ</label>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0">ການຊຳລະ</label>
               </div>
-              <div className="flex bg-slate-100 p-1 rounded-xl gap-1 h-11">
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1 h-11">
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('COD')}
-                  className={`flex-1 h-full text-[13px] font-bold rounded-lg transition-all duration-150 ${paymentMethod === 'COD' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 h-full text-[13px] font-bold rounded-lg transition-all duration-150 ${paymentMethod === 'COD' ? 'bg-white dark:bg-slate-700 text-orange-600 dark:text-orange-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
                 >
                   <span className="flex items-center justify-center gap-1.5">
                     <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.63c0-.621-.504-1.125-1.125-1.125H4.125C3.504 5.818 3 6.322 3 6.943v10.982a1.125 1.125 0 001.125 1.125h1.5m8.25-13.5V18.75m0-13.5h-2.25" /></svg>
@@ -938,7 +938,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('ຈ່າຍແລ້ວ')}
-                  className={`flex-1 h-full text-[13px] font-bold rounded-lg transition-all duration-150 ${paymentMethod === 'ຈ່າຍແລ້ວ' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 h-full text-[13px] font-bold rounded-lg transition-all duration-150 ${paymentMethod === 'ຈ່າຍແລ້ວ' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
                 >
                   <span className="flex items-center justify-center gap-1.5">
                     <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
@@ -951,21 +951,21 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             <div>
               <div className="flex items-center gap-2 mb-1.5">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-amber-500"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.87 0 .53-.39 1.64-2.1 1.64-1.64 0-2.1-.92-2.16-1.7H8.22c.07 1.63 1.25 2.82 2.68 3.19V19h2.34v-1.65c1.76-.32 2.92-1.41 2.92-2.96 0-2.36-1.89-3.07-3.85-3.53z"/></svg>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0">ຍອດມັດຈຳ (₭)</label>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0">ຍອດມັດຈຳ (₭)</label>
               </div>
-              <MoneyInput value={deposit} onChange={setDeposit} className="text-amber-600 bg-amber-50/50" />
+              <MoneyInput value={deposit} onChange={setDeposit} className="text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-500/10" />
             </div>
           </div>
         </section>
 
         {/* Summary & Save Card */}
         <section className={`${card} ${pad} overflow-hidden relative`}>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 dark:bg-blue-900/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
           <div className="relative flex flex-col xl:flex-row items-center justify-between gap-8 xl:gap-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-10 w-full xl:w-auto flex-1">
               <div className="flex flex-col items-center xl:items-start text-center xl:text-left">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">ຍອດຂາຍ</span>
-                <span className="text-2xl sm:text-3xl font-extrabold text-slate-800 tabular-nums">
+                <span className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white tabular-nums">
                   {formatNumber(totalSales)} <span className="text-lg">K</span>
                 </span>
               </div>
@@ -1019,25 +1019,25 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
       {/* Stock Selection Modal */}
       {showStockModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-white/10">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-500 dark:text-emerald-400">
                   <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800">ເລືອກສິນຄ້າຈາກສະຕັອກ</h3>
-                  <p className="text-xs text-slate-500">ຄລິກທີ່ສິນຄ້າເພື່ອເພີ່ມລົງໃນບິນ</p>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">ເລືອກສິນຄ້າຈາກສະຕັອກ</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">ຄລິກທີ່ສິນຄ້າເພື່ອເພີ່ມລົງໃນບິນ</p>
                 </div>
               </div>
-              <button onClick={() => setShowStockModal(false)} className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+              <button onClick={() => setShowStockModal(false)} className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             
             {/* Search */}
-            <div className="p-4 border-b border-slate-100">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800">
               <div className="relative">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                 <input
@@ -1045,19 +1045,19 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                   value={stockSearch}
                   onChange={e => setStockSearch(e.target.value)}
                   placeholder="ຄົ້ນຫາຊື່ສິນຄ້າ..."
-                  className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-emerald-400 outline-none transition-colors"
+                  className="w-full h-12 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 text-sm font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none transition-colors"
                 />
               </div>
             </div>
 
             {/* List */}
-            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-900/50">
               {stocks.filter(s => (s.itemName || "").toLowerCase().includes((stockSearch || "").toLowerCase())).length === 0 ? (
                 <div className="text-center py-10">
-                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center text-slate-300">
+                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600">
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
                   </div>
-                  <p className="text-slate-500 font-bold">ບໍ່ພົບສິນຄ້າທີ່ຄົ້ນຫາ</p>
+                  <p className="text-slate-500 dark:text-slate-400 font-bold">ບໍ່ພົບສິນຄ້າທີ່ຄົ້ນຫາ</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1065,22 +1065,22 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                     <div
                       key={stock.id}
                       onClick={() => handleSelectFromStock(stock)}
-                      className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all active:scale-95"
+                      className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-500 hover:shadow-md transition-all active:scale-95"
                     >
                       {stock.imageUrl ? (
-                        <img src={stock.imageUrl} className="w-14 h-14 rounded-lg object-cover bg-slate-50 shrink-0" alt="" />
+                        <img src={stock.imageUrl} className="w-14 h-14 rounded-lg object-cover bg-slate-50 dark:bg-slate-700 shrink-0" alt="" />
                       ) : (
-                        <div className="w-14 h-14 rounded-lg bg-slate-50 flex items-center justify-center text-slate-300 shrink-0 border border-slate-100">
+                        <div className="w-14 h-14 rounded-lg bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-500 shrink-0 border border-slate-100 dark:border-slate-600">
                           <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-800 text-sm truncate">{stock.itemName}</div>
+                        <div className="font-bold text-slate-800 dark:text-slate-200 text-sm truncate">{stock.itemName}</div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
                             ສະຕັອກ: {stock.quantity}
                           </span>
-                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
                             ₭{new Intl.NumberFormat('lo-LA').format(stock.sellingPrice)}
                           </span>
                         </div>
