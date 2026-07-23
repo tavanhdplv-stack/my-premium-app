@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db } from '@/firebase';
-import { collection, onSnapshot, addDoc, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import Swal from 'sweetalert2';
 
 interface Wallet {
@@ -35,9 +34,9 @@ export default function OtherExpenses() {
   const handleUpdateAmount = async (id: string) => {
     if (!editAmount) return;
     try {
-      await updateDoc(doc(db, 'transactions', id), {
+      await supabase.from('transactions').update({
         amount: Number(editAmount.replace(/,/g, ''))
-      });
+      }).eq('id', id);
       setEditingId(null);
       setEditAmount('');
     } catch (e) {
@@ -47,38 +46,53 @@ export default function OtherExpenses() {
   };
 
   useEffect(() => {
-    const unsubWallets = onSnapshot(collection(db, 'wallets'), (snap) => {
-      const w: Wallet[] = [];
-      snap.forEach(d => w.push({ id: d.id, name: d.data().name, type: d.data().type }));
-      setWallets(w);
-      if (w.length > 0 && !walletId) {
-        const comp = w.find(x => x.type === 'W-COMP');
-        setWalletId(comp ? comp.id : w[0].id);
-      }
-    });
-
-    const unsubHistory = onSnapshot(query(collection(db, 'transactions'), orderBy('date', 'desc')), (snap) => {
-      const h: ExpenseTransaction[] = [];
-      snap.forEach(d => {
-        const data = d.data();
-        // Ignore order expenses which usually start with 'Order #' or are related to orders
-        if (data.type === 'expense' && !data.note.startsWith('Order #')) {
-          h.push({
-            id: d.id,
-            note: data.note,
-            amount: Number(data.amount) || 0,
-            walletId: data.walletId,
-            date: data.date,
-            type: data.type
-          });
+    const fetchWallets = async () => {
+      const { data } = await supabase.from('wallets').select('*');
+      if (data) {
+        const w: Wallet[] = data.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          type: d.type
+        }));
+        setWallets(w);
+        if (w.length > 0 && !walletId) {
+          const comp = w.find((x: any) => x.type === 'W-COMP');
+          setWalletId(comp ? comp.id : w[0].id);
         }
-      });
-      setHistory(h);
-    });
+      }
+    };
+
+    const fetchHistory = async () => {
+      const { data } = await supabase.from('transactions').select('*').order('date', { ascending: false });
+      if (data) {
+        const h: ExpenseTransaction[] = [];
+        data.forEach((d: any) => {
+          // Ignore order expenses which usually start with 'Order #' or are related to orders
+          if (d.type === 'expense' && !d.note.startsWith('Order #')) {
+            h.push({
+              id: d.id,
+              note: d.note,
+              amount: Number(d.amount) || 0,
+              walletId: d.wallet_id,
+              date: d.date,
+              type: d.type
+            });
+          }
+        });
+        setHistory(h);
+      }
+    };
+
+    fetchWallets();
+    fetchHistory();
+
+    const channel = supabase.channel('other_expenses_channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, fetchWallets)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, fetchHistory)
+      .subscribe();
 
     return () => {
-      unsubWallets();
-      unsubHistory();
+      supabase.removeChannel(channel);
     };
   }, [walletId]);
 
@@ -86,11 +100,11 @@ export default function OtherExpenses() {
     if (!name || !amount || !walletId) return;
     setLoading(true);
     try {
-      await addDoc(collection(db, 'transactions'), {
+      await supabase.from('transactions').insert({
         type: 'expense',
         note: name,
         amount: Number(amount),
-        walletId: walletId,
+        wallet_id: walletId,
         date: new Date().toISOString()
       });
       setName('');
@@ -119,7 +133,7 @@ export default function OtherExpenses() {
     });
     if (!result.isConfirmed) return;
     try {
-      await deleteDoc(doc(db, 'transactions', id));
+      await supabase.from('transactions').delete().eq('id', id);
     } catch (e) {
       console.error(e);
     }

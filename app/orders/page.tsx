@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { db } from '@/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 
 interface Order {
   id: string;
@@ -19,22 +18,39 @@ export default function OrdersListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-    
-    // ดึงข้อมูลสดแบบ Real-time ดึงครั้งเดียวอัปเดตอัตโนมัติทุกจอ
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const ordersArray: Order[] = [];
-      querySnapshot.forEach((doc) => {
-        const d: any = doc.data();
-        const createdAtVal = (d.createdAt && d.createdAt.seconds) ? d.createdAt.seconds * 1000 : (d.createdAtClient || Date.now());
-        ordersArray.push({ id: doc.id, ...d, __createdAtVal: createdAtVal } as Order & { __createdAtVal?: number });
-      });
-      ordersArray.sort((a: any, b: any) => (b.__createdAtVal || 0) - (a.__createdAtVal || 0));
-      setOrders(ordersArray as Order[]);
+    const fetchOrders = async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        const mappedOrders = data.map((d: any) => ({
+          id: d.id,
+          customerName: d.customer_name,
+          productName: d.product_name,
+          size: d.size,
+          price: d.price,
+          paymentMethod: d.payment_method,
+          status: d.status
+        }));
+        setOrders(mappedOrders as Order[]);
+      }
       setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
+    fetchOrders();
+
+    const channel = supabase
+      .channel('public:orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (

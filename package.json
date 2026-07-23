@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@supabase/supabase-js": "^2.110.8",
     "browser-image-compression": "^2.0.2",
     "chart.js": "^4.5.1",
     "cloudinary": "^2.10.0",

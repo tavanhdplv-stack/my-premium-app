@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db } from '@/firebase';
-import { collection, getCountFromServer } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import ThemeToggle from './components/ThemeToggle';
 import OrderDashboard from './components/OrderDashboard';
 import OrderForm from './components/OrderForm';
@@ -137,8 +136,10 @@ export default function DashboardPage() {
     let cancelled = false;
     const fetchCount = async () => {
       try {
-        const snap = await getCountFromServer(collection(db, 'orders'));
-        if (!cancelled) setOrderCount(snap.data().count);
+        const { count, error } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true });
+        if (!error && !cancelled) setOrderCount(count || 0);
       } catch (err) {
         console.error("Error fetching order count:", err);
       }

@@ -1,4 +1,5 @@
 import imageCompression from 'browser-image-compression';
+import { supabase } from '@/app/lib/supabase';
 
 export async function uploadImageDirect(file: File): Promise<string> {
   // 1. Compress the image first
@@ -9,34 +10,28 @@ export async function uploadImageDirect(file: File): Promise<string> {
   };
   const compressedFile = await imageCompression(file, options);
 
-  // 2. Get the signature from our API
-  const signRes = await fetch('/api/sign-upload', { method: 'POST' });
-  if (!signRes.ok) {
-    throw new Error('Failed to get upload signature');
-  }
-  const { signature, timestamp, cloudName, apiKey } = await signRes.json();
+  // 2. Generate a unique file name
+  const timestamp = Date.now();
+  const fileExt = file.name.split('.').pop() || 'jpg';
+  const fileName = `${timestamp}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
 
-  // 3. Upload directly to Cloudinary
-  const formData = new FormData();
-  formData.append('file', compressedFile);
-  formData.append('api_key', apiKey);
-  formData.append('timestamp', timestamp);
-  formData.append('signature', signature);
-  formData.append('folder', 'tawan-orders');
+  // 3. Upload directly to Supabase Storage
+  const { data, error } = await supabase.storage
+    .from('images')
+    .upload(fileName, compressedFile, {
+      cacheControl: '3600',
+      upsert: false
+    });
 
-  const uploadRes = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-    {
-      method: 'POST',
-      body: formData,
-    }
-  );
-
-  if (!uploadRes.ok) {
-    const errorData = await uploadRes.json();
-    throw new Error(errorData.error?.message || 'Failed to upload image directly');
+  if (error) {
+    throw new Error(error.message || 'Failed to upload image to Supabase');
   }
 
-  const data = await uploadRes.json();
-  return data.secure_url;
+  // 4. Get the public URL
+  const { data: publicUrlData } = supabase.storage
+    .from('images')
+    .getPublicUrl(fileName);
+
+  return publicUrlData.publicUrl;
 }
+

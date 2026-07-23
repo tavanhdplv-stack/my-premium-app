@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
-import { db } from '@/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import OtherExpenses from './OtherExpenses';
 
 // --- Wallet types (shared with OrderWallet) ---
@@ -312,73 +311,100 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
 
   // Real‑time listeners from Firestore
   useEffect(() => {
-    // Orders
-    const unsubOrders = onSnapshot(
-      collection(db, 'orders'),
-      (snapshot) => {
-        const list = snapshot.docs.map((d) => {
-          const data = d.data();
-          const createdAtVal = (data.createdAt && data.createdAt.seconds) ? data.createdAt.seconds * 1000 : (data.createdAtClient || Date.now());
-          return { id: d.id, ...(data as Omit<OrderDoc, 'id'>), __createdAtVal: createdAtVal } as OrderDoc & { __createdAtVal?: number };
-        });
-        list.sort((a, b) => ((b.__createdAtVal as number) || 0) - ((a.__createdAtVal as number) || 0));
-        setOrders(list);
+    const fetchOrders = async () => {
+      const { data, error } = await supabase.from('orders').select('*');
+      if (error) {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] orders error:', error);
         setLoading(false);
-      },
-      (err) => {
-        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] orders error:', err);
-        setLoading(false);
+        return;
       }
-    );
-    // Wallets
-    const unsubWallets = onSnapshot(
-      collection(db, 'wallets'),
-      (snapshot) => {
-        const list: WalletDoc[] = snapshot.docs.map((d) => ({
-          id: d.id,
-          name: d.data().name,
-          type: d.data().type,
-          sharePercent: d.data().sharePercent ?? 50,
-        }));
-        list.sort((a, b) => (a.type === 'W-COMP' ? -1 : b.type === 'W-COMP' ? 1 : 0));
-        setWallets(list);
-      },
-      (err) => {
-        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] wallets error:', err);
+      const list = data.map(d => ({
+        id: d.id,
+        customerName: d.customer_name,
+        phone: d.phone,
+        price: d.price,
+        paymentMethod: d.payment_method,
+        status: d.status,
+        orderDate: d.order_date,
+        deposit: d.deposit,
+        shippingFee: d.shipping_fee,
+        totalCost: d.total_cost,
+        totalExpenses: d.total_expenses,
+        totalProfit: d.total_profit,
+        wallet: d.wallet,
+        items: d.items,
+        createdAt: d.created_at,
+        __createdAtVal: new Date(d.created_at).getTime()
+      }));
+      list.sort((a, b) => b.__createdAtVal - a.__createdAtVal);
+      setOrders(list as any);
+      setLoading(false);
+    };
+
+    const fetchWallets = async () => {
+      const { data, error } = await supabase.from('wallets').select('*');
+      if (error) {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] wallets error:', error);
+        return;
       }
-    );
-    // Transactions
-    const unsubTrans = onSnapshot(
-      collection(db, 'transactions'),
-      (snapshot) => {
-        setWalletTransactions(
-          snapshot.docs.map((d) => ({
-            id: d.id,
-            walletId: d.data().walletId,
-            type: d.data().type,
-            amount: Number(d.data().amount) || 0,
-            note: d.data().note || '',
-            date: d.data().date || new Date().toISOString(),
-          }))
-        );
-      },
-      (err) => {
-        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] transactions error:', err);
+      const list = data.map(d => ({
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        sharePercent: d.share_percent ?? 50,
+      }));
+      list.sort((a, b) => (a.type === 'W-COMP' ? -1 : b.type === 'W-COMP' ? 1 : 0));
+      setWallets(list as any);
+    };
+
+    const fetchTransactions = async () => {
+      const { data, error } = await supabase.from('transactions').select('*');
+      if (error) {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] transactions error:', error);
+        return;
       }
-    );
-    // Stocks
-    const unsubStocks = onSnapshot(
-      collection(db, 'stocks'),
-      (snapshot) => {
-        setStocks(
-          snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StockItem, 'id'>) }))
-        );
-      },
-      (err) => {
-        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] stocks error:', err);
+      setWalletTransactions(data.map(d => ({
+        id: d.id,
+        walletId: d.wallet_id,
+        type: d.type,
+        amount: Number(d.amount) || 0,
+        note: d.note || '',
+        date: d.date || new Date().toISOString(),
+      })));
+    };
+
+    const fetchStocks = async () => {
+      const { data, error } = await supabase.from('stocks').select('*');
+      if (error) {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderDashboard] stocks error:', error);
+        return;
       }
-    );
-    return () => { unsubOrders(); unsubWallets(); unsubTrans(); unsubStocks(); };
+      setStocks(data.map(d => ({
+        id: d.id,
+        itemName: d.item_name,
+        quantity: d.quantity,
+        costPrice: d.cost_price,
+        sellingPrice: d.selling_price,
+        imageUrl: d.image_url,
+        notes: d.notes,
+      })));
+    };
+
+    fetchOrders();
+    fetchWallets();
+    fetchTransactions();
+    fetchStocks();
+
+    const channel = supabase.channel('dashboard_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, fetchWallets)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, fetchTransactions)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, fetchStocks)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const thisYm = useMemo(() => {

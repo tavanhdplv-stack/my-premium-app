@@ -1,15 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db } from '@/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, query } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import Swal from 'sweetalert2';
 
 interface Note {
   id: string;
   title: string;
   content: string;
-  createdAt: any;
+  created_at: string;
 }
 
 export default function OrderNotes() {
@@ -27,19 +26,30 @@ export default function OrderNotes() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'notes'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const data: Note[] = [];
-      snap.forEach(d => {
-        data.push({ id: d.id, ...d.data() } as Note);
-      });
-      setNotes(data);
+    const fetchNotes = async () => {
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setNotes(data as Note[]);
+      }
       setLoading(false);
-    }, (err) => {
-      console.error(err);
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    };
+
+    fetchNotes();
+
+    const channel = supabase
+      .channel('notes_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, () => {
+        fetchNotes();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const openAddModal = () => {
@@ -61,16 +71,14 @@ export default function OrderNotes() {
     setSaving(true);
     try {
       if (editId) {
-        await updateDoc(doc(db, 'notes', editId), {
-          title,
-          content
-        });
+        await supabase
+          .from('notes')
+          .update({ title, content })
+          .eq('id', editId);
       } else {
-        await addDoc(collection(db, 'notes'), {
-          title,
-          content,
-          createdAt: serverTimestamp()
-        });
+        await supabase
+          .from('notes')
+          .insert([{ title, content }]);
       }
       setShowModal(false);
     } catch (e) {
@@ -104,7 +112,10 @@ export default function OrderNotes() {
     });
     if (!result.isConfirmed) return;
     try {
-      await deleteDoc(doc(db, 'notes', id));
+      await supabase
+        .from('notes')
+        .delete()
+        .eq('id', id);
     } catch (e) {
       console.error(e);
     }
@@ -230,7 +241,7 @@ export default function OrderNotes() {
                       {note.title}
                     </h3>
                     <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                      {note.createdAt?.toDate?.().toLocaleDateString() || 'ບໍ່ມີວັນທີ'}
+                      {note.created_at ? new Date(note.created_at).toLocaleDateString() : 'ບໍ່ມີວັນທີ'}
                     </p>
                   </div>
                   

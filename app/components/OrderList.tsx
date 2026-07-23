@@ -5,11 +5,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db } from '@/firebase';
-import {
-  collection, addDoc, query, orderBy, onSnapshot,
-  doc, updateDoc, deleteDoc, setDoc, getDoc
-} from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import Swal from 'sweetalert2';
 import { BaseModal } from './BaseModal';
 import {
@@ -84,32 +80,32 @@ const btnGhost =
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES (คงเดิม)
 // ═══════════════════════════════════════════════════════════════════════
-interface OrderItem { id: string; name: string; qty: number; cost: number; price: number; status?: string; imageUrl?: string; }
+interface OrderItem { id: string; name: string; qty: number; cost: number; price: number; status?: string; image_url?: string; }
 interface Order {
   id: string;
-  customerName: string;
+  customer_name: string;
   phone: string;
   transport: string;
   village: string;
   district: string;
   province: string;
-  orderDate: string;
+  order_date: string;
   status: string;
-  statusUpdatedAt?: unknown;
+  status_updated_at?: unknown;
   deposit: number;
-  shippingFee: number;
+  shipping_fee: number;
   items: OrderItem[];
   expenses?: Array<{ id: string; name: string; amount: number }>;
-  totalCost: number;
-  totalProfit: number;
-  totalSales?: number;
+  total_cost: number;
+  total_profit: number;
+  total_sales?: number;
   price?: number;
-  totalExpenses?: number;
-  paymentMethod?: string;
+  total_expenses?: number;
+  payment_method?: string;
   wallet?: string;
-  createdAt?: unknown;
-  imageUrl?: string;
-  orderedBy?: string;
+  created_at?: unknown;
+  image_url?: string;
+  ordered_by?: string;
 }
 interface Wallet { id: string; name: string; type: string; }
 
@@ -266,14 +262,14 @@ function StatusModal({ current, onSelect, onClose }: { current: string; onSelect
 // ═══════════════════════════════════════════════════════════════════════
 function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shopName: string; shopPhone: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const totalSales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
-  const remaining = totalSales - (order.deposit || 0);
+  const total_sales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
+  const remaining = total_sales - (order.deposit || 0);
 
   const copyText = [
     `🏪 ${shopName || 'Tawan East Shop'}`,
     `📞 ${shopPhone || ''}`,
     `━━━━━━━━━━━━━━━━━`,
-    `👤 ຜູ້ຮັບ: ${order.customerName}`,
+    `👤 ຜູ້ຮັບ: ${order.customer_name}`,
     `📱 ເບີ: ${order.phone}`,
     `🏠 ທີ່ຢູ່: ບ.${order.village} ມ.${order.district} ແຂ.${order.province}`,
     `🚚 ຂົນສົ່ງ: ${order.transport}`,
@@ -281,7 +277,7 @@ function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shop
     ...(order.items || []).map(i => `• ${i.name} x${i.qty} = ${fmtNum(i.price * i.qty)} ₭`),
     `━━━━━━━━━━━━━━━━━`,
     order.deposit > 0 ? `💵 ມັດຈຳ: ${fmtNum(order.deposit)} ₭` : '',
-    `💰 COD: ${fmtNum(remaining > 0 ? remaining : totalSales)} ₭`,
+    `💰 COD: ${fmtNum(remaining > 0 ? remaining : total_sales)} ₭`,
   ].filter(Boolean).join('\n');
 
   const handleCopy = () => {
@@ -300,7 +296,7 @@ function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shop
         <div className="flex items-center justify-between px-5">
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{order.id.slice(-8)}</p>
-            <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">{order.customerName}</h3>
+            <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">{order.customer_name}</h3>
           </div>
           <button
             onClick={handleCopy}
@@ -322,7 +318,7 @@ function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shop
           ['📱 ເບີໂທ', order.phone],
           ['🚚 ຂົນສົ່ງ', order.transport],
           ['📍 ທີ່ຢູ່', `ບ.${order.village} ມ.${order.district}`],
-          ['📅 ວັນທີ', order.orderDate],
+          ['📅 ວັນທີ', order.order_date],
         ].map(([l, v]) => (
           <div key={l} className="bg-slate-50/70 dark:bg-slate-800 rounded-[18px] p-3">
             <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{l}</p>
@@ -333,7 +329,7 @@ function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shop
       {/* Status */}
       <div className="flex items-center gap-3">
         <StatusBadge status={order.status} />
-        <span className="text-xs text-slate-400">{formatDate(order.createdAt)}</span>
+        <span className="text-xs text-slate-400">{formatDate(order.created_at)}</span>
       </div>
       {/* Items */}
       <div>
@@ -353,12 +349,12 @@ function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shop
       {/* Financials */}
       <div className="border-t border-slate-100/80 dark:border-white/8 pt-4 space-y-2.5">
         {[
-          ['ຍອດຂາຍລວມ', fmtNum(totalSales) + ' ₭', 'text-slate-900 dark:text-white font-bold'],
-          ['ຄ່າຂົນສົ່ງ', fmtNum(order.shippingFee) + ' ₭', 'text-slate-600 dark:text-slate-300'],
-          ['ຕົ້ນທຶນ', fmtNum(order.totalCost) + ' ₭', 'text-orange-600 dark:text-orange-400'],
-          ['ກຳໄລ', fmtNum(order.totalProfit) + ' ₭', order.totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-rose-600 font-extrabold'],
+          ['ຍອດຂາຍລວມ', fmtNum(total_sales) + ' ₭', 'text-slate-900 dark:text-white font-bold'],
+          ['ຄ່າຂົນສົ່ງ', fmtNum(order.shipping_fee) + ' ₭', 'text-slate-600 dark:text-slate-300'],
+          ['ຕົ້ນທຶນ', fmtNum(order.total_cost) + ' ₭', 'text-orange-600 dark:text-orange-400'],
+          ['ກຳໄລ', fmtNum(order.total_profit) + ' ₭', order.total_profit >= 0 ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-rose-600 font-extrabold'],
           ...(order.deposit > 0 ? [['ມັດຈຳ', fmtNum(order.deposit) + ' ₭', 'text-teal-600 dark:text-teal-400']] : []),
-          ...(order.deposit > 0 ? [['COD ຄ້າງຈ່າຍ', fmtNum(Math.max(totalSales - order.deposit, 0)) + ' ₭', 'text-rose-600 dark:text-rose-400 font-bold']] : []),
+          ...(order.deposit > 0 ? [['COD ຄ້າງຈ່າຍ', fmtNum(Math.max(total_sales - order.deposit, 0)) + ' ₭', 'text-rose-600 dark:text-rose-400 font-bold']] : []),
         ].map(([l, v, cls]) => (
           <div key={l} className="flex items-center justify-between text-sm">
             <span className="text-slate-500 dark:text-slate-400">{l}</span>
@@ -375,8 +371,8 @@ function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shop
 // ═══════════════════════════════════════════════════════════════════════
 function ShippingModal({ order, onClose }: { order: Order; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const totalSales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
-  const remaining = totalSales - (order.deposit || 0);
+  const total_sales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
+  const remaining = total_sales - (order.deposit || 0);
 
   useEffect(() => {
     const originalStyle = window.getComputedStyle(document.body).overflow;
@@ -387,14 +383,14 @@ function ShippingModal({ order, onClose }: { order: Order; onClose: () => void }
   }, []);
 
   const textLines = [
-    `ຜູ້ສັ່ງ: ${order.customerName} (${order.phone})`,
+    `ຜູ້ສັ່ງ: ${order.customer_name} (${order.phone})`,
     `--------------------------`,
-    `ຜູ້ຮັບ: ${order.customerName}`,
+    `ຜູ້ຮັບ: ${order.customer_name}`,
     `ໂທ: ${order.phone}`,
     `ທີ່ຢູ່: ບ.${order.village || '-'} ມ.${order.district || '-'} ແຂ.${order.province || '-'}`,
     `ຂົນສົ່ງ: ${order.transport || '-'}`,
     `--------------------------`,
-    `*** COD: ${fmtNum(remaining > 0 ? remaining : totalSales)} ₭ ***`,
+    `*** COD: ${fmtNum(remaining > 0 ? remaining : total_sales)} ₭ ***`,
   ];
 
   const handleCopy = () => {
@@ -509,7 +505,7 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
   const filtered = useMemo(() => {
     return orders.filter(o => {
       if (o.status === 'ຍົກເລີກອໍເດີ') return false;
-      const d = tsToDate(o.createdAt);
+      const d = tsToDate(o.created_at);
       if (!d) return false;
       const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       return ym === monthFilter;
@@ -519,12 +515,12 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
   const byDay = useMemo(() => {
     const map: Record<string, { cost: number; profit: number; count: number }> = {};
     filtered.forEach(o => {
-      const d = tsToDate(o.createdAt);
+      const d = tsToDate(o.created_at);
       if (!d) return;
       const key = d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
       if (!map[key]) map[key] = { cost: 0, profit: 0, count: 0 };
-      map[key].cost += o.totalCost || 0;
-      map[key].profit += o.totalProfit || 0;
+      map[key].cost += o.total_cost || 0;
+      map[key].profit += o.total_profit || 0;
       map[key].count++;
     });
     return Object.entries(map).map(([date, v]) => ({ date, ...v }));
@@ -616,7 +612,7 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
 // ALERT BADGE (ปรับดีไซน์)
 // ═══════════════════════════════════════════════════════════════════════
 function AlertBadge({ order, now, onQuickCheck }: { order: Order; now: number; onQuickCheck: () => void }) {
-  const updatedAt = tsToDate(order.statusUpdatedAt) || tsToDate(order.createdAt);
+  const updatedAt = tsToDate(order.status_updated_at) || tsToDate(order.created_at);
 
   if (order.status === 'ສົ່ງບິນແລ້ວ' && updatedAt) {
     const hrs = (now - updatedAt.getTime()) / 3600000;
@@ -782,24 +778,21 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
           customClass: { popup: 'rounded-2xl' },
         });
         if (result.isConfirmed) {
-          const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
-          await addDoc(collection(db, 'stocks'), {
-            itemName: newItems[itemIdx].name,
+          await supabase.from('stocks').insert([{
+            item_name: newItems[itemIdx].name,
             quantity: newItems[itemIdx].qty || 1,
-            costPrice: 0,
-            sellingPrice: 0,
-            imageUrl: newItems[itemIdx].imageUrl || '',
-            notes: `ຈາກການຍົກເລີກອໍເດີ (Order: ${orderId})`,
-            createdAt: serverTimestamp(),
-          });
+            cost_price: 0,
+            selling_price: 0,
+            image_url: newItems[itemIdx].image_url || newItems[itemIdx].image_url || '',
+            notes: `ຈາກການຍົກເລີກອໍເດີ (Order: ${orderId})`
+          }]);
           setToast({ msg: '📦 ນຳສິນຄ້າເຂົ້າສະຕັອກ ແລະ ລຶບອອກຈາກອໍເດີສຳເລັດ', type: 'success' });
           newItems.splice(itemIdx, 1);
           updateData.items = newItems;
         }
       }
       
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, updateData);
+      await supabase.from('orders').update(updateData).eq('id', orderId);
     } catch (err) {
       if (process.env.NODE_ENV !== 'production') console.error(err);
       setToast({ msg: '❌ ບໍ່ສາມາດອັບເດດສະຖານະສິນຄ້າໄດ້', type: 'error' });
@@ -834,64 +827,73 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
     if (typeof window !== 'undefined') localStorage.setItem('orderTableTheme', t);
   };
 
-  // ── Firestore listeners ───────────────────────────────────────────────
+  // ── Supabase listeners ───────────────────────────────────────────────
   useEffect(() => {
-    const unsubOrders = onSnapshot(
-      collection(db, 'orders'),
-      snap => {
-        const arr = snap.docs.map(d => {
-          const data: any = d.data();
-          const createdAtVal = (data.createdAt && data.createdAt.seconds) ? data.createdAt.seconds * 1000 : (data.createdAtClient || Date.now());
-          return { id: d.id, ...data, __createdAtVal: createdAtVal } as Order & { __createdAtVal?: number };
+    const fetchOrders = async () => {
+      const { data, error } = await supabase.from('orders').select('*');
+      if (!error && data) {
+        const arr = data.map(d => {
+          const created_atVal = d.created_at ? new Date(d.created_at).getTime() : (d.created_at_client || Date.now());
+          return { ...d, __created_atVal: created_atVal };
         });
-        arr.sort((a: any, b: any) => (b.__createdAtVal || 0) - (a.__createdAtVal || 0));
-        setOrders(arr as Order[]);
+        arr.sort((a: any, b: any) => (b.__created_atVal || 0) - (a.__created_atVal || 0));
+        setOrders(arr as any);
         setLoading(false);
+        if (isInitialLoad.current) isInitialLoad.current = false;
+      }
+    };
+    fetchOrders();
 
-        if (isInitialLoad.current) {
-          isInitialLoad.current = false;
-        } else if (!snap.metadata.hasPendingWrites) {
-          snap.docChanges().forEach(change => {
-            const data = change.doc.data();
-            const customer = data.customerName || 'ລູກຄ້າ';
-            if (change.type === 'modified') {
-              setToast({ msg: `🔔 ອໍເດີຂອງທ່ານ ${customer} ຖືກອັບເດດສະຖານະ!`, type: 'success' });
-            } else if (change.type === 'added') {
-              setToast({ msg: `🆕 ມີອໍເດີໃໝ່ຈາກທ່ານ ${customer}!`, type: 'success' });
-            }
-          });
+    const ordersChannel = supabase
+      .channel('orders_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload: any) => {
+        fetchOrders();
+        const data = payload.new;
+        if (data && !isInitialLoad.current) {
+          const customer = data.customer_name || data.customer_name || 'ລູກຄ້າ';
+          if (payload.eventType === 'UPDATE') {
+            setToast({ msg: `🔔 ອໍເດີຂອງທ່ານ ${customer} ຖືກອັບເດດສະຖານະ!`, type: 'success' });
+          } else if (payload.eventType === 'INSERT') {
+            setToast({ msg: `🆕 ມີອໍເດີໃໝ່ຈາກທ່ານ ${customer}!`, type: 'success' });
+          }
         }
-      },
-      err => { console.error(err); setLoading(false); }
-    );
+      })
+      .subscribe();
 
-    const unsubWallets = onSnapshot(
-      collection(db, 'wallets'),
-      snap => {
-        setWallets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Wallet)));
-      },
-      err => {
-        if (process.env.NODE_ENV !== 'production') console.error('[OrderList] wallets snapshot error:', err);
+    const fetchWallets = async () => {
+      const { data } = await supabase.from('wallets').select('*');
+      if (data) setWallets(data as Wallet[]);
+    };
+    fetchWallets();
+
+    const walletsChannel = supabase
+      .channel('wallets_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => {
+        fetchWallets();
+      })
+      .subscribe();
+
+    const fetchCounter = async () => {
+      const { data } = await supabase.from('settings').select('*').eq('id', 'costCounter').single();
+      if (data) {
+        setLastReset(data.last_reset ? new Date(data.last_reset) : null);
+        setLastResetBy(data.last_reset_by || '');
       }
-    );
+    };
+    fetchCounter();
 
-    getDoc(doc(db, 'settings', 'costCounter')).then(snap => {
-      if (snap.exists()) {
-        const d = snap.data();
-        setLastReset(tsToDate(d.lastReset));
-        setLastResetBy(d.lastResetBy || '');
-      }
-    });
+    const settingsChannel = supabase
+      .channel('settings_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings', filter: 'id=eq.costCounter' }, () => {
+        fetchCounter();
+      })
+      .subscribe();
 
-    const unsubCounter = onSnapshot(doc(db, 'settings', 'costCounter'), snap => {
-      if (snap.exists()) {
-        const d = snap.data();
-        setLastReset(tsToDate(d.lastReset));
-        setLastResetBy(d.lastResetBy || '');
-      }
-    });
-
-    return () => { unsubOrders(); unsubWallets(); unsubCounter(); };
+    return () => {
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(walletsChannel);
+      supabase.removeChannel(settingsChannel);
+    };
   }, []);
 
   // ── Date helpers ──────────────────────────────────────────────────────
@@ -908,7 +910,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
     return orders.filter(o => {
       const q = search.toLowerCase();
       const matchSearch = !q ||
-        o.customerName?.toLowerCase().includes(q) ||
+        o.customer_name?.toLowerCase().includes(q) ||
         o.phone?.includes(q) ||
         o.id.toLowerCase().includes(q) ||
         o.transport?.toLowerCase().includes(q) ||
@@ -919,9 +921,9 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                           (o.items || []).some(i => i.status === statusFilter);
 
       let matchDate = true;
-      if (dateFilter === 'this')   matchDate = getYM(o.createdAt) === thisYM;
-      if (dateFilter === 'prev')   matchDate = getYM(o.createdAt) === prevYM;
-      if (dateFilter === 'custom') matchDate = getYM(o.createdAt) === customMonth;
+      if (dateFilter === 'this')   matchDate = getYM(o.created_at) === thisYM;
+      if (dateFilter === 'prev')   matchDate = getYM(o.created_at) === prevYM;
+      if (dateFilter === 'custom') matchDate = getYM(o.created_at) === customMonth;
 
       return matchSearch && matchStatus && matchDate;
     });
@@ -932,13 +934,13 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
     const src = lastReset
       ? orders.filter(o => {
           if (o.status === 'ຍົກເລີກອໍເດີ') return false;
-          const d = tsToDate(o.createdAt);
+          const d = tsToDate(o.created_at);
           return d && d >= lastReset;
         })
       : orders.filter(o => o.status !== 'ຍົກເລີກອໍເດີ');
     return {
-      cost:   src.reduce((s, o) => s + (o.totalCost || 0) + (o.shippingFee || 0), 0),
-      profit: src.reduce((s, o) => s + (o.totalProfit || 0), 0),
+      cost:   src.reduce((s, o) => s + (o.total_cost || 0) + (o.shipping_fee || 0), 0),
+      profit: src.reduce((s, o) => s + (o.total_profit || 0), 0),
       count:  src.length,
     };
   }, [orders, lastReset]);
@@ -948,10 +950,10 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
     setStatusModal(null);
     setUpdatingId(orderId);
     try {
-      await updateDoc(doc(db, 'orders', orderId), {
+      await supabase.from('orders').update({
         status: newStatus,
-        statusUpdatedAt: new Date(),
-      });
+        status_updated_at: new Date().toISOString(),
+      }).eq('id', orderId);
       setToast({ msg: `ປ່ຽນສະຖານະເປັນ "${newStatus}" ສຳເລັດ`, type: 'success' });
     } catch {
       setToast({ msg: 'ບໍ່ສາມາຖປ່ຽນສະຖານະໄດ້', type: 'error' });
@@ -963,21 +965,21 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
   const saveCost = useCallback(async (orderId: string, cost: number) => {
     try {
       const order = orders.find(o => o.id === orderId);
-      const newProfit = (order?.totalSales ?? order?.price ?? 0)
+      const newProfit = (order?.total_sales ?? order?.total_sales ?? order?.price ?? 0)
         - cost
-        - (order?.shippingFee ?? 0)
-        - (order?.totalExpenses ?? 0);
+        - (order?.shipping_fee ?? order?.shipping_fee ?? 0)
+        - (order?.total_expenses ?? order?.total_expenses ?? 0);
       
       const updates: any = {
-        totalCost: cost,
-        totalProfit: newProfit,
+        total_cost: cost,
+        total_profit: newProfit,
       };
 
       if (lastResetBy) {
-        updates.orderedBy = lastResetBy;
+        updates.ordered_by = lastResetBy;
       }
 
-      await updateDoc(doc(db, 'orders', orderId), updates);
+      await supabase.from('orders').update(updates).eq('id', orderId);
       setToast({ msg: 'ບັນທຶກຕ້ນທຶນແລ້ວ', type: 'success' });
     } catch {
       setToast({ msg: 'ບໍ່ສາມາຖບັນທຶກຕ້ນທຶນໄດ້', type: 'error' });
@@ -1006,7 +1008,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
     });
     if (!result.isConfirmed) return;
     try {
-      await deleteDoc(doc(db, 'orders', orderId));
+      await supabase.from('orders').delete().eq('id', orderId);
       setToast({ msg: 'ລຶບອໍເດີສຳເລັດ', type: 'success' });
     } catch {
       setToast({ msg: 'ບໍ່ສາມາດລຶບໄດ້', type: 'error' });
@@ -1019,24 +1021,25 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
       const profitSinceReset = orders
         .filter(o => {
           if (o.status === 'ຍົກເລີກອໍເດີ') return false;
-          const d = tsToDate(o.createdAt);
+          const d = tsToDate(o.created_at);
           return resetTime ? (d && d >= resetTime) : true;
         })
-        .reduce((s, o) => s + (o.totalProfit || 0), 0);
+        .reduce((s, o) => s + (o.total_profit || 0), 0);
 
       if (profitSinceReset > 0) {
-        await addDoc(collection(db, 'transactions'), {
-          walletId: 'W-COMP',
+        await supabase.from('transactions').insert([{
+          wallet_id: 'W-COMP',
           type: 'income',
           amount: profitSinceReset,
           note: `ກຳໄລລອບ — ໂດຍ: ${personName}`,
           date: new Date().toISOString(),
-        });
+        }]);
       }
 
-      await setDoc(doc(db, 'settings', 'costCounter'), {
-        lastReset: new Date(),
-        lastResetBy: personName,
+      await supabase.from('settings').upsert({
+        id: 'costCounter',
+        last_reset: new Date().toISOString(),
+        last_reset_by: personName,
       });
 
       setShowReset(false);
@@ -1305,20 +1308,20 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
               </thead>
               <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
                 {filteredOrders.map((order, idx) => {
-                  const totalSales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
+                  const total_sales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
                   const isUpdating = updatingId === order.id;
-                  const remaining  = totalSales - (order.deposit || 0);
+                  const remaining  = total_sales - (order.deposit || 0);
                   const waUrl = getWhatsAppUrl(order.phone || '');
 
                   const shippingCopyText = [
                     `🏪 ${shopName}`, `📞 ${shopPhone}`,
                     '━━━━━━━━━━━',
-                    `👤 ຜູ້ຮັບ: ${order.customerName}`,
+                    `👤 ຜູ້ຮັບ: ${order.customer_name}`,
                     `📱 ເບີ: ${order.phone}`,
                     `🏠 ບ.${order.village} ມ.${order.district} ແຂ.${order.province}`,
                     `🚚 ${order.transport}`,
                     '━━━━━━━━━━━',
-                    `💰 COD: ${fmtNum(remaining > 0 ? remaining : totalSales)} ₭`,
+                    `💰 COD: ${fmtNum(remaining > 0 ? remaining : total_sales)} ₭`,
                   ].filter(Boolean).join('\n');
 
                   return (
@@ -1336,10 +1339,10 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                       <td className="px-4 py-4 min-w-[120px]">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 truncate max-w-[100px]">{order.id.slice(-10)}</span>
-                          <span className="text-xs text-slate-400">{formatDate(order.createdAt)}</span>
-                          {order.orderedBy && (
+                          <span className="text-xs text-slate-400">{formatDate(order.created_at)}</span>
+                          {order.ordered_by && (
                             <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 w-fit border border-amber-200/60 dark:border-amber-500/30">
-                              <UserIcon className="w-3 h-3" /> {order.orderedBy}
+                              <UserIcon className="w-3 h-3" /> {order.ordered_by}
                             </span>
                           )}
                         </div>
@@ -1349,7 +1352,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                       <td className="px-4 py-4 min-w-[150px]">
                         <div className="flex items-start">
                           <div>
-                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">{order.customerName || '—'}</p>
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">{order.customer_name || '—'}</p>
                             {order.phone && (
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className="text-xs text-slate-500 dark:text-slate-400">{order.phone}</span>
@@ -1385,9 +1388,9 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                         <div className="space-y-1.5">
                           {(order.items || []).map((item, i) => (
                             <div key={i} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                              {item.imageUrl ? (
+                              {item.image_url ? (
                                 <img
-                                  src={item.imageUrl}
+                                  src={item.image_url}
                                   alt=""
                                   className="w-6 h-6 rounded-[8px] border border-slate-200/60 dark:border-white/10 object-cover cursor-pointer hover:ring-2 hover:ring-teal-500 transition-all shrink-0 bg-white"
                                   onClick={() => {
@@ -1395,9 +1398,9 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                                     let clickedIndex = 0;
                                     let imgCount = 0;
                                     order.items.forEach((it) => {
-                                      if (it.imageUrl) {
-                                        images.push({ url: it.imageUrl, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
-                                        if (it.imageUrl === item.imageUrl) {
+                                      if (it.image_url) {
+                                        images.push({ url: it.image_url, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
+                                        if (it.image_url === item.image_url) {
                                           clickedIndex = imgCount;
                                         }
                                         imgCount++;
@@ -1460,9 +1463,9 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                       {/* Cost (inline edit) */}
                       <td className="px-4 py-4">
                         <div className="space-y-0.5">
-                          <InlineCostInput orderId={order.id} value={order.totalCost || 0} onSave={saveCost} />
-                          {(order.shippingFee || 0) > 0 && (
-                            <p className="text-[11px] text-slate-400 tabular-nums">+{fmtNum(order.shippingFee)} ₭ ຂົນສົ່ງ</p>
+                          <InlineCostInput orderId={order.id} value={order.total_cost || 0} onSave={saveCost} />
+                          {(order.shipping_fee || 0) > 0 && (
+                            <p className="text-[11px] text-slate-400 tabular-nums">+{fmtNum(order.shipping_fee)} ₭ ຂົນສົ່ງ</p>
                           )}
                         </div>
                       </td>
@@ -1471,7 +1474,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                       <td className="px-4 py-4">
                         <div className="flex flex-col items-center gap-1.5">
                           <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
-                            {fmtNum(totalSales)}
+                            {fmtNum(total_sales)}
                           </p>
                           {(order.deposit || 0) > 0 && (
                             <div className="flex flex-col gap-1 w-full max-w-[110px]">
@@ -1496,16 +1499,16 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
 
                       {/* Profit */}
                       <td className="px-4 py-4">
-                        <p className={`text-sm font-extrabold tabular-nums ${(order.totalProfit || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                          {fmtNum(order.totalProfit || 0)} ₭
+                        <p className={`text-sm font-extrabold tabular-nums ${(order.total_profit || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {fmtNum(order.total_profit || 0)} ₭
                         </p>
                       </td>
 
                       {/* Status */}
                       <td className="px-4 py-4 min-w-[170px]">
                         <StatusBadge status={order.status} loading={isUpdating} onClick={() => setStatusModal(order.id)} />
-                        {order.statusUpdatedAt != null && (
-                          <p className="text-[10px] text-slate-400 mt-1 tabular-nums">{formatDate(order.statusUpdatedAt as any, true)} {formatTime(order.statusUpdatedAt as any)}</p>
+                        {order.status_updated_at != null && (
+                          <p className="text-[10px] text-slate-400 mt-1 tabular-nums">{formatDate(order.status_updated_at as any, true)} {formatTime(order.status_updated_at as any)}</p>
                         )}
                         <AlertBadge order={order} now={now} onQuickCheck={() => updateStatus(order.id, 'ກວດສອບແລ້ວ')} />
                       </td>

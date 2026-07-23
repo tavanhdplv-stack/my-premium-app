@@ -3,8 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db } from '@/firebase';
-import { collection, onSnapshot, addDoc, setDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import { BaseModal } from './BaseModal';
 
 // --- Interfaces ---
@@ -79,74 +78,89 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   const [isProfitSplitTrans, setIsProfitSplitTrans] = useState(false);
   const [splitPartnerId, setSplitPartnerId] = useState('');
 
-  // --- Firestore Real-time Subscriptions ---
+  // --- Supabase Real-time Subscriptions ---
   useEffect(() => {
-    // 1. Wallets subscription
-    const unsubscribeWallets = onSnapshot(collection(db, 'wallets'), (snapshot) => {
-      const walletList: Wallet[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        walletList.push({
-          id: docSnap.id,
-          name: data.name,
-          type: data.type,
-          sharePercent: data.sharePercent !== undefined ? data.sharePercent : 50,
-          createdAt: data.createdAt,
-        });
-      });
-
-      if (walletList.length === 0) {
-        // Seed main wallet if Firestore is empty
-        setDoc(doc(db, 'wallets', 'W-COMP'), {
-          name: 'ກະເປົາບໍລິສັດ',
-          type: 'W-COMP',
-          sharePercent: 100,
-          createdAt: new Date().toISOString(),
-        }).catch((err) => console.error('Error seeding main wallet:', err));
-      } else {
-        walletList.sort((a, b) => {
-          if (a.type === 'W-COMP') return -1;
-          if (b.type === 'W-COMP') return 1;
-          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return aTime - bTime;
-        });
-        setWallets(walletList);
+    const fetchWallets = async () => {
+      const { data } = await supabase.from('wallets').select('*');
+      if (data) {
+        const walletList = data.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          type: d.type,
+          sharePercent: d.share_percent !== undefined ? d.share_percent : 50,
+          createdAt: d.created_at,
+        }));
+        if (walletList.length === 0) {
+          // Seed main wallet
+          const { error } = await supabase.from('wallets').insert({
+            id: 'W-COMP',
+            name: 'ກະເປົາບໍລິສັດ',
+            type: 'W-COMP',
+            share_percent: 100,
+            created_at: new Date().toISOString(),
+          });
+          if (error) console.error(error);
+        } else {
+          walletList.sort((a, b) => {
+            if (a.type === 'W-COMP') return -1;
+            if (b.type === 'W-COMP') return 1;
+            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return aTime - bTime;
+          });
+          setWallets(walletList);
+        }
       }
-    });
+    };
 
-    // 2. Transactions subscription
-    const unsubscribeTrans = onSnapshot(collection(db, 'transactions'), (snapshot) => {
-      const transList: Transaction[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        transList.push({
-          id: docSnap.id,
-          walletId: data.walletId,
-          type: data.type,
-          amount: Number(data.amount) || 0,
-          note: data.note || '',
-          date: data.date || new Date().toISOString(),
-          partnerSplitId: data.partnerSplitId || undefined,
-        });
-      });
-      transList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setTransactions(transList);
-    });
+    const fetchTransactions = async () => {
+      const { data } = await supabase.from('transactions').select('*');
+      if (data) {
+        const transList = data.map((d: any) => ({
+          id: d.id,
+          walletId: d.wallet_id,
+          type: d.type,
+          amount: Number(d.amount) || 0,
+          note: d.note || '',
+          date: d.date || new Date().toISOString(),
+          partnerSplitId: d.partner_split_id || undefined,
+        }));
+        transList.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setTransactions(transList);
+      }
+    };
 
-    // 3. Orders subscription (คำนวณกำไรจริงจาก orders)
-    const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
-      const orderList: any[] = [];
-      snapshot.forEach((docSnap) => {
-        orderList.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setOrders(orderList);
-    });
+    const fetchOrders = async () => {
+      const { data } = await supabase.from('orders').select('*');
+      if (data) {
+        const orderList = data.map((d: any) => ({
+          id: d.id,
+          ...d,
+          orderDate: d.order_date,
+          totalSales: d.total_sales,
+          paymentMethod: d.payment_method,
+          totalCost: d.total_cost,
+          shippingFee: d.shipping_fee,
+          totalExpenses: d.total_expenses,
+          totalProfit: d.total_profit,
+          customerName: d.customer_name
+        }));
+        setOrders(orderList);
+      }
+    };
+
+    fetchWallets();
+    fetchTransactions();
+    fetchOrders();
+
+    const channel = supabase.channel('order_wallet_channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, fetchWallets)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, fetchTransactions)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .subscribe();
 
     return () => {
-      unsubscribeWallets();
-      unsubscribeTrans();
-      unsubscribeOrders();
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -259,11 +273,12 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
     if (!newWalletName.trim()) return;
     const walletId = `W-${Date.now()}`;
     try {
-      await setDoc(doc(db, 'wallets', walletId), {
+      await supabase.from('wallets').insert({
+        id: walletId,
         name: newWalletName.trim(),
         type: 'partner',
-        sharePercent: 50,
-        createdAt: new Date().toISOString(),
+        share_percent: 50,
+        created_at: new Date().toISOString(),
       });
       setNewWalletName('');
       setShowAddWallet(false);
@@ -275,8 +290,8 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   const handleSaveTransaction = async () => {
     if (!transAmount || !showTransModal) return;
     try {
-      await addDoc(collection(db, 'transactions'), {
-        walletId: showTransModal.walletId,
+      await supabase.from('transactions').insert({
+        wallet_id: showTransModal.walletId,
         type:
           showTransModal.type === 'income'
             ? 'income'
@@ -288,7 +303,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
           transNote ||
           (showTransModal.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນອອກ'),
         date: new Date().toISOString(),
-        partnerSplitId: isProfitSplitTrans ? splitPartnerId : null,
+        partner_split_id: isProfitSplitTrans ? splitPartnerId : null,
       });
       setShowTransModal(null);
       setTransAmount('');
@@ -854,7 +869,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                                     if (newAmt !== null) {
                                       const numAmt = Number(newAmt.replace(/,/g, ''));
                                       if (!isNaN(numAmt)) {
-                                        updateDoc(doc(db, 'transactions', h.rawId), { amount: numAmt });
+                                        supabase.from('transactions').update({ amount: numAmt }).eq('id', h.rawId);
                                       }
                                     }
                                   }}
@@ -867,7 +882,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                                 <button
                                   title="ລຶບ"
                                   onClick={() => {
-                                    if (confirm('ລຶບລາຍການນີ້?')) deleteDoc(doc(db, 'transactions', h.rawId));
+                                    if (confirm('ລຶບລາຍການນີ້?')) supabase.from('transactions').delete().eq('id', h.rawId);
                                   }}
                                   className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all"
                                 >
@@ -988,7 +1003,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                               onChange={async (e) => {
                                 const val = Number(e.target.value);
                                 try {
-                                  await setDoc(doc(db, 'wallets', w.id), { sharePercent: val }, { merge: true });
+                                  await supabase.from('wallets').update({ share_percent: val }).eq('id', w.id);
                                 } catch (err) {
                                   console.error('Error updating share percent:', err);
                                 }

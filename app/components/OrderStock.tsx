@@ -3,11 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db } from '@/firebase';
-import {
-    collection, addDoc, serverTimestamp,
-    onSnapshot, updateDoc, deleteDoc, doc,
-} from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import Swal from 'sweetalert2';
 import {
     PlusIcon, PencilIcon, TrashIcon,
@@ -146,35 +142,35 @@ export default function OrderStock() {
 
     // Real-time Firestore listener
     useEffect(() => {
-        const q = collection(db, 'stocks');
-        const unsub = onSnapshot(
-            q,
-            (snap) => {
-                const docs = snap.docs.map(d => {
-                    const ddata = d.data();
-                    const createdAt = ddata.createdAt as { seconds?: number } | null;
-                    const createdAtVal = createdAt?.seconds ? createdAt.seconds * 1000 : (ddata.createdAtClient as number || Date.now());
-                    return {
-                        id: d.id,
-                        itemName: ddata.itemName || '',
-                        quantity: typeof ddata.quantity === 'number' ? ddata.quantity : 0,
-                        costPrice: typeof ddata.costPrice === 'number' ? ddata.costPrice : 0,
-                        sellingPrice: typeof ddata.sellingPrice === 'number' ? ddata.sellingPrice : 0,
-                        imageUrl: ddata.imageUrl || '',
-                        notes: ddata.notes || '',
-                        __createdAtVal: createdAtVal,
-                    } as StockItem & { __createdAtVal: number };
-                });
-                docs.sort((a, b) => (b as StockItem & { __createdAtVal: number }).__createdAtVal - (a as StockItem & { __createdAtVal: number }).__createdAtVal);
+        const fetchStocks = async () => {
+            const { data, error } = await supabase.from('stocks').select('*').order('created_at', { ascending: false });
+            if (data) {
+                const docs = data.map(d => ({
+                    id: d.id,
+                    itemName: d.item_name || '',
+                    quantity: typeof d.quantity === 'number' ? d.quantity : 0,
+                    costPrice: typeof d.cost_price === 'number' ? d.cost_price : 0,
+                    sellingPrice: typeof d.selling_price === 'number' ? d.selling_price : 0,
+                    imageUrl: d.image_url || '',
+                    notes: d.notes || '',
+                }));
                 setStocks(docs as StockItem[]);
-                setListLoading(false);
-            },
-            (err) => {
-                if (process.env.NODE_ENV !== 'production') console.error('[OrderStock] snapshot error:', err);
-                setListLoading(false);
             }
-        );
-        return () => unsub();
+            setListLoading(false);
+        };
+        
+        fetchStocks();
+
+        const channel = supabase
+            .channel('stocks_channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, () => {
+                fetchStocks();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
 
     // ── File helpers ────────────────────────────────────────────────────
@@ -231,26 +227,26 @@ export default function OrderStock() {
             }
 
             if (editingId) {
-                await updateDoc(doc(db, 'stocks', editingId), {
-                    itemName: itemName.trim(),
+                const { error } = await supabase.from('stocks').update({
+                    item_name: itemName.trim(),
                     quantity: Number(quantity),
-                    costPrice: costPrice ? Number(costPrice) : 0,
-                    sellingPrice: Number(sellingPrice),
-                    imageUrl: finalImageUrl,
+                    cost_price: costPrice ? Number(costPrice) : 0,
+                    selling_price: Number(sellingPrice),
+                    image_url: finalImageUrl,
                     notes: notes.trim(),
-                });
+                }).eq('id', editingId);
+                if (error) throw error;
                 setMessage({ type: 'success', text: '✅ ແກ້ໄຂຂໍ້ມູນສິນຄ້າສຳເລັດແລ້ວ!' });
             } else {
-                await addDoc(collection(db, 'stocks'), {
-                    itemName: itemName.trim(),
+                const { error } = await supabase.from('stocks').insert({
+                    item_name: itemName.trim(),
                     quantity: Number(quantity),
-                    costPrice: costPrice ? Number(costPrice) : 0,
-                    sellingPrice: Number(sellingPrice),
-                    imageUrl: finalImageUrl,
+                    cost_price: costPrice ? Number(costPrice) : 0,
+                    selling_price: Number(sellingPrice),
+                    image_url: finalImageUrl,
                     notes: notes.trim(),
-                    createdAt: serverTimestamp(),
-                    createdAtClient: Date.now(),
                 });
+                if (error) throw error;
                 setMessage({ type: 'success', text: '✅ ບັນທຶກສິນຄ້າເຂົ້າສາງສຳເລັດແລ້ວ!' });
             }
 
@@ -296,7 +292,7 @@ export default function OrderStock() {
     const updateQty = async (id: string, current: number, delta: number) => {
         const next = current + delta;
         if (next < 0) return;
-        await updateDoc(doc(db, 'stocks', id), { quantity: next });
+        await supabase.from('stocks').update({ quantity: next }).eq('id', id);
     };
 
     // ── Delete item ─────────────────────────────────────────────────────
@@ -322,7 +318,7 @@ export default function OrderStock() {
         });
         if (!result.isConfirmed) return;
         setDeletingId(id);
-        try { await deleteDoc(doc(db, 'stocks', id)); } catch {
+        try { await supabase.from('stocks').delete().eq('id', id); } catch {
             Swal.fire({
                 title: 'ລຶບບໍ່ສຳເລັດ',
                 text: 'ກະລຸນາລອງໃໝ່',

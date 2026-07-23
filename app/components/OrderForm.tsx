@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { db } from '@/firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import type { Agent } from '@/app/types';
 import { Handshake, User, Package, Phone, Truck, Home, Building2, MapPin, Sparkles, CheckCircle2, XCircle, FileImage, ImagePlus, Check, Trash2, Calendar, Map, Hash, CreditCard } from 'lucide-react';
 import { BaseModal } from './BaseModal';
@@ -171,26 +170,25 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     if (!editId) return;
     const fetchOrder = async () => {
       try {
-        const snap = await getDoc(doc(db, 'orders', editId));
-        if (snap.exists()) {
-          const d = snap.data();
-          setCustomerName(d.customerName || '');
+        const { data: d, error } = await supabase.from('orders').select('*').eq('id', editId).single();
+        if (d && !error) {
+          setCustomerName(d.customer_name || '');
           setPhone(d.phone || '');
           setTransport(d.transport || TRANSPORTS[0]);
           setVillage(d.village || '');
           setDistrict(d.district || '');
           setProvince(d.province || PROVINCES[0]);
-          setOrderDate(d.orderDate || new Date().toLocaleDateString('en-GB'));
+          setOrderDate(d.order_date || new Date().toLocaleDateString('en-GB'));
           setStatus(d.status || STATUSES[0]);
           setWallet(d.wallet || '');
-          setPaymentMethod(d.paymentMethod || 'COD');
+          setPaymentMethod(d.payment_method || 'COD');
           setDeposit(d.deposit?.toString() || '');
-          setShippingFee(d.shippingFee?.toString() || '');
+          setShippingFee(d.shipping_fee?.toString() || '');
           setItems(d.items?.length ? d.items : [{ id: Date.now().toString(), name: '', qty: 1, cost: 0, price: 0 }]);
           setExpenses(d.expenses || []);
-          setImageUrl(d.imageUrl || '');
-          setAgentId(d.agentId || '');
-          setOrderedBy(d.orderedBy || '');
+          setImageUrl(d.image_url || '');
+          setAgentId(d.agent_id || '');
+          setOrderedBy(d.ordered_by || '');
         }
       } catch (err) {
         console.error('Error loading order:', err);
@@ -229,31 +227,48 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'stocks'), (snapshot) => {
-      const data = snapshot.docs.map(doc => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          itemName: d.itemName || '',
+    const fetchStocks = async () => {
+      const { data, error } = await supabase.from('stocks').select('*');
+      if (data && !error) {
+        setStocks(data.map(d => ({
+          id: d.id,
+          itemName: d.item_name || '',
           quantity: Number(d.quantity) || 0,
-          costPrice: Number(d.costPrice) || 0,
-          sellingPrice: Number(d.sellingPrice) || 0,
-          imageUrl: d.imageUrl || ''
-        } as StockItem;
-      });
-      setStocks(data);
-    });
-    return () => unsub();
+          costPrice: Number(d.cost_price) || 0,
+          sellingPrice: Number(d.selling_price) || 0,
+          imageUrl: d.image_url || ''
+        } as StockItem)));
+      }
+    };
+    fetchStocks();
+    const channel = supabase.channel('form_stocks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, fetchStocks)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
 
 
   useEffect(() => {
-    const unsubAgents = onSnapshot(collection(db, 'agents'), (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Agent));
-      setAgents(data);
-    });
-    return () => unsubAgents();
+    const fetchAgents = async () => {
+      const { data, error } = await supabase.from('agents').select('*');
+      if (data && !error) {
+        setAgents(data.map(d => ({
+          id: d.id,
+          agentName: d.agent_name || d.name,
+          phone: d.phone,
+          level: d.level,
+          totalSales: d.total_sales || d.initial_sales,
+          notes: d.notes || '',
+          joinDate: d.join_date || d.created_at
+        } as Agent)));
+      }
+    };
+    fetchAgents();
+    const channel = supabase.channel('form_agents')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agents' }, fetchAgents)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -289,14 +304,19 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
   // Load wallets from Firestore
   useEffect(() => {
-    const q = query(collection(db, 'wallets'), orderBy('createdAt', 'asc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const list: WalletOption[] = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
-      setWalletOptions(list);
-      // Auto-select first wallet if none selected yet
-      setWallet(prev => prev || list[0]?.name || '');
-    });
-    return () => unsub();
+    const fetchWallets = async () => {
+      const { data, error } = await supabase.from('wallets').select('*').order('created_at', { ascending: true });
+      if (data && !error) {
+        const list: WalletOption[] = data.map(d => ({ id: d.id, name: d.name }));
+        setWalletOptions(list);
+        setWallet(prev => prev || list[0]?.name || '');
+      }
+    };
+    fetchWallets();
+    const channel = supabase.channel('form_wallets')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, fetchWallets)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   useEffect(() => {
@@ -541,55 +561,58 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     try {
       const firstItem = items[0] || { name: 'ສິນຄ້າທົ່ວໄປ', price: 0 };
       const orderData = {
-        customerName: customerName || 'ລູກຄ້າທົ່ວໄປ',
-        productName: firstItem.name,
+        customer_name: customerName || 'ລູກຄ້າທົ່ວໄປ',
+        product_name: firstItem.name,
         size: 'N/A',
         price: Number(totalSales),
-        paymentMethod: paymentMethod,
+        payment_method: paymentMethod,
         status: status,
-        phone, transport, village, district, province, orderDate, wallet,
+        phone, transport, village, district, province, order_date: orderDate, wallet,
         deposit: Number(deposit) || 0,
-        shippingFee: totalShipping,
+        shipping_fee: totalShipping,
         items: items,
         expenses: expenses,
-        totalCost,
-        totalProfit,
-        totalExpenses,
-        imageUrl: imageUrl || '',
-        agentId: agentId || null,
-        isPreOrder: agentId ? true : false,
-        orderedBy: orderedBy || '',
+        total_cost: totalCost,
+        total_profit: totalProfit,
+        total_expenses: totalExpenses,
+        image_url: imageUrl || '',
+        agent_id: agentId || null,
+        is_pre_order: agentId ? true : false,
+        ordered_by: orderedBy || '',
       };
 
       if (editId) {
         // Update existing order
-        await updateDoc(doc(db, 'orders', editId), {
+        await supabase.from('orders').update({
           ...orderData,
-          updatedAt: serverTimestamp(),
-        });
+          updated_at: new Date().toISOString()
+        }).eq('id', editId);
         setMessage({ type: 'success', text: 'ແກ້ໄຂອໍເດີສຳເລັດແລ້ວ!' });
       } else {
         // Create new order
-        await addDoc(collection(db, 'orders'), {
+        await supabase.from('orders').insert({
           ...orderData,
-          createdAt: serverTimestamp(),
         });
         
         // ตัดสต๊อกอัตโนมัติเมื่อสร้างอໍเດີใหม่
         for (const item of items) {
           if (item.stockId && item.qty > 0) {
-            const stockRef = doc(db, 'stocks', item.stockId);
-            await updateDoc(stockRef, {
-              quantity: increment(-item.qty)
-            });
+            const { data: currentStock } = await supabase.from('stocks').select('quantity').eq('id', item.stockId).single();
+            if (currentStock) {
+              await supabase.from('stocks').update({
+                quantity: currentStock.quantity - item.qty
+              }).eq('id', item.stockId);
+            }
           }
         }
 
         if (agentId && totalSales > 0) {
-          const agentRef = doc(db, 'agents', agentId);
-          await updateDoc(agentRef, {
-            totalSales: increment(totalSales)
-          });
+          const { data: currentAgent } = await supabase.from('agents').select('total_sales').eq('id', agentId).single();
+          if (currentAgent) {
+            await supabase.from('agents').update({
+              total_sales: (currentAgent.total_sales || 0) + totalSales
+            }).eq('id', agentId);
+          }
         }
         setMessage({ type: 'success', text: 'ບັນທຶກອໍເດີສຳເລັດແລ້ວ!' });
       }

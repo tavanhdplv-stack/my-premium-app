@@ -3,11 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ExclamationTriangleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { ImageGalleryModal, GalleryImage } from './ImageGalleryModal';
-import { db } from '@/firebase';
-import {
-  collection, addDoc, serverTimestamp,
-  onSnapshot, doc, updateDoc, deleteDoc,
-} from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 
 // ── Types ────────────────────────────────────────────────────────────────
 interface Agent {
@@ -72,44 +68,59 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
 
   // Fetch orders for agent history
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'orders'), snap => {
-      const mapped = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setOrders(mapped);
-    });
-    return () => unsub();
+    const fetchOrders = async () => {
+      const { data } = await supabase.from('orders').select('*');
+      if (data) {
+        setOrders(data.map(d => ({
+          ...d,
+          agentId: d.agent_id,
+          orderDate: d.order_date,
+          customerName: d.customer_name,
+          totalCost: d.total_cost,
+          totalProfit: d.total_profit,
+          imageUrl: d.image_url,
+          createdAt: d.created_at ? { seconds: new Date(d.created_at).getTime() / 1000 } : undefined,
+        })));
+      }
+    };
+    fetchOrders();
+
+    const channel = supabase.channel('orders-agent')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
 
   // Real-time listener
   useEffect(() => {
-    const q = collection(db, 'agents');
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const mapped = snap.docs.map(d => {
-          const data = d.data();
-          const createdAt = data.createdAt as { seconds?: number } | null;
-          return {
-            id: d.id,
-            agentName: data.agentName ?? '',
-            phone: data.phone ?? '',
-            level: (data.level as Agent['level']) ?? 'General',
-            totalSales: data.totalSales ?? 0,
-            notes: data.notes ?? '',
-            createdAt: createdAt ? { seconds: createdAt.seconds ?? 0 } : undefined,
-            __createdAtVal: createdAt?.seconds ? createdAt.seconds * 1000 : Date.now(),
-          } as Agent & { __createdAtVal: number };
-        });
-        mapped.sort((a, b) => b.__createdAtVal - a.__createdAtVal);
-        setAgents(mapped);
+    const fetchAgents = async () => {
+      const { data, error } = await supabase.from('agents').select('*').order('created_at', { ascending: false });
+      if (error) {
+        if (process.env.NODE_ENV !== 'production') console.error('[OrderAgent] fetch error:', error);
         setListLoading(false);
-      },
-      (err) => {
-        if (process.env.NODE_ENV !== 'production') console.error('[OrderAgent] snapshot error:', err);
-        setListLoading(false);
+        return;
       }
-    );
-    return () => unsub();
+      if (data) {
+         const mapped = data.map(d => ({
+            id: d.id,
+            agentName: d.name ?? '',
+            phone: d.phone ?? '',
+            level: d.level ?? 'General',
+            totalSales: d.initial_sales ?? 0,
+            notes: d.notes ?? '',
+            createdAt: d.created_at ? { seconds: new Date(d.created_at).getTime() / 1000 } : undefined,
+         })) as Agent[];
+         setAgents(mapped);
+      }
+      setListLoading(false);
+    };
+    fetchAgents();
+    
+    const channel = supabase.channel('agents')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agents' }, fetchAgents)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   // ── Add agent ────────────────────────────────────────────────────────────
@@ -122,13 +133,12 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
-      await addDoc(collection(db, 'agents'), {
-        agentName: agentName.trim(),
+      await supabase.from('agents').insert({
+        name: agentName.trim(),
         phone: phone.trim(),
         level,
-        totalSales: initialSales ? Number(initialSales) : 0,
+        initial_sales: initialSales ? Number(initialSales) : 0,
         notes: notes.trim(),
-        createdAt: serverTimestamp(),
       });
       setMessage({ type: 'success', text: '✅ ລົງທະບຽນຕົວແທນສຳເລັດແລ້ວ!' });
       setAgentName(''); setPhone(''); setInitialSales(''); setNotes('');
@@ -143,7 +153,7 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
   // ── Cycle level ──────────────────────────────────────────────────────────
   const handleCycleLevel = async (id: string, current: Agent['level']) => {
     const next = LEVEL_CFG[current].next as Agent['level'];
-    try { await updateDoc(doc(db, 'agents', id), { level: next }); }
+    try { await supabase.from('agents').update({ level: next }).eq('id', id); }
     catch (e) { console.error(e); }
   };
 
@@ -151,7 +161,7 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     setConfirmDeleteId(null);
-    try { await deleteDoc(doc(db, 'agents', id)); }
+    try { await supabase.from('agents').delete().eq('id', id); }
     catch { setMessage({ type: 'error', text: 'ລົບບໍ່ສຳເລັດ ກະລຸນາລອງໃໝ່' }); }
     finally { setDeletingId(null); }
   };
@@ -520,7 +530,7 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
                                   value={o.status || 'ລໍຖ້າຈ່າຍເງິນ'}
                                   onChange={async (e) => {
                                     try {
-                                      await updateDoc(doc(db, 'orders', o.id), { status: e.target.value });
+                                      await supabase.from('orders').update({ status: e.target.value }).eq('id', o.id);
                                     } catch(err) {
                                       console.error("Error updating status:", err);
                                     }

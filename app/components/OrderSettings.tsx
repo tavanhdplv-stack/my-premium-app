@@ -1,27 +1,59 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '@/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
+import {
+  Store,
+  Phone,
+  DollarSign,
+  Clock,
+  Percent,
+  Ruler,
+  Eye,
+  Moon,
+  Info,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Save,
+} from 'lucide-react';
 
 // ── Design tokens ─────────────────────────────────────────────────────────
-const card    = 'premium-card glass';
-const inputCls = 'w-full h-10 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none transition focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10';
-const lbl     = 'block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
-const primaryBtn = 'inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/30 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0';
-const sectionHead = 'flex items-center gap-2.5 text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide';
+const card =
+  'bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm rounded-2xl p-5 sm:p-6 transition-all';
+
+const inputCls =
+  'w-full h-10 bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none transition focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10';
+
+const lbl =
+  'block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
+
+const primaryBtn =
+  'inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/30 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0';
+
+const sectionHead =
+  'flex items-center gap-2.5 text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide';
 
 // ── Setting section wrapper ───────────────────────────────────────────────
-function SettingSection({ icon, label, color, children }: {
+function SettingSection({
+  icon,
+  label,
+  color,
+  children,
+}: {
   icon: React.ReactNode;
   label: string;
   color: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={`${card} p-5 sm:p-6`}>
-      <div className={`${sectionHead} mb-5 pb-4 border-b border-slate-100 dark:border-white/8`}>
-        <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+    <div className={card}>
+      <div
+        className={`${sectionHead} mb-5 pb-4 border-b border-slate-100 dark:border-white/8`}
+      >
+        <span
+          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}
+        >
           {icon}
         </span>
         {label}
@@ -32,21 +64,39 @@ function SettingSection({ icon, label, color, children }: {
 }
 
 // ── Toggle switch ─────────────────────────────────────────────────────────
-function Toggle({ checked, onChange, label, desc }: {
-  checked: boolean; onChange: () => void; label: string; desc: string;
+function Toggle({
+  checked,
+  onChange,
+  label,
+  desc,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  desc: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/8">
+    <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-slate-50/60 dark:bg-white/[0.03] border border-slate-100 dark:border-white/8 transition-colors hover:bg-slate-100/60 dark:hover:bg-white/5">
       <div>
-        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{label}</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{desc}</p>
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+          {label}
+        </p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          {desc}
+        </p>
       </div>
       <button
         type="button"
         onClick={onChange}
-        className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 focus:outline-none focus:ring-2 focus:ring-violet-500/30 ${checked ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'}`}
+        className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 focus:outline-none focus:ring-2 focus:ring-violet-500/30 ${
+          checked ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'
+        }`}
       >
-        <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${checked ? 'translate-x-6' : 'translate-x-0'}`} />
+        <span
+          className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
+            checked ? 'translate-x-6' : 'translate-x-0'
+          }`}
+        />
       </button>
     </div>
   );
@@ -54,17 +104,20 @@ function Toggle({ checked, onChange, label, desc }: {
 
 export default function OrderSettings() {
   // ── State ─────────────────────────────────────────────────────────────
-  const [shopName,        setShopName]        = useState('Tawan East Shop');
-  const [shopPhone,       setShopPhone]       = useState('');
-  const [exchangeRate,    setExchangeRate]    = useState('750');
-  const [shippingTime,    setShippingTime]    = useState('1-2 ອາທິດ');
-  const [defaultDeposit,  setDefaultDeposit]  = useState('0');
-  const [availableSizes,  setAvailableSizes]  = useState('S, M, L, XL, XXL');
-  const [showProfit,      setShowProfit]      = useState(true);
-  const [darkDefault,     setDarkDefault]     = useState(false);
-  const [loading,         setLoading]         = useState(false);
-  const [fetching,        setFetching]        = useState(true);
-  const [message,         setMessage]         = useState<{ type: 'success' | 'error' | ''; text: string }>({ type: '', text: '' });
+  const [shopName, setShopName] = useState('Tawan East Shop');
+  const [shopPhone, setShopPhone] = useState('');
+  const [exchangeRate, setExchangeRate] = useState('750');
+  const [shippingTime, setShippingTime] = useState('1-2 ອາທິດ');
+  const [defaultDeposit, setDefaultDeposit] = useState('0');
+  const [availableSizes, setAvailableSizes] = useState('S, M, L, XL, XXL');
+  const [showProfit, setShowProfit] = useState(true);
+  const [darkDefault, setDarkDefault] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | '';
+    text: string;
+  }>({ type: '', text: '' });
 
   // ── Cleanup ref for toast timeout ────────────────────────────────────
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,21 +126,24 @@ export default function OrderSettings() {
   useEffect(() => {
     (async () => {
       try {
-        const snap = await getDoc(doc(db, 'system', 'settings'));
-        if (snap.exists()) {
-          const d = snap.data();
-          setShopName(d.shopName     || 'Tawan East Shop');
-          setShopPhone(d.shopPhone   || '');
-          setExchangeRate(String(d.exchangeRate || 750));
-          setShippingTime(d.shippingTime || '1-2 ອາທິດ');
-          setDefaultDeposit(String(d.defaultDeposit || 0));
-          setAvailableSizes(d.availableSizes || 'S, M, L, XL, XXL');
-          setShowProfit(d.showProfit !== false);
-          setDarkDefault(d.darkDefault || false);
+        const { data: d, error } = await supabase.from('system').select('*').eq('id', 'settings').single();
+        if (d) {
+          setShopName(d.shop_name || 'Tawan East Shop');
+          setShopPhone(d.shop_phone || '');
+          setExchangeRate(String(d.exchange_rate || 750));
+          setShippingTime(d.shipping_time || '1-2 ອາທິດ');
+          setDefaultDeposit(String(d.default_deposit || 0));
+          setAvailableSizes(d.available_sizes || 'S, M, L, XL, XXL');
+          setShowProfit(d.show_profit !== false);
+          setDarkDefault(d.dark_default || false);
         }
       } catch (e) {
-        if (process.env.NODE_ENV !== 'production') console.error('[OrderSettings] load error:', e);
-        setMessage({ type: 'error', text: '⚠️ ໂຫລດການຕັ້ງຄ່າບໍ່ສຳເລັດ ກະລຸນາລອງໃໝ່ອີກຄັ້ງ' });
+        if (process.env.NODE_ENV !== 'production')
+          console.error('[OrderSettings] load error:', e);
+        setMessage({
+          type: 'error',
+          text: '⚠️ ໂຫລດການຕັ້ງຄ່າບໍ່ສຳເລັດ ກະລຸນາລອງໃໝ່ອີກຄັ້ງ',
+        });
       } finally {
         setFetching(false);
       }
@@ -103,29 +159,41 @@ export default function OrderSettings() {
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
-      await setDoc(doc(db, 'system', 'settings'), {
-        shopName, shopPhone,
-        exchangeRate: parseFloat(exchangeRate) || 0,
-        shippingTime,
-        defaultDeposit: parseFloat(defaultDeposit) || 0,
-        availableSizes,
-        showProfit, darkDefault,
-        updatedAt: new Date(),
-      });
+      const { error } = await supabase.from('system').update({
+        shop_name: shopName,
+        shop_phone: shopPhone,
+        exchange_rate: parseFloat(exchangeRate) || 0,
+        shipping_time: shippingTime,
+        default_deposit: parseFloat(defaultDeposit) || 0,
+        available_sizes: availableSizes,
+        show_profit: showProfit,
+        dark_default: darkDefault,
+        updated_at: new Date().toISOString(),
+      }).eq('id', 'settings');
+      if (error) throw error;
       // Also save shopName/shopPhone to localStorage for copy-text use
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('shopName',  shopName);
+          localStorage.setItem('shopName', shopName);
           localStorage.setItem('shopPhone', shopPhone);
         } catch {
           // localStorage may be unavailable in restricted environments
         }
       }
-      setMessage({ type: 'success', text: '✅ ບັນທຶກການຕັ້ງຄ່າລະບົບສຳເລັດແລ້ວ!' });
+      setMessage({
+        type: 'success',
+        text: 'ບັນທຶກການຕັ້ງຄ່າລະບົບສຳເລັດແລ້ວ!',
+      });
       if (toastTimer.current) clearTimeout(toastTimer.current);
-      toastTimer.current = setTimeout(() => setMessage({ type: '', text: '' }), 3500);
+      toastTimer.current = setTimeout(
+        () => setMessage({ type: '', text: '' }),
+        3500
+      );
     } catch {
-      setMessage({ type: 'error', text: 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່' });
+      setMessage({
+        type: 'error',
+        text: 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່',
+      });
     } finally {
       setLoading(false);
     }
@@ -134,7 +202,7 @@ export default function OrderSettings() {
   if (fetching) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
-        <div className="w-8 h-8 border-2 border-slate-200 dark:border-slate-700 border-t-violet-500 rounded-full animate-spin" />
+        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
         <p className="text-sm font-medium">ກຳລັງໂຫຼດການຕັ້ງຄ່າ...</p>
       </div>
     );
@@ -142,7 +210,6 @@ export default function OrderSettings() {
 
   return (
     <div className="space-y-6 pb-6 max-w-3xl">
-
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
@@ -154,40 +221,59 @@ export default function OrderSettings() {
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-
         {/* ── Section 1: Shop Info ── */}
         <SettingSection
           label="ຂໍ້ມູນຮ້ານຄ້າ"
           color="bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-          icon={
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" />
-            </svg>
-          }
+          icon={<Store className="w-5 h-5" />}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={lbl}>ຊື່ຮ້ານຄ້າ</label>
-              <input type="text" value={shopName} onChange={e => setShopName(e.target.value)}
-                placeholder="Tawan East Shop" className={inputCls} />
+              <input
+                type="text"
+                value={shopName}
+                onChange={(e) => setShopName(e.target.value)}
+                placeholder="Tawan East Shop"
+                className={inputCls}
+              />
             </div>
             <div>
               <label className={lbl}>ເບີໂທຮ້ານ</label>
-              <input type="text" value={shopPhone} onChange={e => setShopPhone(e.target.value)}
-                placeholder="020..." className={inputCls} />
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={shopPhone}
+                  onChange={(e) => setShopPhone(e.target.value)}
+                  placeholder="020..."
+                  className={`${inputCls} pl-10`}
+                />
+              </div>
             </div>
           </div>
           <div>
             <label className={lbl}>ອັດຕາແລກປ່ຽນ (1 THB = ? LAK)</label>
             <div className="relative">
-              <input type="text" inputMode="decimal" value={exchangeRate ? String(exchangeRate).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''} onChange={e => {
-                const raw = e.target.value.replace(/,/g, '');
-                if (/^-?\d*\.?\d*$/.test(raw)) setExchangeRate(raw);
-              }}
-                placeholder="750" className={inputCls} />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">LAK/THB</span>
+              <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                inputMode="decimal"
+                value={exchangeRate ? String(exchangeRate).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/,/g, '');
+                  if (/^-?\d*\.?\d*$/.test(raw)) setExchangeRate(raw);
+                }}
+                placeholder="750"
+                className={`${inputCls} pl-10`}
+              />
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                LAK/THB
+              </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1.5">ໃຊ້ຄຳນວນ COD ແລະ ສະແດງຜົນລາຄາ</p>
+            <p className="text-xs text-slate-400 mt-1.5">
+              ໃຊ້ຄຳນວນ COD ແລະ ສະແດງຜົນລາຄາ
+            </p>
           </div>
         </SettingSection>
 
@@ -195,37 +281,60 @@ export default function OrderSettings() {
         <SettingSection
           label="ເງື່ອນໄຂສັ່ງຊື້"
           color="bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400"
-          icon={
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-            </svg>
-          }
+          icon={<Clock className="w-5 h-5" />}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={lbl}>ໄລຍະເວລາລໍຄອຍ</label>
-              <input type="text" value={shippingTime} onChange={e => setShippingTime(e.target.value)}
-                placeholder="1-2 ອາທິດ" className={inputCls} />
+              <input
+                type="text"
+                value={shippingTime}
+                onChange={(e) => setShippingTime(e.target.value)}
+                placeholder="1-2 ອາທິດ"
+                className={inputCls}
+              />
             </div>
             <div>
               <label className={lbl}>ມັດຈຳເລີ່ມຕົ້ນ (%)</label>
               <div className="relative">
-                <input type="number" min="0" max="100" value={defaultDeposit} onChange={e => setDefaultDeposit(e.target.value)}
-                  placeholder="0" className={inputCls} />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                <Percent className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={defaultDeposit}
+                  onChange={(e) => setDefaultDeposit(e.target.value)}
+                  placeholder="0"
+                  className={`${inputCls} pl-10`}
+                />
               </div>
             </div>
           </div>
           <div>
             <label className={lbl}>ໄຊ້ສິນຄ້າທີ່ມີ (ໃຊ້ , ຄັ່ນ)</label>
-            <input type="text" value={availableSizes} onChange={e => setAvailableSizes(e.target.value)}
-              placeholder="S, M, L, XL, XXL" className={inputCls} />
+            <div className="relative">
+              <Ruler className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={availableSizes}
+                onChange={(e) => setAvailableSizes(e.target.value)}
+                placeholder="S, M, L, XL, XXL"
+                className={`${inputCls} pl-10`}
+              />
+            </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {availableSizes.split(',').map(s => s.trim()).filter(Boolean).map(s => (
-                <span key={s} className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300">
-                  {s}
-                </span>
-              ))}
+              {availableSizes
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map((s) => (
+                  <span
+                    key={s}
+                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/5"
+                  >
+                    {s}
+                  </span>
+                ))}
             </div>
           </div>
         </SettingSection>
@@ -234,11 +343,7 @@ export default function OrderSettings() {
         <SettingSection
           label="ການສະແດງຜົນ & UI"
           color="bg-purple-50 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400"
-          icon={
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
-            </svg>
-          }
+          icon={<Eye className="w-5 h-5" />}
         >
           <Toggle
             checked={showProfit}
@@ -255,12 +360,10 @@ export default function OrderSettings() {
         </SettingSection>
 
         {/* ── System Info card ── */}
-        <div className={`${card} p-5 sm:p-6`}>
+        <div className={card}>
           <div className={`${sectionHead} mb-4`}>
             <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 text-slate-500 dark:text-slate-400">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-              </svg>
+              <Info className="w-5 h-5" />
             </span>
             ຂໍ້ມູນລະບົບ
           </div>
@@ -272,10 +375,17 @@ export default function OrderSettings() {
               { label: 'Storage', value: 'Cloudinary' },
               { label: 'Styling', value: 'Tailwind v4' },
               { label: 'Runtime', value: 'Node.js' },
-            ].map(item => (
-              <div key={item.label} className="rounded-xl p-3 bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/8">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</p>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-0.5">{item.value}</p>
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl p-3 bg-slate-50/60 dark:bg-white/[0.03] border border-slate-100 dark:border-white/8"
+              >
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {item.label}
+                </p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-0.5 tabular-nums">
+                  {item.value}
+                </p>
               </div>
             ))}
           </div>
@@ -283,22 +393,38 @@ export default function OrderSettings() {
 
         {/* Message */}
         {message.text && (
-          <div className={`p-4 rounded-xl text-sm font-medium border flex items-center gap-3 ${
-            message.type === 'success'
-              ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
-              : 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/20'
-          }`}>
-            <span className="text-lg">{message.type === 'success' ? '✅' : '❌'}</span>
+          <div
+            className={`p-4 rounded-xl text-sm font-medium border flex items-center gap-3 ${
+              message.type === 'success'
+                ? 'bg-emerald-50/80 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
+                : 'bg-rose-50/80 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/20'
+            }`}
+          >
+            {message.type === 'success' ? (
+              <CheckCircle className="w-5 h-5 shrink-0" />
+            ) : (
+              <XCircle className="w-5 h-5 shrink-0" />
+            )}
             {message.text}
           </div>
         )}
 
         {/* Save button */}
-        <button type="submit" disabled={loading} className={`${primaryBtn} w-full`}>
+        <button
+          type="submit"
+          disabled={loading}
+          className={`${primaryBtn} w-full`}
+        >
           {loading ? (
-            <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>ກຳລັງບັນທຶກ...</>
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              ກຳລັງບັນທຶກ...
+            </>
           ) : (
-            <><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>ບັນທຶກການຕັ້ງຄ່າລະບົບ</>
+            <>
+              <Save className="w-4 h-4" />
+              ບັນທຶກການຕັ້ງຄ່າລະບົບ
+            </>
           )}
         </button>
       </form>
