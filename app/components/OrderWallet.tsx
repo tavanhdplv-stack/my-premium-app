@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '@/firebase';
 import { collection, onSnapshot, addDoc, setDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { BaseModal } from './BaseModal';
 
 // --- Interfaces ---
 interface Wallet {
@@ -33,6 +36,27 @@ interface WalletStats {
 // --- Component ---
 interface OrderWalletProps {
   onEditOrder?: (orderId: string) => void;
+}
+
+function parseOrderDate(str?: string): { day: number; month: number; year: number } | null {
+  if (!str) return null;
+  if (/^\d{4}-\d{2}/.test(str)) {
+    const [yearStr, monthStr, dayStr] = str.substring(0, 10).split('-');
+    const year = Number(yearStr), month = Number(monthStr), day = Number(dayStr);
+    if (!year || !month) return null;
+    return { day, month, year };
+  }
+  const p = str.split('/');
+  if (p.length !== 3) return null;
+  const day = Number(p[0]), month = Number(p[1]), year = Number(p[2]);
+  if (!day || !month || !year) return null;
+  return { day, month, year };
+}
+
+function ymOf(str?: string): string | null {
+  const d = parseOrderDate(str);
+  if (!d) return null;
+  return `${d.year}-${String(d.month).padStart(2, '0')}`;
 }
 
 export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
@@ -126,22 +150,39 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (showDetailsModal) {
+      const originalStyle = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalStyle;
+      };
+    }
+  }, [showDetailsModal]);
+
   // --- คำนวณยอดกระเป๋า (Orders + Transactions) ---
   const getWalletStats = (walletId: string, month: string): WalletStats => {
     let bal = 0, inAmt = 0, outAmt = 0, cap = 0;
 
     // 1. จากรายการธุรกรรมทำมือ
     transactions.forEach((t) => {
-      if (month !== 'all' && t.date.slice(0, 7) !== month) return;
       if (t.walletId !== walletId) return;
 
+      const tMonth = ymOf(t.date || (t as any).Date);
+      const isCurrentMonth = month === 'all' || tMonth === month;
+      const isPastOrCurrent = month === 'all' || (tMonth && tMonth <= month);
+
       if (t.type === 'income') {
-        bal += t.amount;
-        inAmt += t.amount;
-        if (!t.note.includes('ຄືນທຶນ')) cap += t.amount;
+        if (isPastOrCurrent) bal += t.amount;
+        if (isCurrentMonth) {
+          inAmt += t.amount;
+          if (!t.note.includes('ຄືນທຶນ')) cap += t.amount;
+        }
       } else if (t.type === 'expense' || t.type === 'profit_split') {
-        bal -= t.amount;
-        outAmt += t.amount;
+        if (isPastOrCurrent) bal -= t.amount;
+        if (isCurrentMonth) {
+          outAmt += t.amount;
+        }
       }
     });
 
@@ -150,30 +191,40 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
     if (walletObj) {
       orders.forEach((o) => {
         if (o.status === 'ຍົກເລີກອໍເດີ') return;
-        if (month !== 'all' && o.orderDate && o.orderDate.slice(0, 7) !== month) return;
 
         let match = false;
         if (walletObj.type === 'W-COMP') {
-          match = o.wallet?.includes('ບໍລິສັດ') || o.wallet?.includes('BCEL') || !o.wallet;
+          match = !o.wallet || o.wallet === walletObj.name || o.wallet?.includes('ບໍລິສັດ') || o.wallet?.includes('BCEL') || o.wallet?.includes('W-COMP');
         } else {
-          const cleanPartnerName = walletObj.name.split(/[(\s]/)[0];
-          match = o.wallet?.includes(cleanPartnerName);
+          const cleanPartnerName = (walletObj?.name || '').split(/[(\s]/)[0];
+          match = o.wallet === walletObj.name || !!o.wallet?.includes(cleanPartnerName);
         }
 
         if (match) {
+          const oMonth = ymOf(o.orderDate || (o as any).Date || (o as any)['ວັນທີ'] || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString() : ''));
+          const isCurrentMonth = month === 'all' || oMonth === month;
+          const isPastOrCurrent = month === 'all' || (oMonth && oMonth <= month);
+
+          const finalPrice = Number(o.price) || Number(o.totalSales) || Number(o.SellingPrice) || 0;
           const income =
-            o.paymentMethod === 'ຈ່າຍແລ້ວ'
-              ? Number(o.price) || 0
-              : Number(o.deposit) || 0;
-          bal += income;
-          inAmt += income;
+            o.paymentMethod === 'ຈ່າຍແລ້ວ' || o.PaymentMethod === 'ຈ່າຍແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ' || o.status === 'ປິດບິນແລ້ວ'
+              ? finalPrice
+              : (Number(o.deposit) || Number(o.DepositAmount) || Number(o['ຍອດມັດຈຳ']) || 0);
 
           const cost =
-            (Number(o.totalCost) || 0) +
-            (Number(o.shippingFee) || 0) +
-            (Number(o.totalExpenses) || 0);
-          bal -= cost;
-          outAmt += cost;
+            (Number(o.totalCost) || Number(o.CostPrice) || 0) +
+            (Number(o.shippingFee) || Number(o.OrderShippingFee) || 0) +
+            (Number(o.totalExpenses) || Number(o.AdditionalCost) || 0);
+
+          if (isPastOrCurrent) {
+            bal += income;
+            bal -= cost;
+          }
+
+          if (isCurrentMonth) {
+            inAmt += income;
+            outAmt += cost;
+          }
         }
       });
     }
@@ -188,13 +239,13 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   const totalShopProfit = useMemo(() => {
     return orders
       .filter((o) => o.status !== 'ຍົກເລີກອໍເດີ')
-      .reduce((sum, o) => sum + (Number(o.totalProfit) || 0), 0);
+      .reduce((sum, o) => sum + (Number(o.totalProfit) || Number((o as any).NetProfit) || 0), 0);
   }, [orders]);
 
   const totalWithdrawn = useMemo(() => {
     return transactions
-      .filter((t) => t.type === 'profit_split')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .filter((t) => t.type === 'profit_split' || t.note?.includes('[ປັນຜົນຮຸ້ນສ່ວນ') || t.note?.includes('ຖອນ') || (t as any).Note?.includes('ຖອນ'))
+      .reduce((sum, t) => sum + (Number(t.amount) || Number((t as any).Amount) || 0), 0);
   }, [transactions]);
 
   const totalPercent = useMemo(() => {
@@ -436,175 +487,181 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
 
       {/* Add Wallet Modal */}
       {showAddWallet && (
-        <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowAddWallet(false)}
+        <BaseModal
+          isOpen={true}
+          onClose={() => setShowAddWallet(false)}
+          title={<h3 className="text-lg font-bold text-slate-900 dark:text-white">ສ້າງກະເປົາ / ເພີ່ມຫຸ້ນສ່ວນ</h3>}
+          maxWidth="max-w-md"
+          width="w-full"
+          bodyClassName="p-6 bg-white dark:bg-slate-900"
         >
-          <div
-            className="bg-slate-900 border border-white/10 rounded-xl p-6 w-full max-w-md"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-white mb-4">ສ້າງກະເປົາ / ເພີ່ມຫຸ້ນສ່ວນ</h3>
-            <label className="block text-xs text-slate-400 mb-1">ຊື່ກະເປົາ / ຊື່ຫຸ້ນສ່ວນ</label>
-            <input
-              type="text"
-              value={newWalletName}
-              onChange={(e) => setNewWalletName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddWallet()}
-              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-white mb-4 outline-none focus:border-blue-500"
-              placeholder="ເຊັ່ນ: ສົມຊາຍ"
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowAddWallet(false)}
-                className="flex-1 bg-white/5 text-slate-300 border border-white/10 py-2 rounded-lg hover:bg-white/10 font-bold"
-              >
-                ຍົກເລີກ
-              </button>
-              <button
-                onClick={handleAddWallet}
-                className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-bold"
-              >
-                ຢືນຢັນການສ້າງ
-              </button>
-            </div>
+          <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">ຊື່ກະເປົາ / ຊື່ຫຸ້ນສ່ວນ</label>
+          <input
+            type="text"
+            value={newWalletName}
+            onChange={(e) => setNewWalletName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddWallet()}
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-slate-900 dark:text-white mb-4 outline-none focus:border-blue-500"
+            placeholder="ເຊັ່ນ: ສົມຊາຍ"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowAddWallet(false)}
+              className="flex-1 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10 py-2 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 font-bold"
+            >
+              ຍົກເລີກ
+            </button>
+            <button
+              onClick={handleAddWallet}
+              className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-bold"
+            >
+              ຢືນຢັນການສ້າງ
+            </button>
           </div>
-        </div>
+        </BaseModal>
       )}
 
       {/* Transaction Modal */}
       {showTransModal && (
-        <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowTransModal(null)}
-        >
-          <div
-            className="bg-slate-900 border border-white/10 rounded-xl p-6 w-full max-w-md"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-white mb-4">
-              {showTransModal.type === 'income' ? '💰 ເຕີມທຶນເຂົ້າກະເປົາ' : '💸 ຖອນເງິນອອກຈາກກະເປົາ'}
-            </h3>
-            <p className="text-xs text-slate-400 mb-3">
-              ກະເປົາ: <span className="text-white font-bold">{wallets.find((w) => w.id === showTransModal.walletId)?.name}</span>
-            </p>
-
-            <input
-              type="number"
-              value={transAmount}
-              onChange={(e) => setTransAmount(e.target.value)}
-              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-4 text-3xl text-center text-white mb-4 outline-none focus:border-blue-500 font-mono"
-              placeholder="0"
-              autoFocus
-            />
-
-            <input
-              type="text"
-              value={transNote}
-              onChange={(e) => setTransNote(e.target.value)}
-              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-white mb-4 outline-none focus:border-blue-500"
-              placeholder="ໝາຍເຫດ..."
-            />
-
-            {/* ตัวเลือกปันผลพาร์ทเนอร์ สำหรับ W-COMP ถอน */}
-            {showTransModal.type === 'expense' && showTransModal.walletId === 'W-COMP' && (
-              <div className="mb-4 bg-amber-500/10 border border-amber-500/20 p-3 rounded-lg">
-                <label className="flex items-center gap-2 text-sm text-amber-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isProfitSplitTrans}
-                    onChange={(e) => setIsProfitSplitTrans(e.target.checked)}
-                  />
-                  ນີ້ຄືການເບີກປັນຜົນໃຫ້ຮຸ້ນສ່ວນ
-                </label>
-                {isProfitSplitTrans && (
-                  <select
-                    value={splitPartnerId}
-                    onChange={(e) => setSplitPartnerId(e.target.value)}
-                    className="w-full mt-2 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none"
-                  >
-                    <option value="">ເລືອກຫຸ້ນສ່ວນທີ່ມາຮັບ</option>
-                    {wallets
-                      .filter((w) => w.type === 'partner')
-                      .map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.name}
-                        </option>
-                      ))}
-                  </select>
-                )}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowTransModal(null)}
-                className="flex-1 bg-white/5 text-slate-300 border border-white/10 py-3 rounded-lg hover:bg-white/10 font-bold"
-              >
-                ຍົກເລີກ
-              </button>
-              <button
-                onClick={handleSaveTransaction}
-                className={`flex-1 py-3 rounded-lg font-bold text-white ${
-                  showTransModal.type === 'income'
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : 'bg-rose-600 hover:bg-rose-700'
-                }`}
-              >
-                ຢືນຢັນ
-              </button>
+        <BaseModal
+          isOpen={true}
+          onClose={() => setShowTransModal(null)}
+          title={
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                {showTransModal.type === 'income' ? '💰 ເຕີມທຶນເຂົ້າກະເປົາ' : '💸 ຖອນເງິນອອກຈາກກະເປົາ'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">
+                ກະເປົາ: <span className="text-slate-900 dark:text-white font-bold">{wallets.find((w) => w.id === showTransModal.walletId)?.name}</span>
+              </p>
             </div>
+          }
+          maxWidth="max-w-md"
+          width="w-full"
+          bodyClassName="p-6 bg-white dark:bg-slate-900"
+        >
+          <input
+            type="text"
+            inputMode="decimal"
+            value={transAmount ? String(transAmount).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/,/g, '');
+              if (/^-?\d*\.?\d*$/.test(raw)) setTransAmount(raw);
+            }}
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-4 text-3xl text-center text-slate-900 dark:text-white mb-4 outline-none focus:border-blue-500 font-mono"
+            placeholder="0"
+            autoFocus
+          />
+
+          <input
+            type="text"
+            value={transNote}
+            onChange={(e) => setTransNote(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-slate-900 dark:text-white mb-4 outline-none focus:border-blue-500"
+            placeholder="ໝາຍເຫດ..."
+          />
+
+          {/* ตัวเลือกปันผลพาร์ทเนอร์ สำหรับ W-COMP ถอน */}
+          {showTransModal.type === 'expense' && showTransModal.walletId === 'W-COMP' && (
+            <div className="mb-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-3 rounded-lg">
+              <label className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isProfitSplitTrans}
+                  onChange={(e) => setIsProfitSplitTrans(e.target.checked)}
+                />
+                ນີ້ຄືການເບີກປັນຜົນໃຫ້ຮຸ້ນສ່ວນ
+              </label>
+              {isProfitSplitTrans && (
+                <select
+                  value={splitPartnerId}
+                  onChange={(e) => setSplitPartnerId(e.target.value)}
+                  className="w-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-slate-900 dark:text-white text-sm outline-none"
+                >
+                  <option value="">ເລືອກຫຸ້ນສ່ວນທີ່ມາຮັບ</option>
+                  {wallets
+                    .filter((w) => w.type === 'partner')
+                    .map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowTransModal(null)}
+              className="flex-1 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10 py-3 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 font-bold"
+            >
+              ຍົກເລີກ
+            </button>
+            <button
+              onClick={handleSaveTransaction}
+              className={`flex-1 py-3 rounded-lg font-bold text-white ${
+                showTransModal.type === 'income'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-rose-600 hover:bg-rose-700'
+              }`}
+            >
+              ຢືນຢັນ
+            </button>
           </div>
-        </div>
+        </BaseModal>
       )}
 
       {/* Wallet Details Modal — Statement/Invoices */}
       {showDetailsModal && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
-          onClick={() => setShowDetailsModal(null)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* ── Header ── */}
-            <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-slate-100 shrink-0">
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
-                  <span className="text-xl">📋</span>
-                  ລາຍລະອຽດບິນ &amp; ການເຄື່ອນໄຫວ (Statement/Invoices)
-                </h3>
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                    🏦 ກະເປົາ: {showDetailsModal.name}
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
-                    <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    ສະແດງສະຫຼຸບ
-                  </span>
-                </div>
+        <BaseModal
+          isOpen={true}
+          onClose={() => setShowDetailsModal(null)}
+          maxWidth="max-w-5xl"
+          maxHeight="max-h-[85vh]"
+          width="w-full"
+          bodyClassName="flex-1 overflow-auto bg-white dark:bg-slate-900"
+          title={
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                <span className="text-xl">📋</span>
+                ລາຍລະອຽດບິນ &amp; ການເຄື່ອນໄຫວ (Statement/Invoices)
+              </h3>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                  🏦 ກະເປົາ: {showDetailsModal?.name}
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800">
+                  <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  ສະແດງສະຫຼຸບ
+                </span>
               </div>
+            </div>
+          }
+          footer={
+            <div className="flex items-center justify-between w-full">
+              <p className="text-xs text-slate-400">
+                ລາຍການທຸລະກຳທັງໝົດຂອງ <span className="font-bold text-slate-600 dark:text-slate-300">{showDetailsModal?.name}</span>
+              </p>
               <button
                 onClick={() => setShowDetailsModal(null)}
-                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors shrink-0 text-xl font-light"
+                className="px-5 py-2 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold transition-colors text-sm"
               >
-                ×
+                ປິດໜ້າຈໍ
               </button>
             </div>
+          }
+        >
+          {(() => {
+                    // Build combined history
+                    const history: any[] = [];
 
-            {/* ── Table Body ── */}
-            <div className="flex-1 overflow-auto">
-              {(() => {
-                // Build combined history
-                const history: any[] = [];
-
-                // Manual transactions
-                getWalletTransactions(showDetailsModal.id).forEach(t => {
+                    // Manual transactions
+                    getWalletTransactions(showDetailsModal?.id || '').forEach(t => {
                   history.push({
                     id: t.id,
                     date: new Date(t.date),
@@ -628,18 +685,20 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                 orders.forEach(o => {
                   if (o.status === 'ຍົກເລີກອໍເດີ') return;
                   let match = false;
-                  if (showDetailsModal.type === 'W-COMP') {
-                    match = !o.wallet || o.wallet.includes('ບໍລິສັດ') || o.wallet.includes('BCEL') || o.wallet.includes('W-COMP');
+                  if (showDetailsModal?.type === 'W-COMP') {
+                    match = !o.wallet || o.wallet === showDetailsModal?.name || o.wallet.includes('ບໍລິສັດ') || o.wallet.includes('BCEL') || o.wallet.includes('W-COMP');
                   } else {
-                    const cleanName = showDetailsModal.name.split(/[(\s]/)[0];
-                    match = !!o.wallet?.includes(cleanName);
+                    const cleanName = (showDetailsModal?.name || '').split(/[(\s]/)[0];
+                    match = o.wallet === showDetailsModal?.name || !!o.wallet?.includes(cleanName);
                   }
                   if (!match) return;
 
-                  const income = o.paymentMethod === 'ຈ່າຍແລ້ວ'
-                    ? (Number(o.price) || 0)
-                    : (Number(o.deposit) || 0);
-                  const cost = (Number(o.totalCost) || 0) + (Number(o.shippingFee) || 0) + (Number(o.totalExpenses) || 0);
+                  const depositAmount = Number(o.deposit) || Number(o.DepositAmount) || Number(o['ຍອດມັດຈຳ']) || 0;
+                  const finalPrice = Number(o.price) || Number(o.totalSales) || Number(o.SellingPrice) || 0;
+                  const income = o.paymentMethod === 'ຈ່າຍແລ້ວ' || o.PaymentMethod === 'ຈ່າຍແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ' || o.status === 'ປິດບິນແລ້ວ'
+                    ? finalPrice
+                    : depositAmount;
+                  const cost = (Number(o.totalCost) || Number(o.CostPrice) || 0) + (Number(o.shippingFee) || Number(o.OrderShippingFee) || 0) + (Number(o.totalExpenses) || Number(o.AdditionalCost) || 0);
                   if (income === 0 && cost === 0) return;
 
                   const d = o.createdAt?.seconds
@@ -663,6 +722,9 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                   if (cost > 0) {
                     badges.push({ text: 'ລົງທຶນສັ່ງເຄື່ອງ', cls: 'bg-rose-50 text-rose-600 border-rose-200' });
                   }
+                  if (depositAmount > 0) {
+                    badges.push({ text: 'ມັດຈຳແລ້ວ', cls: 'bg-blue-50 text-blue-600 border-blue-200' });
+                  }
 
                   history.push({
                     id: o.id,
@@ -674,6 +736,8 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                     subDetail: itemsStr,
                     badges,
                     inAmt: income > 0 ? income : null,
+                    depositAmt: depositAmount > 0 ? depositAmount : 0,
+                    remainingAmt: income === finalPrice && finalPrice > depositAmount && depositAmount > 0 ? finalPrice - depositAmount : 0,
                     outAmt: cost > 0 ? cost : null,
                     rawId: o.id,
                     paymentMethod: o.paymentMethod,
@@ -748,9 +812,21 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                           {/* Income */}
                           <td className="px-4 py-3.5 text-right align-top pt-4">
                             {h.inAmt != null ? (
-                              <span className="font-bold text-emerald-600 tabular-nums">
-                                +{h.inAmt.toLocaleString()}
-                              </span>
+                              <div className="flex flex-col items-end">
+                                <span className="font-bold text-emerald-600 tabular-nums">
+                                  +{h.inAmt.toLocaleString()}
+                                </span>
+                                {h.depositAmt > 0 && h.remainingAmt > 0 ? (
+                                  <div className="text-[10px] text-emerald-600/70 mt-1 flex flex-col items-end leading-tight">
+                                    <span>ມັດຈຳ: +{h.depositAmt.toLocaleString()}</span>
+                                    <span>ຈ່າຍເພີ່ມ: +{h.remainingAmt.toLocaleString()}</span>
+                                  </div>
+                                ) : h.depositAmt > 0 && h.remainingAmt === 0 && h.inAmt === h.depositAmt ? (
+                                  <div className="text-[10px] text-emerald-600/70 mt-0.5">
+                                    (ມັດຈຳ)
+                                  </div>
+                                ) : null}
+                              </div>
                             ) : (
                               <span className="text-slate-300">—</span>
                             )}
@@ -835,136 +911,124 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                   </table>
                 );
               })()}
-            </div>
-
-            {/* ── Footer ── */}
-            <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
-              <p className="text-xs text-slate-400">
-                ລາຍການທຸລະກຳທັງໝົດຂອງ <span className="font-bold text-slate-600">{showDetailsModal.name}</span>
-              </p>
-              <button
-                onClick={() => setShowDetailsModal(null)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition-colors text-sm"
-              >
-                ປິດໜ້າຈໍ
-              </button>
-            </div>
-          </div>
-        </div>
+        </BaseModal>
       )}
 
       {/* Profit Split Modal */}
       {showProfitSplit && (
-        <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowProfitSplit(false)}
+        <BaseModal
+          isOpen={true}
+          onClose={() => setShowProfitSplit(false)}
+          title={
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">ລະບົບແບ່ງຜົນຮຸ້ນສ່ວນ (Profit Split)</h3>
+          }
+          maxWidth="max-w-4xl"
+          width="w-full"
+          maxHeight="max-h-[90vh]"
+          bodyClassName="p-6 bg-white dark:bg-slate-900 overflow-y-auto"
         >
-          <div
-            className="bg-slate-900 border border-white/10 rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-white">ລະບົບແບ່ງຜົນຮຸ້ນສ່ວນ (Profit Split)</h3>
-              <button onClick={() => setShowProfitSplit(false)} className="text-slate-400 hover:text-white text-2xl">
-                &times;
-              </button>
-            </div>
-
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-              <div className="bg-slate-800 p-4 rounded-lg">
-                <div className="text-xs text-slate-400 mb-1">ກຳໄລໃນກະເປົາປັດຈຸບັນ</div>
-                <div className="text-xl font-bold text-emerald-400">
-                  {(totalShopProfit - totalWithdrawn).toLocaleString()} ₭
-                </div>
-              </div>
-              <div className="bg-slate-800 p-4 rounded-lg">
-                <div className="text-xs text-slate-400 mb-1">ເບີກປັນຜົນໄປແລ້ວ</div>
-                <div className="text-xl font-bold text-rose-400">-{totalWithdrawn.toLocaleString()} ₭</div>
-              </div>
-              <div className="bg-blue-900/50 border border-blue-500/30 p-4 rounded-lg">
-                <div className="text-xs text-blue-300 mb-1">ກຳໄລສຸດທິທັງໝົດ (100%)</div>
-                <div className="text-xl font-bold text-white">{totalShopProfit.toLocaleString()} ₭</div>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-white/10">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">ກຳໄລໃນກະເປົາປັດຈຸບັນ</div>
+              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                {(totalShopProfit - totalWithdrawn).toLocaleString()} ₭
               </div>
             </div>
-
-            {/* Partners Table */}
-            {wallets.filter((w) => w.type === 'partner').length === 0 ? (
-              <div className="text-center py-8 text-slate-500 text-sm">
-                ຍັງບໍ່ມີຮຸ້ນສ່ວນ · ກົດ "ເພີ່ມກະເປົາ" ເພື່ອເພີ່ມຮຸ້ນສ່ວນ
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase border-b border-white/10">
-                    <tr>
-                      <th className="p-2">ຊື່ຮຸ້ນສ່ວນ</th>
-                      <th className="p-2">ທຶນລົງ</th>
-                      <th className="p-2 text-center">ສ່ວນແບ່ງ (%)</th>
-                      <th className="p-2 text-right">ຄວນໄດ້ຮັບ</th>
-                      <th className="p-2 text-right">ເບີກແລ້ວ</th>
-                      <th className="p-2 text-right">ຍອດເຫຼືອ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {wallets
-                      .filter((w) => w.type === 'partner')
-                      .map((w) => {
-                        const percent = w.sharePercent ?? 50;
-                        const shouldGet = (totalShopProfit * percent) / 100;
-                        const withdrawn = transactions
-                          .filter((t) => t.type === 'profit_split' && t.partnerSplitId === w.id)
-                          .reduce((sum, t) => sum + t.amount, 0);
-                        const remain = shouldGet - withdrawn;
-                        const partnerCapital = getWalletStats(w.id, 'all').capital;
-
-                        return (
-                          <tr key={w.id} className="text-slate-200">
-                            <td className="p-2 font-bold text-white">{w.name}</td>
-                            <td className="p-2 text-slate-400">{partnerCapital.toLocaleString()} ₭</td>
-                            <td className="p-2 text-center">
-                              <input
-                                type="number"
-                                value={percent}
-                                min={0}
-                                max={100}
-                                onChange={async (e) => {
-                                  const val = Number(e.target.value);
-                                  try {
-                                    await setDoc(doc(db, 'wallets', w.id), { sharePercent: val }, { merge: true });
-                                  } catch (err) {
-                                    console.error('Error updating share percent:', err);
-                                  }
-                                }}
-                                className="w-16 bg-slate-800 text-center px-2 py-1 rounded border border-white/10 text-white outline-none"
-                              />
-                            </td>
-                            <td className="p-2 text-right text-emerald-400 font-bold">{shouldGet.toLocaleString()} ₭</td>
-                            <td className="p-2 text-right text-rose-400">{withdrawn.toLocaleString()} ₭</td>
-                            <td className={`p-2 text-right font-bold ${remain >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {remain.toLocaleString()} ₭
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div className="mt-4 text-right text-sm">
-              <span
-                className={`px-3 py-1 rounded-full border ${
-                  totalPercent === 100
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                }`}
-              >
-                ລວມ % {totalPercent === 100 ? 'ຄົບ 100% ✓' : `ບໍ່ຄົບ (ປັດຈຸບັນ: ${totalPercent}%)`}
-              </span>
+            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-white/10">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">ເບີກປັນຜົນໄປແລ້ວ</div>
+              <div className="text-xl font-bold text-rose-600 dark:text-rose-400">-{totalWithdrawn.toLocaleString()} ₭</div>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-500/30 p-4 rounded-lg">
+              <div className="text-xs text-blue-700 dark:text-blue-300 mb-1">ກຳໄລສຸດທິທັງໝົດ (100%)</div>
+              <div className="text-xl font-bold text-slate-900 dark:text-white">{totalShopProfit.toLocaleString()} ₭</div>
             </div>
           </div>
-        </div>
+
+          {/* Partners Table */}
+          {wallets.filter((w) => w.type === 'partner').length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              ຍັງບໍ່ມີຮຸ້ນສ່ວນ · ກົດ "ເພີ່ມກະເປົາ" ເພື່ອເພີ່ມຮຸ້ນສ່ວນ
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase border-b border-slate-200 dark:border-white/10">
+                  <tr>
+                    <th className="p-2">ຊື່ຮຸ້ນສ່ວນ</th>
+                    <th className="p-2">ທຶນລົງ</th>
+                    <th className="p-2 text-center">ສ່ວນແບ່ງ (%)</th>
+                    <th className="p-2 text-right">ຄວນໄດ້ຮັບ</th>
+                    <th className="p-2 text-right">ເບີກແລ້ວ</th>
+                    <th className="p-2 text-right">ຍອດເຫຼືອ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {wallets
+                    .filter((w) => w.type === 'partner')
+                    .map((w) => {
+                      const percent = w.sharePercent ?? 50;
+                      const shouldGet = (totalShopProfit * percent) / 100;
+                      const withdrawn = transactions
+                        .filter((t) => (t.type === 'profit_split' && t.partnerSplitId === w.id) || t.note?.includes(`[ປັນຜົນຮຸ້ນສ່ວນ: ${w.id}`))
+                        .reduce((sum, t) => sum + (Number(t.amount) || Number((t as any).Amount) || 0), 0);
+                      const remain = shouldGet - withdrawn;
+                      const partnerCapital = getWalletStats(w.id, 'all').capital;
+
+                      return (
+                        <tr key={w.id} className="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-transparent">
+                          <td className="p-2 font-bold text-slate-900 dark:text-white">{w.name}</td>
+                          <td className="p-2 text-slate-500 dark:text-slate-400">{partnerCapital.toLocaleString()} ₭</td>
+                          <td className="p-2 text-center">
+                            <input
+                              type="number"
+                              value={percent}
+                              min={0}
+                              max={100}
+                              onChange={async (e) => {
+                                const val = Number(e.target.value);
+                                try {
+                                  await setDoc(doc(db, 'wallets', w.id), { sharePercent: val }, { merge: true });
+                                } catch (err) {
+                                  console.error('Error updating share percent:', err);
+                                }
+                              }}
+                              className="w-16 bg-slate-100 dark:bg-slate-800 text-center px-2 py-1 rounded border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white outline-none focus:border-teal-500"
+                            />
+                          </td>
+                          <td className="p-2 text-right text-emerald-600 dark:text-emerald-400 font-bold">{shouldGet.toLocaleString()} ₭</td>
+                          <td className="p-2 text-right text-rose-600 dark:text-rose-400">{withdrawn.toLocaleString()} ₭</td>
+                          <td className={`p-2 text-right font-bold ${remain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                            {remain.toLocaleString()} ₭
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="mt-4 flex justify-between items-center text-sm">
+            <button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold transition-colors"
+              onClick={() => {
+                alert('ລະບົບນີ້ພຽງຄຳນວນໃຫ້ເບິ່ງ. ການເບີກຈ່າຍແທ້ ໃຫ້ໄປກົດ "ຖອນອອກ" ທີ່ກະເປົາບໍລິສັດ ແລ້ວຕິກເລືອກ "ປັນຜົນ"');
+              }}
+            >
+              ຮັບຊາບ / ແນະນຳວິທີໂອນ
+            </button>
+            <span
+              className={`px-3 py-1 rounded-full border ${
+                totalPercent === 100
+                  ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
+                  : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-500/20'
+              }`}
+            >
+              ລວມ % {totalPercent === 100 ? 'ຄົບ 100% ✓' : `ບໍ່ຄົບ (ປັດຈຸບັນ: ${totalPercent}%)`}
+            </span>
+          </div>
+        </BaseModal>
       )}
     </div>
   );

@@ -19,7 +19,7 @@ interface Agent {
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────
-const card  = 'bg-white dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-white/8 shadow-sm dark:shadow-none';
+const card  = 'premium-card glass';
 const input = 'w-full h-10 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none transition focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10';
 const lbl   = 'block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
 const primaryBtn = 'inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/30 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0';
@@ -235,7 +235,10 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
               </div>
               <div>
                 <label className={lbl}>ຍອດຂາຍເລີ່ມຕົ້ນ</label>
-                <input type="number" min="0" value={initialSales} onChange={e => setInitialSales(e.target.value)}
+                <input type="text" inputMode="decimal" value={initialSales ? String(initialSales).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''} onChange={e => {
+                  const raw = e.target.value.replace(/,/g, '');
+                  if (/^-?\d*\.?\d*$/.test(raw)) setInitialSales(raw);
+                }}
                   placeholder="0" className={input} />
               </div>
             </div>

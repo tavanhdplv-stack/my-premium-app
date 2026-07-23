@@ -5,6 +5,7 @@ import { db } from '@/firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import type { Agent } from '@/app/types';
 import { Handshake, User, Package, Phone, Truck, Home, Building2, MapPin, Sparkles, CheckCircle2, XCircle, FileImage, ImagePlus, Check, Trash2, Calendar, Map, Hash, CreditCard } from 'lucide-react';
+import { BaseModal } from './BaseModal';
 
 // --- Constants ---
 const PROVINCES = [
@@ -1023,82 +1024,71 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
       </div>
 
       {/* Stock Selection Modal */}
-      {showStockModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-white/10">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-500 dark:text-emerald-400">
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">ເລືອກສິນຄ້າຈາກສະຕັອກ</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">ຄລິກທີ່ສິນຄ້າເພື່ອເພີ່ມລົງໃນບິນ</p>
-                </div>
-              </div>
-              <button onClick={() => setShowStockModal(false)} className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            
-            {/* Search */}
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-              <div className="relative">
-                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-                <input
-                  type="text"
-                  value={stockSearch}
-                  onChange={e => setStockSearch(e.target.value)}
-                  placeholder="ຄົ້ນຫາຊື່ສິນຄ້າ..."
-                  className="w-full h-12 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 text-sm font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none transition-colors"
-                />
-              </div>
-            </div>
-
-            {/* List */}
-            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-900/50">
-              {stocks.filter(s => (s.itemName || "").toLowerCase().includes((stockSearch || "").toLowerCase())).length === 0 ? (
-                <div className="text-center py-10">
-                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600">
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-                  </div>
-                  <p className="text-slate-500 dark:text-slate-400 font-bold">ບໍ່ພົບສິນຄ້າທີ່ຄົ້ນຫາ</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {stocks.filter(s => (s.itemName || "").toLowerCase().includes((stockSearch || "").toLowerCase())).map(stock => (
-                    <div
-                      key={stock.id}
-                      onClick={() => handleSelectFromStock(stock)}
-                      className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-500 hover:shadow-md transition-all active:scale-95"
-                    >
-                      {stock.imageUrl ? (
-                        <img src={stock.imageUrl} className="w-14 h-14 rounded-lg object-cover bg-slate-50 dark:bg-slate-700 shrink-0" alt="" />
-                      ) : (
-                        <div className="w-14 h-14 rounded-lg bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-500 shrink-0 border border-slate-100 dark:border-slate-600">
-                          <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-800 dark:text-slate-200 text-sm truncate">{stock.itemName}</div>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                            ສະຕັອກ: {stock.quantity}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
-                            ₭{new Intl.NumberFormat('lo-LA').format(stock.sellingPrice)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+      <BaseModal
+        isOpen={showStockModal}
+        onClose={() => setShowStockModal(false)}
+        title={
+          <div>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white">ເລືອກສິນຄ້າຈາກສະຕັອກ</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">ຄລິກທີ່ສິນຄ້າເພື່ອເພີ່ມລົງໃນບິນ</p>
           </div>
-        </div>
-      )}
+        }
+        icon={<svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>}
+        maxWidth="max-w-[900px]"
+        maxHeight="max-h-[80vh]"
+        width="w-[95vw]"
+        headerBottom={
+          <div className="relative mt-2">
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+            <input
+              type="text"
+              value={stockSearch}
+              onChange={e => setStockSearch(e.target.value)}
+              placeholder="ຄົ້ນຫາຊື່ສິນຄ້າ..."
+              className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 text-sm font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none transition-colors focus:border-teal-400"
+            />
+          </div>
+        }
+        bodyClassName="p-4 sm:p-5 bg-slate-50/50 dark:bg-slate-900/50"
+      >
+        {stocks.filter(s => (s.itemName || "").toLowerCase().includes((stockSearch || "").toLowerCase())).length === 0 ? (
+          <div className="text-center py-10">
+            <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+            </div>
+            <p className="text-slate-500 dark:text-slate-400 font-bold">ບໍ່ພົບສິນຄ້າທີ່ຄົ້ນຫາ</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {stocks.filter(s => (s.itemName || "").toLowerCase().includes((stockSearch || "").toLowerCase())).map(stock => (
+              <div
+                key={stock.id}
+                onClick={() => handleSelectFromStock(stock)}
+                className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:border-teal-400 dark:hover:border-teal-500 hover:shadow-md transition-all active:scale-95 group"
+              >
+                {stock.imageUrl ? (
+                  <img src={stock.imageUrl} className="w-14 h-14 rounded-lg object-cover bg-slate-50 dark:bg-slate-700 shrink-0" alt="" />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-slate-300 dark:text-slate-500 shrink-0 border border-slate-100 dark:border-slate-600 group-hover:text-teal-400 transition-colors">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-800 dark:text-slate-200 text-sm truncate">{stock.itemName}</div>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider border border-emerald-100 dark:border-emerald-500/20">
+                      ສະຕັອກ: {stock.quantity}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600">
+                      ₭{new Intl.NumberFormat('lo-LA').format(stock.sellingPrice)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </BaseModal>
     </div>
   );
 }

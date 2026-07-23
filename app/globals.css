@@ -4,15 +4,24 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #F8FAFC;
+  --foreground: #0F172A;
   --surface: rgba(255, 255, 255, 0.72);
   --surface-elevated: rgba(255, 255, 255, 0.92);
   --border: rgba(226, 232, 240, 0.8);
-  --accent: #6366f1;
-  --accent-glow: rgba(99, 102, 241, 0.25);
+  
+  /* Japanese Premium Minimal Colors */
+  --primary: #0F766E;
+  --secondary: #14B8A6;
+  --accent: #F59E0B;
+  --success: #22C55E;
+  --warning: #FACC15;
+  --danger: #EF4444;
+  
+  --accent-glow: rgba(20, 184, 166, 0.25);
   --premium-gold: #d4a853;
-  --premium-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
+  --premium-shadow: 0 10px 35px rgba(0,0,0,0.08);
+  --premium-hover-shadow: 0 18px 50px rgba(0,0,0,0.12);
 }
 
 .dark {
@@ -21,10 +30,19 @@
   --surface: rgba(15, 23, 42, 0.65);
   --surface-elevated: rgba(15, 23, 42, 0.85);
   --border: rgba(255, 255, 255, 0.08);
-  --accent: #818cf8;
-  --accent-glow: rgba(129, 140, 248, 0.2);
+  
+  /* Japanese Premium Minimal Colors (Dark Mode variations if needed, keep same for now) */
+  --primary: #14B8A6;
+  --secondary: #2DD4BF;
+  --accent: #FBBF24;
+  --success: #4ADE80;
+  --warning: #FDE047;
+  --danger: #F87171;
+  
+  --accent-glow: rgba(45, 212, 191, 0.2);
   --premium-gold: #e8c872;
-  --premium-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
+  --premium-shadow: 0 10px 35px rgba(0,0,0,0.3);
+  --premium-hover-shadow: 0 18px 50px rgba(0,0,0,0.4);
 }
 
 @theme inline {

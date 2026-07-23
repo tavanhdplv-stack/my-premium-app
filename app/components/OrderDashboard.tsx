@@ -19,6 +19,7 @@ interface TransactionDoc {
   amount: number;
   note: string;
   date: string;
+  [key: string]: any;
 }
 
 // --- Stock types ---
@@ -81,15 +82,14 @@ const ChartFallback = () => (
 // =====================================================================
 // Design tokens — premium SaaS with dark mode
 // =====================================================================
-const card =
-  'bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200/80 dark:border-white/8 shadow-sm dark:shadow-none';
-const pad = 'p-5 sm:p-6 lg:p-7';
-const chip = 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0';
+const card = 'premium-card glass';
+const pad = 'p-5 sm:p-6 lg:p-8';
+const chip = 'w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0';
 const sectionTitle =
-  'flex items-center gap-2.5 text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide';
-const pillActive = 'bg-violet-600 text-white shadow-sm';
+  'flex items-center gap-2.5 text-[15px] font-bold premium-gradient-text uppercase tracking-wide font-heading';
+const pillActive = 'bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white shadow-md scale-105 transition-all';
 const pillIdle =
-  'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-white dark:hover:bg-white/10';
+  'text-slate-500 dark:text-slate-400 hover:text-[var(--primary)] hover:bg-white dark:hover:bg-white/10 transition-all';
 
 // --- Data shape (matches OrderForm.tsx) ---
 interface OrderItem {
@@ -119,7 +119,8 @@ interface OrderDoc {
   totalProfit?: number;
   wallet?: string;
   items?: OrderItem[];
-  createdAt?: { toDate?: () => Date };
+  createdAt?: any;
+  [key: string]: any;
 }
 
 
@@ -139,14 +140,14 @@ const STATUS_META: {
   chip: string;
   icon: 'inbox' | 'download' | 'check' | 'alert' | 'box' | 'truck' | 'send' | 'complete' | 'cancel';
 }[] = [
-  { value: 'ຮັບອໍເດີແລ້ວ', label: 'ຮັບອໍເດີແລ້ວ', chip: 'bg-blue-50 text-blue-600', icon: 'inbox' },
-  { value: 'ສົ່ງບິນແລ້ວ', label: 'ສົ່ງບິນແລ້ວ', chip: 'bg-cyan-50 text-cyan-600', icon: 'download' },
-  { value: 'ກວດສອບແລ້ວ', label: 'ກວດສອບແລ້ວ', chip: 'bg-emerald-50 text-emerald-600', icon: 'check' },
-  { value: 'ໂອນມັດຈຳແລ້ວ', label: 'ໂອນມັດຈຳແລ້ວ', chip: 'bg-yellow-50 text-yellow-600', icon: 'alert' },
-  { value: 'ສັ່ງເຄື່ອງແລ້ວ', label: 'ສັ່ງເຄື່ອງແລ້ວ', chip: 'bg-orange-50 text-orange-600', icon: 'box' },
-  { value: 'ເຄື່ອງມາຮອດແລ້ວ', label: 'ເຄື່ອງມາຮອດແລ້ວ', chip: 'bg-indigo-50 text-indigo-600', icon: 'truck' },
-  { value: 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', label: 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', chip: 'bg-purple-50 text-purple-600', icon: 'send' },
-  { value: 'ໄດ້ຮັບເງິນແລ້ວ', label: 'ໄດ້ຮັບເງິນແລ້ວ', chip: 'bg-lime-50 text-lime-600', icon: 'complete' },
+  { value: 'ຮັບອໍເດີແລ້ວ', label: 'รับออเดอร์แล้ว (ຮັບອໍເດີ)', chip: 'bg-blue-50 text-blue-600', icon: 'inbox' },
+  { value: 'ສົ່ງບິນແລ້ວ', label: 'ส่งบินแล้ว (ສົ່ງບິນ)', chip: 'bg-cyan-50 text-cyan-600', icon: 'download' },
+  { value: 'ກວດສອບແລ້ວ', label: 'ตรวจสอบแล้ว (ກວດສອບ)', chip: 'bg-emerald-50 text-emerald-600', icon: 'check' },
+  { value: 'ໂອນມັດຈຳແລ້ວ', label: 'โอนมัดจำแล้ว (ໂອນມັດຈຳ)', chip: 'bg-yellow-50 text-yellow-600', icon: 'alert' },
+  { value: 'ສັ່ງເຄື່ອງແລ້ວ', label: 'สั่งของแล้ว (ສັ່ງເຄື່ອງ)', chip: 'bg-orange-50 text-orange-600', icon: 'box' },
+  { value: 'ເຄື່ອງມາຮອດແລ້ວ', label: 'ของมาถึงแล้ว (ເຄື່ອງມາຮອດ)', chip: 'bg-indigo-50 text-indigo-600', icon: 'truck' },
+  { value: 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', label: 'ส่งให้ลูกค้าแล้ว (ສົ່ງເຄື່ອງ)', chip: 'bg-purple-50 text-purple-600', icon: 'send' },
+  { value: 'ໄດ້ຮັບເງິນແລ້ວ', label: 'ได้รับเงินแล้ว (ໄດ້ຮັບເງິນ)', chip: 'bg-lime-50 text-lime-600', icon: 'complete' },
 ];
 
 // --- Helpers ---
@@ -393,7 +394,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
   // Orders that fall inside the selected period (or all, if monthFilter === '')
   const periodOrders = useMemo(() => {
     if (!monthFilter) return orders;
-    return orders.filter((o) => ymOf(o.orderDate) === monthFilter);
+    return orders.filter((o) => ymOf(o.orderDate || (o as any).Date || (o as any)['ວັນທີ'] || ((o.createdAt as any)?.seconds ? new Date((o.createdAt as any).seconds * 1000).toISOString() : '')) === monthFilter);
   }, [orders, monthFilter]);
 
   // Active orders exclude Cancelled
@@ -411,21 +412,22 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
     
     // 1. Order expenses
     activeOrders.forEach((o) => {
-      const price = o.price || 0;
-      const orderCost = (o.totalCost || 0) + (o.shippingFee || 0);
-      const orderExp = o.totalExpenses || 0;
+      const price = o.price || o.totalSales || o.SellingPrice || 0;
+      const orderCost = (o.totalCost || o.CostPrice || 0) + (o.shippingFee || o.OrderShippingFee || 0);
+      const orderExp = o.totalExpenses || o.AdditionalCost || 0;
       revenue += price;
       cost += orderCost;
       expenses += orderExp;
-      if (o.paymentMethod === 'ຈ່າຍແລ້ວ') actualCashIn += price;
-      else if ((o.deposit || 0) > 0) actualCashIn += o.deposit || 0;
+      if (o.paymentMethod === 'ຈ່າຍແລ້ວ' || o.PaymentMethod === 'ຈ່າຍແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ' || o.status === 'ປິດບິນແລ້ວ') actualCashIn += price;
+      else if ((o.deposit || o.DepositAmount || o['ຍອດມັດຈຳ'] || 0) > 0) actualCashIn += o.deposit || o.DepositAmount || o['ຍອດມັດຈຳ'] || 0;
     });
 
     // 2. Manual expenses from OtherExpenses
     walletTransactions.forEach(t => {
-      if (t.type === 'expense' && !t.note.startsWith('Order #')) {
-        if (!monthFilter || ymOf(t.date) === monthFilter) {
-          expenses += t.amount;
+      const isWithdrawal = t.type === 'profit_split' || t.note?.includes('[ປັນຜົນຮຸ້ນສ່ວນ') || t.note?.includes('ຖອນ') || t.Note?.includes('ຖອນ');
+      if ((t.type === 'expense' || t.Type === 'Expense') && !t.note?.startsWith('Order #') && !isWithdrawal) {
+        if (!monthFilter || ymOf(t.date || t.Date) === monthFilter) {
+          expenses += Number(t.amount) || Number(t.Amount) || 0;
         }
       }
     });
@@ -483,19 +485,19 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
       labels = Array.from({ length: days }, (_, i) => String(i + 1));
       labels.forEach((l) => (buckets[l] = { sales: 0, cost: 0, profit: 0 }));
       activeOrders.forEach((o) => {
-        const d = parseOrderDate(o.orderDate);
+        const d = parseOrderDate(o.orderDate || o.Date || o['ວັນທີ']);
         if (!d) return;
         const key = String(d.day);
         if (!buckets[key]) return;
-        const price = o.price || 0;
-        const c = (o.totalCost || 0) + (o.shippingFee || 0) + (o.totalExpenses || 0);
+        const price = o.price || o.totalSales || o.SellingPrice || 0;
+        const c = (o.totalCost || o.CostPrice || 0) + (o.shippingFee || o.OrderShippingFee || 0) + (o.totalExpenses || o.AdditionalCost || 0);
         buckets[key].sales += price;
         buckets[key].cost += c;
-        buckets[key].profit += price - c;
+        buckets[key].profit += (o.totalProfit !== undefined ? o.totalProfit : (o.NetProfit !== undefined ? o.NetProfit : (price - c)));
       });
     } else {
       activeOrders.forEach((o) => {
-        const d = parseOrderDate(o.orderDate);
+        const d = parseOrderDate(o.orderDate || o.Date || o['ວັນທີ']);
         if (!d) return;
         const key = `${String(d.month).padStart(2, '0')}/${String(d.year).slice(-2)}`;
         if (!buckets[key]) buckets[key] = { sales: 0, cost: 0, profit: 0 };
@@ -541,14 +543,15 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
         if (o.status === 'ຍົກເລີກອໍເດີ') return;
         let match = false;
         if (walletObj.type === 'W-COMP') {
-          match = !o.wallet || (o.wallet as string)?.includes('ບໍລິສັດ') || (o.wallet as string)?.includes('BCEL');
+          match = !o.wallet || o.wallet === walletObj.name || (o.wallet as string)?.includes('ບໍລິສັດ') || (o.wallet as string)?.includes('BCEL') || (o.wallet as string)?.includes('W-COMP');
         } else {
-          const cleanName = walletObj.name.split('(')[0].trim();
-          match = (o.wallet as string)?.includes(cleanName);
+          const cleanName = (walletObj.name || '').split('(')[0].trim();
+          match = o.wallet === walletObj.name || !!(o.wallet as string)?.includes(cleanName);
         }
         if (match) {
-          const income = o.paymentMethod === 'ຈ່າຍແລ້ວ' ? (o.price || 0) : (o.deposit || 0);
-          const cost = (o.totalCost || 0) + (o.shippingFee || 0) + (o.totalExpenses || 0);
+          const finalPrice = o.price || o.totalSales || o.SellingPrice || 0;
+          const income = o.paymentMethod === 'ຈ່າຍແລ້ວ' || o.PaymentMethod === 'ຈ່າຍແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ' || o.status === 'ປິດບິນແລ້ວ' ? finalPrice : (o.deposit || o.DepositAmount || o['ຍອດມັດຈຳ'] || 0);
+          const cost = (o.totalCost || o.CostPrice || 0) + (o.shippingFee || o.OrderShippingFee || 0) + (o.totalExpenses || o.AdditionalCost || 0);
           bal += income - cost;
         }
       });

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '@/firebase';
 import { collection, onSnapshot, addDoc, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import Swal from 'sweetalert2';
 
 interface Wallet {
   id: string;
@@ -41,7 +42,7 @@ export default function OtherExpenses() {
       setEditAmount('');
     } catch (e) {
       console.error(e);
-      alert('Failed to update amount');
+      Swal.fire({ title: 'ອັບເດດບໍ່ສຳເລັດ', text: 'ກະລຸນາລອງໃໝ່', icon: 'error', confirmButtonColor: '#ef4444', background: '#1e293b', color: '#f1f5f9' });
     }
   };
 
@@ -96,14 +97,27 @@ export default function OtherExpenses() {
       setAmount('');
     } catch (error) {
       console.error(error);
-      alert('Failed to save');
+      Swal.fire({ title: 'ບັນທຶກບໍ່ສຳເລັດ', text: 'ກະລຸນາລອງໃໝ່', icon: 'error', confirmButtonColor: '#ef4444', background: '#1e293b', color: '#f1f5f9' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('ແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບລາຍການນີ້? (ເງິນຈະຖືກຄືນເຂົ້າກະເປົາ)')) return;
+    const result = await Swal.fire({
+      title: 'ລຶບລາຍການຈ່າຍ?',
+      text: 'ແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບລາຍການນີ້? (ເງິນຈະຖືກຄືນເຂົ້າກະເປົາ)',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ລຶບເລີຍ',
+      cancelButtonText: 'ຍົກເລີກ',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      background: '#1e293b',
+      color: '#f1f5f9',
+      customClass: { popup: 'rounded-2xl' },
+    });
+    if (!result.isConfirmed) return;
     try {
       await deleteDoc(doc(db, 'transactions', id));
     } catch (e) {

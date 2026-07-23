@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '@/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, getCountFromServer } from 'firebase/firestore';
 import ThemeToggle from './components/ThemeToggle';
 import OrderDashboard from './components/OrderDashboard';
 import OrderForm from './components/OrderForm';
@@ -73,6 +73,51 @@ const Icon = ({ name, className }: { name: string; className?: string }) => {
   return <>{icons[name] || icons['dashboard']}</>;
 };
 
+// Skeleton shown while Firebase initialises on first load
+function AppSkeleton() {
+  return (
+    <div className="relative min-h-screen flex overflow-hidden bg-[var(--background)]">
+      {/* Sidebar skeleton */}
+      <div className="hidden lg:flex flex-col w-[88px] m-4 rounded-[30px] glass border-r-0 gap-4 p-4">
+        <div className="w-11 h-11 rounded-[20px] skeleton-shimmer mx-auto mt-4" />
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="w-10 h-10 rounded-[20px] skeleton-shimmer mx-auto" />
+        ))}
+      </div>
+      {/* Main content skeleton */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Header */}
+        <div className="glass mx-4 mt-4 rounded-t-[30px] px-10 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl skeleton-shimmer" />
+            <div className="space-y-2">
+              <div className="w-32 h-5 rounded-lg skeleton-shimmer" />
+              <div className="w-56 h-3 rounded-lg skeleton-shimmer" />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <div className="w-10 h-10 rounded-xl skeleton-shimmer" />
+            <div className="w-28 h-10 rounded-xl skeleton-shimmer" />
+          </div>
+        </div>
+        {/* Content area */}
+        <div className="flex-1 p-10 mx-4 mb-4 rounded-b-[30px] glass !border-t-0 !shadow-none space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-28 rounded-2xl skeleton-shimmer" />
+            ))}
+          </div>
+          <div className="h-64 rounded-2xl skeleton-shimmer" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-48 rounded-2xl skeleton-shimmer" />
+            <div className="h-48 rounded-2xl skeleton-shimmer" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabType>('add');
   const [orderCount, setOrderCount] = useState(0);
@@ -80,15 +125,29 @@ export default function DashboardPage() {
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [preSelectedAgentId, setPreSelectedAgentId] = useState<string | null>(null);
+  const [appReady, setAppReady] = useState(false);
 
+  // Lightweight count-only query — does NOT download all documents
+  // Refreshes every 60 seconds so badge stays reasonably up to date
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'orders'),
-      (snapshot) => setOrderCount(snapshot.size),
-      () => {} // silently ignore errors in the nav badge count
-    );
-    return () => unsubscribe();
+    let cancelled = false;
+    const fetchCount = async () => {
+      try {
+        const snap = await getCountFromServer(collection(db, 'orders'));
+        if (!cancelled) setOrderCount(snap.data().count);
+      } catch {
+        // silently ignore — badge count is non-critical
+      } finally {
+        if (!cancelled) setAppReady(true);
+      }
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
+
+  // Show skeleton until Firebase responds (avoids blank white screen)
+  if (!appReady) return <AppSkeleton />;
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -112,13 +171,8 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="relative min-h-screen bg-[#F8FAFC] dark:bg-[#030712] font-lao text-slate-800 dark:text-slate-100 flex overflow-hidden selection:bg-indigo-100 dark:selection:bg-indigo-900/50 selection:text-indigo-900 dark:selection:text-indigo-100 transition-colors duration-300">
-      {/* Decorative Blurred Orbs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-5%] w-[40vw] h-[40vw] rounded-full bg-gradient-to-br from-indigo-200/40 to-purple-200/40 dark:from-indigo-600/15 dark:to-purple-600/10 blur-[80px]" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[40vw] h-[40vw] rounded-full bg-gradient-to-br from-blue-200/30 to-cyan-200/30 dark:from-blue-600/10 dark:to-cyan-600/8 blur-[80px]" />
-        <div className="absolute top-[30%] left-[30%] w-[30vw] h-[30vw] rounded-full bg-gradient-to-br from-amber-200/20 to-rose-200/20 dark:from-amber-500/8 dark:to-rose-500/5 blur-[100px]" />
-      </div>
+    <div className="relative min-h-screen font-lao text-slate-800 dark:text-slate-100 flex overflow-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
+      {/* Decorative Orbs handled in layout.tsx */}
 
       {/* ─── MOBILE OVERLAY BACKDROP ───────────────────────────────────── */}
       {sidebarOpen && (
@@ -131,20 +185,21 @@ export default function DashboardPage() {
 
       {/* ─── SIDEBAR ────────────────────────────────────────────────────── */}
       <aside
+        onMouseEnter={() => { if (window.innerWidth >= 1024) setSidebarExpanded(true); }}
+        onMouseLeave={() => { if (window.innerWidth >= 1024) setSidebarExpanded(false); }}
         className={`
           fixed lg:relative inset-y-0 left-0
           ${sidebarExpanded ? 'w-[280px]' : 'w-[280px] lg:w-[88px]'}
-          bg-white/90 dark:bg-slate-900/90 lg:bg-white/60 lg:dark:bg-slate-900/60
-          backdrop-blur-2xl border-r border-white/80 dark:border-white/5
-          shadow-[4px_0_24px_rgba(0,0,0,0.08)] dark:shadow-[4px_0_24px_rgba(0,0,0,0.3)] lg:shadow-[4px_0_24px_rgba(0,0,0,0.02)]
-          flex flex-col z-40 transition-[width,transform] duration-300 ease-in-out
+          glass border-r-0 lg:my-4 lg:ml-4 lg:rounded-[30px]
+          shadow-[0_10px_40px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.2)]
+          flex flex-col z-40 transition-[width,transform,margin,border-radius] duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
         <div className={`py-8 transition-all duration-300 ${!sidebarExpanded ? 'px-8 lg:px-2 flex lg:justify-center' : 'px-8'}`}>
           <div className="flex items-center gap-3">
-            <div className="relative w-11 h-11 shrink-0 rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-amber-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-              <span className="text-white text-xl font-bold tracking-wider">T</span>
+            <div className="relative w-11 h-11 shrink-0 rounded-[20px] bg-gradient-to-tr from-[var(--primary)] via-[var(--secondary)] to-[var(--accent)] flex items-center justify-center shadow-lg shadow-teal-500/30">
+              <span className="text-white text-xl font-bold font-heading tracking-wider">T</span>
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-white dark:border-slate-900 rounded-full" />
             </div>
             <div className={`whitespace-nowrap overflow-hidden transition-[width,opacity] duration-300 ${!sidebarExpanded ? 'lg:w-0 lg:opacity-0' : 'w-[150px] opacity-100'}`}>
@@ -169,10 +224,10 @@ export default function DashboardPage() {
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
                 title={!sidebarExpanded ? item.label : undefined}
-                className={`group relative flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ease-out
+                className={`group relative flex items-center gap-3.5 px-4 py-3 rounded-[20px] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
                   ${
                     isActive
-                      ? 'bg-gradient-to-r from-indigo-600 to-violet-600 shadow-md shadow-indigo-600/25 text-white'
+                      ? 'bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] shadow-md shadow-teal-600/25 text-white scale-[1.02]'
                       : 'text-slate-500 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white hover:shadow-sm'
                   }
                   ${!sidebarExpanded ? 'lg:justify-center lg:px-0' : ''}`}
@@ -189,7 +244,7 @@ export default function DashboardPage() {
                     className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full transition-all duration-300 ${!sidebarExpanded ? 'lg:hidden' : ''} ${
                       isActive
                         ? 'bg-white/20 text-white border border-white/30'
-                        : 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-500/30'
+                        : 'bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-200/50 dark:border-teal-500/30'
                     }`}
                   >
                     {orderCount}
@@ -201,17 +256,17 @@ export default function DashboardPage() {
         </nav>
 
         <div className={`p-6 mt-auto transition-all duration-300 ${!sidebarExpanded ? 'lg:px-2 lg:py-6' : 'p-6'}`}>
-          <div className={`flex items-center gap-3 p-3 rounded-2xl bg-white/70 dark:bg-white/5 backdrop-blur-md border border-white/80 dark:border-white/10 shadow-sm hover:shadow-md transition-all cursor-pointer group ${!sidebarExpanded ? 'lg:justify-center' : ''}`} title="Admin Tawan">
+          <div className={`flex items-center gap-3 p-3 rounded-[24px] bg-white/70 dark:bg-white/5 backdrop-blur-md border border-white/80 dark:border-white/10 shadow-sm hover:shadow-[var(--premium-hover-shadow)] transition-all duration-400 cursor-pointer group hover:-translate-y-1 ${!sidebarExpanded ? 'lg:justify-center lg:p-2' : ''}`} title="Admin Tawan">
             <div className="w-10 h-10 shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700">
               <div className="w-full h-full rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-sm font-bold">
                 A
               </div>
             </div>
             <div className={`flex-1 min-w-0 overflow-hidden whitespace-nowrap transition-[width,opacity] duration-300 ${!sidebarExpanded ? 'lg:w-0 lg:opacity-0' : 'w-[120px] opacity-100'}`}>
-              <p className="text-[14px] font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              <p className="text-[14px] font-bold text-slate-900 dark:text-white truncate group-hover:text-[var(--primary)] transition-colors">
                 Admin Tawan
               </p>
-              <p className="text-[12px] text-slate-500 dark:text-slate-400 truncate">Premium Package</p>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400 truncate">Premium Member</p>
             </div>
           </div>
         </div>
@@ -220,7 +275,7 @@ export default function DashboardPage() {
       {/* ─── MAIN CONTENT ────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative z-10 min-w-0">
         {/* Header */}
-        <header className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-b border-white/60 dark:border-white/5 px-4 sm:px-6 lg:px-10 py-4 lg:py-5 flex items-center justify-between z-20 shadow-[0_4px_24px_-12px_rgba(0,0,0,0.05)] sticky top-0 transition-colors duration-300">
+        <header className="glass !border-x-0 !border-t-0 border-b border-white/40 dark:border-white/5 px-4 sm:px-6 lg:px-10 py-4 lg:py-5 flex items-center justify-between z-20 sticky top-0 transition-colors duration-300 mx-4 mt-4 lg:rounded-t-[30px]">
           {/* Hamburger button (visible on all screens now) */}
           <div className="flex items-center gap-3">
             <button
@@ -239,7 +294,7 @@ export default function DashboardPage() {
               </svg>
             </button>
             <div>
-              <h2 className="text-xl lg:text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <h2 className="text-xl lg:text-2xl font-bold font-heading text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                 {navConfig.find((n) => n.id === activeTab)?.label}
               </h2>
               <p className="text-[13px] lg:text-[14px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium hidden sm:block">
@@ -248,13 +303,13 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 lg:gap-3">
+          <div className="flex items-center gap-4 lg:gap-5">
             <ThemeToggle />
             <button
               onClick={() => handleTabChange('add')}
-              className="text-[13px] lg:text-[14px] font-semibold text-white px-3 lg:px-5 py-2 lg:py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl hover:shadow-lg hover:shadow-indigo-500/30 transition-all flex items-center gap-1.5 hover:-translate-y-0.5 active:translate-y-0"
+              className="btn-premium px-4 lg:px-6 py-2.5 lg:py-3 text-[14px]"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
               <span className="hidden sm:inline">ສ້າງອໍເດີໃໝ່</span>
@@ -263,13 +318,13 @@ export default function DashboardPage() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 p-3 sm:p-6 lg:p-10 overflow-y-auto pb-24 lg:pb-10">
-          <div className="max-w-7xl mx-auto">
+        <div className="flex-1 p-3 sm:p-6 lg:p-10 overflow-y-auto pb-24 lg:pb-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none">
+          <div className="max-w-7xl mx-auto h-full">
             <div
               key={activeTab}
-              className="premium-card p-1 min-h-[500px] animate-subtle-fade"
+              className="h-full animate-subtle-fade"
             >
-              <div className="bg-white/90 dark:bg-slate-900/60 rounded-[20px] p-3 sm:p-6 h-full shadow-inner shadow-slate-100/50 dark:shadow-none min-h-[500px] transition-colors duration-300">
+              <div className="h-full">
                 {activeTab === 'dashboard' && (
                   <OrderDashboard onViewAll={() => handleTabChange('list')} />
                 )}
@@ -291,24 +346,24 @@ export default function DashboardPage() {
         className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] dark:shadow-[0_-10px_40px_rgba(0,0,0,0.3)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="flex items-center justify-around px-2 py-3">
+        <div className="flex items-center justify-around px-1 py-4">
           {bottomNavItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
-                className={`relative flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all duration-200 ${
+                className={`relative flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl transition-all duration-200 ${
                   isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
                 }`}
               >
                 {isActive && (
                   <span className="absolute inset-0 rounded-xl bg-indigo-50 dark:bg-indigo-500/10" />
                 )}
-                <Icon name={item.icon} className="relative w-6 h-6 mb-1" />
-                <span className="relative text-[11px] font-bold">{item.label}</span>
+                <Icon name={item.icon} className="relative w-7 h-7 mb-0.5" />
+                <span className="relative text-xs font-bold">{item.label}</span>
                 {item.id === 'list' && orderCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-indigo-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                  <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-sm">
                     {orderCount > 99 ? '99+' : orderCount}
                   </span>
                 )}
@@ -318,16 +373,16 @@ export default function DashboardPage() {
           {/* More button — opens sidebar to access agent/settings */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className={`relative flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all duration-200 ${
+            className={`relative flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl transition-all duration-200 ${
               !bottomNavItems.find(i => i.id === activeTab)
                 ? 'text-indigo-600 dark:text-indigo-400'
                 : 'text-slate-400 dark:text-slate-500'
             }`}
           >
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-6 h-6 mb-1">
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-7 h-7 mb-0.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
-            <span className="text-[11px] font-bold">ເພີ່ມເຕີມ</span>
+            <span className="text-xs font-bold">ເພີ່ມເຕີມ</span>
           </button>
         </div>
       </nav>
