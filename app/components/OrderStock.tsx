@@ -21,6 +21,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import imageCompression from 'browser-image-compression';
+import { uploadImageDirect } from '@/app/lib/uploadImage';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface StockItem {
@@ -201,24 +202,14 @@ export default function OrderStock() {
 
     // ── Upload to Cloudinary via API route ─────────────────────────────
     const uploadImage = async (file: File): Promise<string> => {
-        const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
-        const compressedFile = await imageCompression(file, options);
-        const formData = new FormData();
-        formData.append('file', compressedFile);
-        const sizeMap: Record<string, number> = { small: 400, medium: 800, large: 1400 };
-        formData.append('width', String(sizeMap[imageSizeOption]));
-
         setUploadProgress(10);
-        const response = await fetch('/api/upload', { method: 'POST', body: formData });
-        setUploadProgress(80);
-
-        const data = await response.json();
-        const url = data?.secure_url ?? data?.url;
-        if (!response.ok || !url) {
-            throw new Error(typeof data?.error === 'string' ? data.error : 'ອັບໂຫຼດຮູບບໍ່ສຳເລັດ');
+        try {
+            const url = await uploadImageDirect(file);
+            setUploadProgress(100);
+            return url;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'ອັບໂຫຼດຮູບບໍ່ສຳເລັດ');
         }
-        setUploadProgress(100);
-        return url;
     };
 
     // ── Submit form ─────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import type { Agent } from '@/app/types';
 import { Handshake, User, Package, Phone, Truck, Home, Building2, MapPin, Sparkles, CheckCircle2, XCircle, FileImage, ImagePlus, Check, Trash2, Calendar, Map, Hash, CreditCard } from 'lucide-react';
 import { BaseModal } from './BaseModal';
 import imageCompression from 'browser-image-compression';
+import { uploadImageDirect } from '@/app/lib/uploadImage';
 
 // --- Constants ---
 const PROVINCES = [
@@ -340,32 +341,10 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     setMessage({ type: '', text: '' });
 
     try {
-      const options = {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1200,
-        useWebWorker: true,
-      };
-      const compressedFile = await imageCompression(file, options);
-      const formData = new FormData();
-      formData.append('file', compressedFile);
-
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || res.statusText || 'Upload failed');
-      }
-
-      if (data.url) {
-        setImageUrl(data.url);
-        setMessage({ type: 'success', text: 'ອັບໂຫຼດຮູບສຳເລັດ!' });
-        setTimeout(() => setMessage({ type: '', text: '' }), 2500);
-      } else {
-        throw new Error(data.error || 'Unknown upload response');
-      }
+      const url = await uploadImageDirect(file);
+      setImageUrl(url);
+      setMessage({ type: 'success', text: 'ອັບໂຫຼດຮູບສຳເລັດ!' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 2500);
     } catch (err) {
       console.error('Error uploading image:', err);
       setMessage({ type: 'error', text: `❌ ເກີດຂໍ້ຜິດພາດໃນການອັບໂຫຼດຮູບ: ${err instanceof Error ? err.message : 'Unknown error'}` });
@@ -475,20 +454,8 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
     setUploadingItemId(id);
     try {
-      const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
-      const compressedFile = await imageCompression(file, options);
-      const formData = new FormData();
-      formData.append('file', compressedFile);
-      
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!res.ok) throw new Error('Upload failed');
-      
-      const data = await res.json();
-      updateItem(id, 'imageUrl', data.url);
+      const url = await uploadImageDirect(file);
+      updateItem(id, 'imageUrl', url);
       
       setMessage({ type: 'success', text: 'ອັບໂຫຼດຮູບສຳເລັດ' });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
@@ -510,24 +477,17 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     setMessage({ type: 'info', text: 'ກຳລັງອັບໂຫຼດຮູບພາບ...' });
     
     try {
-      const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
       const newItems: OrderItem[] = [];
       for (const file of files) {
-        const compressedFile = await imageCompression(file, options);
-        const formData = new FormData();
-        formData.append('file', compressedFile);
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
-        if (res.ok) {
-          const data = await res.json();
-          newItems.push({
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            name: '',
-            qty: 1,
-            cost: 0,
-            price: 0,
-            imageUrl: data.url
-          });
-        }
+        const url = await uploadImageDirect(file);
+        newItems.push({
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          name: '',
+          qty: 1,
+          cost: 0,
+          price: 0,
+          imageUrl: url
+        });
       }
       
       setItems(prev => {
