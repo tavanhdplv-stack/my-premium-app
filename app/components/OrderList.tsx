@@ -1432,7 +1432,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                                       ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300'
                                       : item.status === 'ສັ່ງເຄື່ອງແລ້ວ'
                                       ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300'
-                                      : 'bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
+                                      : 'bg-teal-50 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300'
                                   }`}
                                   style={{ textOverflow: 'ellipsis' }}
                                 >
@@ -1449,7 +1449,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                                     item.status === 'ຍົກເລີກ' ? 'bg-rose-500' :
                                     item.status === 'ສົ່ງໃຫ້ລູກຄ້າແລ້ວ' ? 'bg-purple-500' :
                                     item.status === 'ເຄື່ອງມາແລ້ວ' ? 'bg-indigo-500' :
-                                    item.status === 'ສັ່ງເຄື່ອງແລ້ວ' ? 'bg-orange-500' : 'bg-blue-500'
+                                    item.status === 'ສັ່ງເຄື່ອງແລ້ວ' ? 'bg-orange-500' : 'bg-teal-500'
                                 }`} />
                               </div>
                             </div>
