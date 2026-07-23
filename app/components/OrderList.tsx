@@ -38,6 +38,7 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/20/solid';
+import { ImageGalleryModal, GalleryImage } from './ImageGalleryModal';
 
 // ═══════════════════════════════════════════════════════════════════════
 // STATUS META (9 statuses)
@@ -808,8 +809,10 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
   const [toast,       setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [statusModal, setStatusModal] = useState<string | null>(null);
   const [billModal,   setBillModal]   = useState<Order | null>(null);
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
+  const [galleryIndex, setGalleryIndex] = useState(0);
   const [shippingModal, setShippingModal] = useState<Order | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showReset,   setShowReset]   = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [updatingId,  setUpdatingId]  = useState<string | null>(null);
@@ -1075,36 +1078,12 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
           )}
           {billModal && <BillModal order={billModal} shopName={shopName} shopPhone={shopPhone} onClose={() => setBillModal(null)} />}
           {shippingModal && <ShippingModal order={shippingModal} onClose={() => setShippingModal(null)} />}
-          {previewImage && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md cursor-zoom-out"
-              onClick={() => setPreviewImage(null)}
-            >
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                className="relative max-w-4xl max-h-[85vh]"
-              >
-                <button
-                  className="absolute -top-3 -right-3 sm:-top-5 sm:-right-5 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-900 dark:text-white hover:bg-rose-500 hover:text-white hover:scale-110 transition-all shadow-2xl z-10"
-
-                onClick={() => setPreviewImage(null)}
-              >
-                <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-              <img
-                src={previewImage}
-                alt="Preview"
-                className="max-w-full max-h-[85vh] object-contain rounded-[24px] shadow-[0_0_50px_rgba(0,0,0,0.5)] ring-1 ring-white/10"
-              />
-            </motion.div>
-          </motion.div>
-        )}
+          <ImageGalleryModal
+            images={galleryImages}
+            initialIndex={galleryIndex}
+            isOpen={galleryImages.length > 0}
+            onClose={() => setGalleryImages([])}
+          />
         {showReset && <ResetModal wallets={wallets} onConfirm={handleReset} onClose={() => setShowReset(false)} />}
         {showHistory && <HistoryModal orders={orders} lastReset={lastReset} onClose={() => setShowHistory(false)} />}
       </AnimatePresence>
@@ -1411,7 +1390,22 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                                   src={item.imageUrl}
                                   alt=""
                                   className="w-6 h-6 rounded-[8px] border border-slate-200/60 dark:border-white/10 object-cover cursor-pointer hover:ring-2 hover:ring-teal-500 transition-all shrink-0 bg-white"
-                                  onClick={() => setPreviewImage(item.imageUrl!)}
+                                  onClick={() => {
+                                    const images: GalleryImage[] = [];
+                                    let clickedIndex = 0;
+                                    let imgCount = 0;
+                                    order.items.forEach((it) => {
+                                      if (it.imageUrl) {
+                                        images.push({ url: it.imageUrl, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
+                                        if (it.imageUrl === item.imageUrl) {
+                                          clickedIndex = imgCount;
+                                        }
+                                        imgCount++;
+                                      }
+                                    });
+                                    setGalleryImages(images);
+                                    setGalleryIndex(clickedIndex);
+                                  }}
                                   title="ຄລິກເພື່ອເບິ່ງຮູບເຕັມ"
                                 />
                               ) : (

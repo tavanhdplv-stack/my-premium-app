@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { ExclamationTriangleIcon, PhotoIcon } from '@heroicons/react/24/outline';
+import { ImageGalleryModal, GalleryImage } from './ImageGalleryModal';
 import { db } from '@/firebase';
 import {
   collection, addDoc, serverTimestamp,
@@ -62,9 +64,11 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [search,      setSearch]      = useState('');
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<any>(null);
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [filterMonth, setFilterMonth] = useState<string>('');
   const [orders, setOrders] = useState<any[]>([]);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // Fetch orders for agent history
   useEffect(() => {
@@ -468,7 +472,26 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
                                   {(() => {
                                     const imgUrl = o.imageUrl || (o.items && o.items.length > 0 && o.items[0].imageUrl);
                                     return imgUrl ? (
-                                      <img src={imgUrl} alt="Product" className="w-10 h-10 object-cover rounded-lg shadow-sm border border-slate-100 cursor-pointer hover:opacity-80 transition-opacity shrink-0" onClick={() => setSelectedImage(imgUrl)} />
+                                      <img src={imgUrl} alt="Product" className="w-10 h-10 object-cover rounded-lg shadow-sm border border-slate-100 cursor-pointer hover:opacity-80 transition-opacity shrink-0" 
+                                        onClick={() => {
+                                          const images: GalleryImage[] = [];
+                                          if (o.imageUrl) {
+                                            images.push({ url: o.imageUrl, title: 'ຫຼັກຖານການໂອນ (Slip)', subtitle: o.customerName });
+                                          }
+                                          if (o.items) {
+                                            o.items.forEach((item: any) => {
+                                              if (item.imageUrl) {
+                                                images.push({ url: item.imageUrl, title: item.name, subtitle: `ຈຳນວນ: ${item.qty}` });
+                                              }
+                                            });
+                                          }
+                                          if (images.length === 0 && imgUrl) {
+                                            images.push({ url: imgUrl, title: 'ຮູບສິນຄ້າ', subtitle: o.customerName });
+                                          }
+                                          setGalleryImages(images);
+                                          setGalleryIndex(0);
+                                        }} 
+                                      />
                                     ) : (
                                     <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 shrink-0">
                                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -530,15 +553,13 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
         </div>
       )}
 
-      {/* Image Modal */}
-      {selectedImage && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={() => setSelectedImage(null)}>
-          <button className="absolute top-6 right-6 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors">
-            <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-          <img src={selectedImage} alt="Preview" className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl" onClick={e => e.stopPropagation()} />
-        </div>
-      )}
+      {/* Image Gallery Modal */}
+      <ImageGalleryModal
+        images={galleryImages}
+        initialIndex={galleryIndex}
+        isOpen={galleryImages.length > 0}
+        onClose={() => setGalleryImages([])}
+      />
     </div>
   );
 }
