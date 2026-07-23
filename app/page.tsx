@@ -320,7 +320,7 @@ export default function DashboardPage() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 p-3 sm:p-6 lg:p-10 overflow-y-auto pb-24 lg:pb-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none">
+        <div className="flex-1 p-3 sm:p-6 lg:p-10 overflow-y-auto pb-40 lg:pb-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none">
           <div className="max-w-7xl mx-auto h-full">
             <div
               key={activeTab}
