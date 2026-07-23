@@ -20,6 +20,7 @@ import {
     EyeIcon, ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { ChevronDownIcon } from '@heroicons/react/20/solid';
+import imageCompression from 'browser-image-compression';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface StockItem {
@@ -200,45 +201,8 @@ export default function OrderStock() {
 
     // ── Upload to Cloudinary via API route ─────────────────────────────
     const uploadImage = async (file: File): Promise<string> => {
-        const compressImage = (file: File, maxWidth = 1200): Promise<File> => {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (event) => {
-                    const img = new window.Image();
-                    img.src = event.target?.result as string;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > maxWidth) {
-                            height = Math.round((height * maxWidth) / width);
-                            width = maxWidth;
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        if (!ctx) return resolve(file);
-
-                        ctx.drawImage(img, 0, 0, width, height);
-                        canvas.toBlob(
-                            (blob) => {
-                                if (!blob) return resolve(file);
-                                resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }));
-                            },
-                            'image/jpeg',
-                            0.8
-                        );
-                    };
-                    img.onerror = () => resolve(file);
-                };
-                reader.onerror = () => resolve(file);
-            });
-        };
-
-        const compressedFile = await compressImage(file);
+        const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
+        const compressedFile = await imageCompression(file, options);
         const formData = new FormData();
         formData.append('file', compressedFile);
         const sizeMap: Record<string, number> = { small: 400, medium: 800, large: 1400 };

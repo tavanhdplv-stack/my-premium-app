@@ -6,6 +6,7 @@ import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, u
 import type { Agent } from '@/app/types';
 import { Handshake, User, Package, Phone, Truck, Home, Building2, MapPin, Sparkles, CheckCircle2, XCircle, FileImage, ImagePlus, Check, Trash2, Calendar, Map, Hash, CreditCard } from 'lucide-react';
 import { BaseModal } from './BaseModal';
+import imageCompression from 'browser-image-compression';
 
 // --- Constants ---
 const PROVINCES = [
@@ -338,10 +339,16 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     setIsUploading(true);
     setMessage({ type: '', text: '' });
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+      };
+      const compressedFile = await imageCompression(file, options);
+      const formData = new FormData();
+      formData.append('file', compressedFile);
+
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
@@ -468,8 +475,10 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
     setUploadingItemId(id);
     try {
+      const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
+      const compressedFile = await imageCompression(file, options);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', compressedFile);
       
       const res = await fetch('/api/upload', {
         method: 'POST',
@@ -501,10 +510,12 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     setMessage({ type: 'info', text: 'ກຳລັງອັບໂຫຼດຮູບພາບ...' });
     
     try {
+      const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
       const newItems: OrderItem[] = [];
       for (const file of files) {
+        const compressedFile = await imageCompression(file, options);
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', compressedFile);
         const res = await fetch('/api/upload', { method: 'POST', body: formData });
         if (res.ok) {
           const data = await res.json();
