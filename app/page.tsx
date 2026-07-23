@@ -173,7 +173,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="relative min-h-screen font-lao text-slate-800 dark:text-slate-100 flex overflow-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
+    <div className="relative min-h-[100dvh] font-lao text-slate-800 dark:text-slate-100 flex overflow-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
       {/* Decorative Orbs handled in layout.tsx */}
 
       {/* ─── MOBILE OVERLAY BACKDROP ───────────────────────────────────── */}
@@ -275,7 +275,7 @@ export default function DashboardPage() {
       </aside>
 
       {/* ─── MAIN CONTENT ────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative z-10 min-w-0">
+      <main className="flex-1 flex flex-col h-[100dvh] overflow-hidden relative z-10 min-w-0">
         {/* Header */}
         <header className="glass !border-x-0 !border-t-0 border-b border-white/40 dark:border-white/5 px-4 sm:px-6 lg:px-10 py-4 lg:py-5 flex items-center justify-between z-20 sticky top-0 transition-colors duration-300 mx-4 mt-4 lg:rounded-t-[30px]">
           {/* Hamburger button (visible on all screens now) */}
