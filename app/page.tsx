@@ -173,7 +173,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="relative min-h-[100dvh] font-lao text-slate-800 dark:text-slate-100 flex overflow-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
+    <div className="relative min-h-[100dvh] font-lao text-slate-800 dark:text-slate-100 flex overflow-x-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
       {/* Decorative Orbs handled in layout.tsx */}
 
       {/* ─── MOBILE OVERLAY BACKDROP ───────────────────────────────────── */}
@@ -190,7 +190,7 @@ export default function DashboardPage() {
         onMouseEnter={() => { if (window.innerWidth >= 1024) setSidebarExpanded(true); }}
         onMouseLeave={() => { if (window.innerWidth >= 1024) setSidebarExpanded(false); }}
         className={`
-          fixed lg:relative inset-y-0 left-0
+          fixed lg:sticky inset-y-0 left-0 top-0 lg:h-[100dvh]
           ${sidebarExpanded ? 'w-[280px]' : 'w-[280px] lg:w-[88px]'}
           glass border-r-0 lg:my-4 lg:ml-4 lg:rounded-[30px]
           shadow-[0_10px_40px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.2)]
@@ -275,7 +275,7 @@ export default function DashboardPage() {
       </aside>
 
       {/* ─── MAIN CONTENT ────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col h-[100dvh] overflow-hidden relative z-10 min-w-0">
+      <main className="flex-1 flex flex-col min-h-[100dvh] relative z-10 min-w-0">
         {/* Header */}
         <header className="glass !border-x-0 !border-t-0 border-b border-white/40 dark:border-white/5 px-4 sm:px-6 lg:px-10 py-4 lg:py-5 flex items-center justify-between z-20 sticky top-0 transition-colors duration-300 mx-4 mt-4 lg:rounded-t-[30px]">
           {/* Hamburger button (visible on all screens now) */}
@@ -320,7 +320,10 @@ export default function DashboardPage() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 p-3 sm:p-6 lg:p-10 overflow-y-auto pb-40 lg:pb-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none">
+        <div 
+          className="flex-1 p-3 sm:p-6 lg:p-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}
+        >
           <div className="max-w-7xl mx-auto min-h-full">
             <div
               key={activeTab}
