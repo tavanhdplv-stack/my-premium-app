@@ -64,7 +64,7 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [search,      setSearch]      = useState('');
-  const [selectedAgent, setSelectedAgent] = useState<any>(null);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [filterMonth, setFilterMonth] = useState<string>('');
