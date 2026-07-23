@@ -42,6 +42,7 @@ interface OrderItem {
   cost: number;
   price: number;
   imageUrl?: string;
+  stockId?: string;
 }
 
 interface Expense {
@@ -212,7 +213,8 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
       qty: 1,
       cost: stock.costPrice,
       price: stock.sellingPrice,
-      imageUrl: stock.imageUrl
+      imageUrl: stock.imageUrl,
+      stockId: stock.id
     };
     if (items.length === 1 && items[0].name === '' && items[0].cost === 0 && items[0].price === 0) {
       setItems([newItem]);
@@ -424,7 +426,17 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         name = name.replace(/^[-*:\s\d.]+|[-*:\s]+$/g, '');
 
         if (name && price > 0) {
-          newItems.push({ id: Math.random().toString(36).substr(2, 9), name, qty, cost: 0, price });
+          // ลองจับคู่ชื่อกับสต๊อกที่มี
+          const matchedStock = stocks.find(s => s.itemName.trim().toLowerCase() === name.toLowerCase());
+          newItems.push({ 
+            id: Math.random().toString(36).substr(2, 9), 
+            name, 
+            qty, 
+            cost: matchedStock ? matchedStock.costPrice : 0, 
+            price,
+            stockId: matchedStock ? matchedStock.id : undefined,
+            imageUrl: matchedStock ? matchedStock.imageUrl : undefined
+          });
         }
       }
     });
@@ -444,7 +456,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
   const applyStockToItem = (id: string, stock: StockItem) => {
     setItems(prev => prev.map(item => 
       item.id === id 
-        ? { ...item, name: stock.itemName, cost: stock.costPrice || 0, price: stock.sellingPrice || 0, imageUrl: stock.imageUrl || '' }
+        ? { ...item, name: stock.itemName, cost: stock.costPrice || 0, price: stock.sellingPrice || 0, imageUrl: stock.imageUrl || '', stockId: stock.id }
         : item
     ));
     setShowStockDropdown(null);
@@ -591,6 +603,17 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           ...orderData,
           createdAt: serverTimestamp(),
         });
+        
+        // ตัดสต๊อกอัตโนมัติเมื่อสร้างอໍเດີใหม่
+        for (const item of items) {
+          if (item.stockId && item.qty > 0) {
+            const stockRef = doc(db, 'stocks', item.stockId);
+            await updateDoc(stockRef, {
+              quantity: increment(-item.qty)
+            });
+          }
+        }
+
         if (agentId && totalSales > 0) {
           const agentRef = doc(db, 'agents', agentId);
           await updateDoc(agentRef, {
