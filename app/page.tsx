@@ -130,15 +130,17 @@ export default function DashboardPage() {
   // Lightweight count-only query — does NOT download all documents
   // Refreshes every 60 seconds so badge stays reasonably up to date
   useEffect(() => {
+    // DO NOT block the UI waiting for Firebase. 
+    // In areas with poor connection, getCountFromServer can hang for 10+ seconds.
+    setAppReady(true);
+    
     let cancelled = false;
     const fetchCount = async () => {
       try {
         const snap = await getCountFromServer(collection(db, 'orders'));
         if (!cancelled) setOrderCount(snap.data().count);
-      } catch {
-        // silently ignore — badge count is non-critical
-      } finally {
-        if (!cancelled) setAppReady(true);
+      } catch (err) {
+        console.error("Error fetching order count:", err);
       }
     };
     fetchCount();
