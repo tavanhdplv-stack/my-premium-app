@@ -137,7 +137,7 @@ export default function OrderNotes() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-[fadeIn_0.4s_ease-out]">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-32 space-y-6 animate-[fadeIn_0.4s_ease-out]">
       
       {/* Header with Glassmorphism */}
       <div className="relative overflow-hidden bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/20 dark:border-white/10 shadow-2xl shadow-slate-200/50 dark:shadow-slate-900/50">

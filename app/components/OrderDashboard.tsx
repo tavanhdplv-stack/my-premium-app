@@ -585,7 +585,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
   }, [orders]);
 
   return (
-    <div className={`animate-[fadeIn_0.35s_ease-out] space-y-6 lg:space-y-8 transition-opacity duration-500 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+    <div className={`animate-[fadeIn_0.35s_ease-out] space-y-6 pb-32 lg:space-y-8 transition-opacity duration-500 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
       
       {/* Other Expenses Widget */}
       <OtherExpenses />

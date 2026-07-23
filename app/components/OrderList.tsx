@@ -1056,7 +1056,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="space-y-6 pb-8 max-w-7xl mx-auto px-4 sm:px-6"
+      className="space-y-6 pb-32 max-w-7xl mx-auto px-4 sm:px-6"
     >
       {/* Toast */}
       <AnimatePresence>
