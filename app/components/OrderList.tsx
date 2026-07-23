@@ -1418,7 +1418,13 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                                 <span className="text-slate-400 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-1"></span>
                               )}
                               <span className="break-words flex-1 leading-tight py-0.5">{item.name}</span>
-                              <span className="font-bold text-blue-600 dark:text-blue-400 shrink-0">x{item.qty}</span>
+                              <span className={`font-bold shrink-0 ${
+                                item.status === 'ຍົກເລີກ' ? 'text-rose-600 dark:text-rose-400' :
+                                item.status === 'ສົ່ງໃຫ້ລູກຄ້າແລ້ວ' ? 'text-purple-600 dark:text-purple-400' :
+                                item.status === 'ເຄື່ອງມາແລ້ວ' ? 'text-indigo-600 dark:text-indigo-400' :
+                                item.status === 'ສັ່ງເຄື່ອງແລ້ວ' ? 'text-orange-600 dark:text-orange-400' :
+                                'text-teal-600 dark:text-teal-400'
+                              }`}>x{item.qty}</span>
                               <div className="relative ml-auto shrink-0 group">
                                 <select
                                   value={item.status || 'ຮັບອໍເດີແລ້ວ'}
