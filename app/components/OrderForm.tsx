@@ -568,6 +568,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         product_name: firstItem.name,
         size: 'N/A',
         price: Number(totalSales),
+        total_sales: Number(totalSales),
         payment_method: paymentMethod,
         status: status,
         phone, transport, village, district, province,

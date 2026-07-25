@@ -106,6 +106,8 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   const [showTransModal, setShowTransModal] = useState<{ type: 'income' | 'expense'; wallet_id: string } | null>(null);
   const [showStatement, setShowStatement] = useState<Wallet | null>(null);
   const [showProfitSplit, setShowProfitSplit] = useState(false);
+  const [editTx, setEditTx] = useState<{ id: string, amount: number } | null>(null);
+  const [deleteTx, setDeleteTx] = useState<{ id: string } | null>(null);
 
   // Form
   const [newWalletName, setNewWalletName] = useState('');
@@ -148,7 +150,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
       amount: Number(d.amount) || 0,
       notes: d.notes || d.note || '',
       date: d.date || d.created_at || new Date().toISOString(),
-      partner_split_id: d.partner_split_id,
+      partner_split_id: d.partner_split_id || d.category,
     })));
   }, []);
 
@@ -228,10 +230,17 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
     orders.filter(o => o.status !== 'ຍົກເລີກອໍເດີ').reduce((s, o) => s + o.total_profit, 0),
     [orders]);
 
-  const totalWithdrawn = useMemo(() =>
-    transactions.filter(t => t.type === 'profit_split' || t.type === 'expense')
+  const totalExpenses = useMemo(() =>
+    transactions.filter(t => t.type === 'expense')
       .reduce((s, t) => s + t.amount, 0),
     [transactions]);
+
+  const totalDividends = useMemo(() =>
+    transactions.filter(t => t.type === 'profit_split')
+      .reduce((s, t) => s + t.amount, 0),
+    [transactions]);
+
+  const netProfit = totalProfit - totalExpenses;
 
   // ── Statement rows for a wallet ───────────────────────────────────────────
   function buildStatement(wallet: Wallet) {
@@ -241,6 +250,14 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
     transactions
       .filter(t => t.wallet_id === wallet.id)
       .forEach(t => {
+        let detailText = t.notes || (t.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນ');
+        if (t.type === 'profit_split' && t.partner_split_id) {
+          const partner = wallets.find(w => w.id === t.partner_split_id);
+          if (partner) {
+            detailText = `ເບີກໃຫ້: ${partner.name}${t.notes ? ` (${t.notes})` : ''}`;
+          }
+        }
+
         rows.push({
           id: `t-${t.id}`,
           date: new Date(t.date),
@@ -251,7 +268,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
           labelColor: t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400 font-bold'
             : t.type === 'profit_split' ? 'text-amber-600 dark:text-amber-400 font-bold'
             : 'text-slate-600 dark:text-slate-400',
-          detail: t.notes || (t.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນ'),
+          detail: detailText,
           subDetail: null,
           badges: [],
           inAmt: t.type === 'income' ? t.amount : 0,
@@ -342,12 +359,44 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
     const txType = showTransModal.type === 'income' ? 'income'
       : isProfitSplit ? 'profit_split' : 'expense';
     const note = transNote || (showTransModal.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນອອກ');
+    
+    // Optimistic Update
+    const tempTx: Transaction = {
+      id: `temp-${Date.now()}`,
+      wallet_id: showTransModal.wallet_id, 
+      type: txType as any,
+      amount: Number(transAmount), 
+      notes: note, 
+      date: new Date().toISOString(),
+      partner_split_id: isProfitSplit ? splitPartnerId : undefined
+    };
+    setTransactions(prev => [tempTx, ...prev]);
+    
     await supabase.from('transactions').insert({
-      wallet_id: showTransModal.wallet_id, type: txType,
-      amount: Number(transAmount), notes: note, date: new Date().toISOString(),
+      wallet_id: showTransModal.wallet_id, 
+      type: txType,
+      amount: Number(transAmount), 
+      notes: note, 
+      date: tempTx.date,
+      category: isProfitSplit ? splitPartnerId : null
     });
     setShowTransModal(null); setTransAmount(''); setTransNote('');
     setIsProfitSplit(false); setSplitPartnerId('');
+  };
+
+  const handleEditWallet = async (wallet: Wallet) => {
+    const newName = prompt('ປ່ຽນຊື່ຮຸ້ນສ່ວນ:', wallet.name);
+    if (newName && newName.trim() !== wallet.name) {
+      await supabase.from('wallets').update({ name: newName.trim() }).eq('id', wallet.id);
+      setWallets(prev => prev.map(w => w.id === wallet.id ? { ...w, name: newName.trim() } : w));
+    }
+  };
+
+  const handleDeleteWallet = async (wallet: Wallet) => {
+    if (confirm(`ລຶບກະເປົາຮຸ້ນສ່ວນ "${wallet.name}"?\n(ລາຍການຕ່າງໆຂອງກະເປົານີ້ຈະຖືກລຶບນຳ)`)) {
+      await supabase.from('wallets').delete().eq('id', wallet.id);
+      setWallets(prev => prev.filter(w => w.id !== wallet.id));
+    }
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -366,7 +415,8 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
             </div>
             <div className="flex flex-wrap gap-4 mt-2 text-xs text-indigo-200">
               <span>ກຳໄລລວມ: <span className="font-bold text-emerald-300">{fmt(totalProfit)} ₭</span></span>
-              <span>ຈ່າຍ/ຖອນ: <span className="font-bold text-rose-300">{fmt(totalWithdrawn)} ₭</span></span>
+              <span>ຄ່າໃຊ້ຈ່າຍອື່ນໆ: <span className="font-bold text-orange-300">{fmt(totalExpenses)} ₭</span></span>
+              <span>ເບີກປັນຜົນ: <span className="font-bold text-rose-300">{fmt(totalDividends)} ₭</span></span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
@@ -417,10 +467,19 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                     </h3>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">ID: {wallet.id}</p>
                   </div>
-                  {isMain && (
+                  {isMain ? (
                     <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
                       Main
                     </span>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handleEditWallet(wallet)} className="p-1.5 text-slate-400 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10 rounded-lg transition-colors" title="ແກ້ໄຂຊື່">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      </button>
+                      <button onClick={() => handleDeleteWallet(wallet)} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors" title="ລຶບ">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -738,13 +797,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                             <div className="flex items-center justify-center gap-1">
                               <button
                                 title="ແກ້ໄຂ"
-                                onClick={() => {
-                                  const newAmt = prompt('ໃສ່ຍອດໃໝ່:', String(row.inAmt || row.outAmt || 0));
-                                  if (newAmt !== null) {
-                                    const n = Number(newAmt.replace(/,/g, ''));
-                                    if (!isNaN(n)) supabase.from('transactions').update({ amount: n }).eq('id', row.rawId);
-                                  }
-                                }}
+                                onClick={() => setEditTx({ id: row.rawId, amount: Number(row.inAmt || row.outAmt || 0) })}
                                 className="w-7 h-7 rounded-lg border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/15 hover:border-blue-200 dark:hover:border-blue-500/30 transition-all"
                               >
                                 <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
@@ -753,7 +806,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                               </button>
                               <button
                                 title="ລຶບ"
-                                onClick={() => { if (confirm('ລຶບລາຍການນີ້?')) supabase.from('transactions').delete().eq('id', row.rawId); }}
+                                onClick={() => setDeleteTx({ id: row.rawId })}
                                 className="w-7 h-7 rounded-lg border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/15 hover:border-rose-200 dark:hover:border-rose-500/30 transition-all"
                               >
                                 <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
@@ -774,7 +827,9 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
       })()}
 
       {/* ══ Profit Split Modal ══ */}
-      {showProfitSplit && (
+      {showProfitSplit && (() => {
+        const distributablePool = totalBalance + totalDividends;
+        return (
         <BaseModal isOpen onClose={() => setShowProfitSplit(false)}
           title={<h3 className="text-xl font-bold text-slate-900 dark:text-white">🎯 ລະບົບແບ່ງຜົນຮຸ້ນສ່ວນ</h3>}
           maxWidth="max-w-3xl" width="w-full" maxHeight="max-h-[90vh]"
@@ -782,9 +837,9 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
         >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             {[
-              { label: 'ກຳໄລສຸດທິ (100%)', val: fmt(totalProfit) + ' ₭', cls: 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-300' },
-              { label: 'ຈ່າຍ/ຖອນໄປແລ້ວ', val: fmt(totalWithdrawn) + ' ₭', cls: 'bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300' },
-              { label: 'ຍັງຄ້າງ', val: fmt(totalProfit - totalWithdrawn) + ' ₭', cls: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300' },
+              { label: 'ຍອດເງິນປັນຜົນລວມ (100%)', val: fmt(distributablePool) + ' ₭', cls: 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-300' },
+              { label: 'ເບີກປັນຜົນໄປແລ້ວ', val: fmt(totalDividends) + ' ₭', cls: 'bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300' },
+              { label: 'ຍອດເງິນຄົງເຫຼືອ', val: fmt(totalBalance) + ' ₭', cls: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300' },
             ].map(c => (
               <div key={c.label} className={`rounded-xl p-4 border ${c.cls}`}>
                 <p className="text-xs font-bold uppercase tracking-wider opacity-70">{c.label}</p>
@@ -808,7 +863,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                   {wallets.filter(w => w.type === 'partner').map(w => {
                     const percent = w.share_percent ?? 50;
-                    const shouldGet = (totalProfit * percent) / 100;
+                    const shouldGet = (distributablePool * percent) / 100;
                     const withdrawn = transactions
                       .filter(t => t.type === 'profit_split' && t.partner_split_id === w.id)
                       .reduce((s, t) => s + t.amount, 0);
@@ -838,7 +893,100 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
           )}
           <p className="text-xs text-slate-400 mt-4 text-center">ເພື່ອເບີກຈ່າຍ: ໃຫ້ກົດ "ຖອນ/ຈ່າຍ" ທີ່ກະເປົາຫຼັກ ແລ້ວຕິ໊ກ "ການເບີກປັນຜົນ"</p>
         </BaseModal>
+        );
+      })()}
+      {/* ══ Edit Transaction Modal ══ */}
+      {editTx && (
+        <BaseModal isOpen onClose={() => setEditTx(null)}
+          title={<h3 className="text-xl font-bold text-slate-900 dark:text-white">ແກ້ໄຂຍອດເງິນ</h3>}
+          maxWidth="max-w-sm" width="w-full"
+          bodyClassName="p-6 bg-white dark:bg-slate-900"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">ຍອດເງິນໃໝ່ (₭)</label>
+              <input 
+                type="text" 
+                inputMode="decimal"
+                autoFocus
+                className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 text-lg font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                value={editTx.amount.toLocaleString('en-US')}
+                onChange={e => {
+                  const num = Number(e.target.value.replace(/,/g, ''));
+                  if (!isNaN(num)) setEditTx({ ...editTx, amount: num });
+                }}
+                onKeyDown={async e => {
+                  if (e.key === 'Enter') {
+                    setTransactions(prev => prev.map(t => t.id === editTx.id ? { ...t, amount: editTx.amount } : t));
+                    setEditTx(null);
+                    await supabase.from('transactions').update({ amount: editTx.amount }).eq('id', editTx.id);
+                  }
+                }}
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setEditTx(null)}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                ຍົກເລີກ
+              </button>
+              <button 
+                onClick={async () => {
+                  setTransactions(prev => prev.map(t => t.id === editTx.id ? { ...t, amount: editTx.amount } : t));
+                  setEditTx(null);
+                  await supabase.from('transactions').update({ amount: editTx.amount }).eq('id', editTx.id);
+                }}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95"
+              >
+                ບັນທຶກ
+              </button>
+            </div>
+          </div>
+        </BaseModal>
       )}
+
+      {/* ══ Delete Transaction Modal ══ */}
+      {deleteTx && (
+        <BaseModal isOpen onClose={() => setDeleteTx(null)}
+          title={<h3 className="text-xl font-bold text-slate-900 dark:text-white">ຢືນຢັນການລຶບ</h3>}
+          maxWidth="max-w-sm" width="w-full"
+          bodyClassName="p-6 bg-white dark:bg-slate-900"
+        >
+          <div className="space-y-4">
+            <div className="flex flex-col items-center justify-center py-4">
+              <div className="w-16 h-16 rounded-full bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mb-4">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-rose-500">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </div>
+              <p className="text-center text-slate-600 dark:text-slate-400">
+                ທ່ານແນ່ໃຈຫຼືບໍ່ທີ່ຈະລຶບລາຍການນີ້?<br/>
+                <span className="text-sm">ການກະທຳນີ້ບໍ່ສາມາດແກ້ໄຂໄດ້</span>
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setDeleteTx(null)}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                ຍົກເລີກ
+              </button>
+              <button 
+                onClick={async () => {
+                  setTransactions(prev => prev.filter(t => t.id !== deleteTx.id));
+                  setDeleteTx(null);
+                  await supabase.from('transactions').delete().eq('id', deleteTx.id);
+                }}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-500/30 transition-all active:scale-95"
+              >
+                ລຶບເລີຍ
+              </button>
+            </div>
+          </div>
+        </BaseModal>
+      )}
+
     </div>
   );
 }

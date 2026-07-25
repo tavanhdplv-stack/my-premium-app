@@ -80,7 +80,7 @@ const btnGhost =
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES (คงเดิม)
 // ═══════════════════════════════════════════════════════════════════════
-interface OrderItem { id: string; name: string; qty: number; cost: number; price: number; status?: string; image_url?: string; }
+interface OrderItem { id: string; name: string; qty: number; cost: number; price: number; status?: string; image_url?: string; _cost_updated_at?: string; _cost_by?: string; }
 interface Order {
   id: string;
   customer_name: string;
@@ -513,26 +513,30 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
     });
   }, [orders, monthFilter]);
 
-  const byDay = useMemo(() => {
-    const map: Record<string, { cost: number; profit: number; count: number }> = {};
+  const byDayAndPerson = useMemo(() => {
+    const map: Record<string, { dateObj: Date; date: string; person: string; cost: number; profit: number; count: number }> = {};
     filtered.forEach(o => {
       const d = tsToDate(o.created_at);
       if (!d) return;
-      const key = d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
-      if (!map[key]) map[key] = { cost: 0, profit: 0, count: 0 };
+      const dateStr = d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
+      const person = o.ordered_by || o.items?.find((i: any) => i._cost_by)?._cost_by || 'ບໍ່ລະບຸ';
+      const key = `${dateStr}_${person}`;
+      if (!map[key]) map[key] = { dateObj: new Date(d.getFullYear(), d.getMonth(), d.getDate()), date: dateStr, person, cost: 0, profit: 0, count: 0 };
       map[key].cost += o.total_cost || 0;
       map[key].profit += o.total_profit || 0;
       map[key].count++;
     });
-    return Object.entries(map).map(([date, v]) => ({ date, ...v }));
+    return Object.values(map).sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
   }, [filtered]);
 
-  const totals = useMemo(() => byDay.reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit, count: acc.count + d.count }), { cost: 0, profit: 0, count: 0 }), [byDay]);
+  const totals = useMemo(() => byDayAndPerson.reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit, count: acc.count + d.count }), { cost: 0, profit: 0, count: 0 }), [byDayAndPerson]);
 
   const today = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
   const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
-  const todayData    = byDay.find(d => d.date === today);
-  const yesterdayData = byDay.find(d => d.date === yesterday);
+  
+  // Aggregate today and yesterday totals across all persons
+  const todayData = byDayAndPerson.filter(d => d.date === today).reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit }), { cost: 0, profit: 0 });
+  const yesterdayData = byDayAndPerson.filter(d => d.date === yesterday).reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit }), { cost: 0, profit: 0 });
 
   return (
     <BaseModal
@@ -552,15 +556,15 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
           className="h-9 bg-white/70 dark:bg-slate-800/60 border border-slate-200/70 dark:border-white/10 rounded-[18px] px-3 text-xs font-bold text-slate-600 dark:text-slate-300 outline-none focus:border-teal-400 focus:shadow-[0_0_0_3px_rgba(20,184,166,0.12)]"
         />
       }
-      maxWidth="max-w-lg"
+      maxWidth="max-w-xl"
       width="w-full"
       bodyClassName="p-5 space-y-5"
     >
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'ມື້ນີ້ — ຕົ້ນທຶນ', val: fmt(todayData?.cost || 0), sub: fmt(todayData?.profit || 0) + ' ກຳໄລ', cls: 'bg-teal-50/60 dark:bg-teal-500/10' },
-              { label: 'ມື້ວານ — ຕົ້ນທຶນ', val: fmt(yesterdayData?.cost || 0), sub: fmt(yesterdayData?.profit || 0) + ' ກຳໄລ', cls: 'bg-slate-50/60 dark:bg-white/5' },
+              { label: 'ມື້ນີ້ — ຕົ້ນທຶນ', val: fmt(todayData.cost), sub: fmt(todayData.profit) + ' ກຳໄລ', cls: 'bg-teal-50/60 dark:bg-teal-500/10' },
+              { label: 'ມື້ວານ — ຕົ້ນທຶນ', val: fmt(yesterdayData.cost), sub: fmt(yesterdayData.profit) + ' ກຳໄລ', cls: 'bg-slate-50/60 dark:bg-white/5' },
               { label: 'ລວມເດືອນ', val: fmt(totals.cost), sub: fmt(totals.profit) + ' ກຳໄລ', cls: totals.profit >= 0 ? 'bg-emerald-50/60 dark:bg-emerald-500/10' : 'bg-rose-50/60 dark:bg-rose-500/10' },
             ].map(c => (
               <div key={c.label} className={`rounded-[18px] p-3 ${c.cls}`}>
@@ -571,7 +575,7 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
             ))}
           </div>
           {/* Daily breakdown */}
-          {byDay.length === 0 ? (
+          {byDayAndPerson.length === 0 ? (
             <p className="text-center text-sm text-slate-400 py-8">ບໍ່ມີຂໍ້ມູນໃນເດືອນນີ້</p>
           ) : (
             <div className="overflow-x-auto">
@@ -579,15 +583,21 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
                 <thead>
                   <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100/80 dark:border-white/8">
                     <th className="text-left pb-2 pr-3">ວັນທີ</th>
+                    <th className="text-left pb-2 pr-3">ຜູ້ສັ່ງ</th>
                     <th className="text-right pb-2 pr-3">ອໍ</th>
                     <th className="text-right pb-2 pr-3">ຕົ້ນທຶນ</th>
                     <th className="text-right pb-2">ກຳໄລ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50/60 dark:divide-white/5">
-                  {byDay.map(d => (
-                    <tr key={d.date} className="hover:bg-slate-50/40 dark:hover:bg-white/3 transition-colors">
+                  {byDayAndPerson.map(d => (
+                    <tr key={`${d.date}_${d.person}`} className="hover:bg-slate-50/40 dark:hover:bg-white/3 transition-colors">
                       <td className="py-2.5 pr-3 font-semibold text-slate-700 dark:text-slate-200">{d.date}</td>
+                      <td className="py-2.5 pr-3 font-medium text-slate-600 dark:text-slate-300">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs">
+                          {d.person}
+                        </span>
+                      </td>
                       <td className="py-2.5 pr-3 text-right text-slate-500">{d.count}</td>
                       <td className="py-2.5 pr-3 text-right font-semibold text-orange-600 dark:text-orange-400 tabular-nums">{fmtNum(d.cost)} ₭</td>
                       <td className={`py-2.5 text-right font-bold tabular-nums ${d.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fmtNum(d.profit)} ₭</td>
@@ -596,7 +606,7 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-slate-200/80 dark:border-white/15 font-extrabold">
-                    <td className="pt-2.5 text-slate-800 dark:text-white">ລວມ</td>
+                    <td colSpan={2} className="pt-2.5 text-slate-800 dark:text-white">ລວມ</td>
                     <td className="pt-2.5 text-right text-slate-600 dark:text-slate-300">{totals.count}</td>
                     <td className="pt-2.5 text-right text-orange-600 dark:text-orange-400 tabular-nums">{fmtNum(totals.cost)} ₭</td>
                     <td className={`pt-2.5 text-right tabular-nums ${totals.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fmtNum(totals.profit)} ₭</td>
@@ -939,7 +949,9 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
     const src = lastReset
       ? orders.filter(o => {
           if (o.status === 'ຍົກເລີກອໍເດີ') return false;
-          const costTime = tsToDate(o.cost_updated_at);
+          const maxCostTimeStr = o.items?.reduce((max: string, i: any) => (i._cost_updated_at && i._cost_updated_at > max) ? i._cost_updated_at : max, '');
+          const costTimeStr = maxCostTimeStr || o.cost_updated_at;
+          const costTime = tsToDate(costTimeStr);
           const createTime = tsToDate(o.created_at);
           const d = costTime || createTime;
           return d && d >= lastReset;
@@ -996,7 +1008,9 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
       if (updatedItems[itemIndex]) {
         updatedItems[itemIndex] = {
           ...updatedItems[itemIndex],
-          cost: newCostPerUnit
+          cost: newCostPerUnit,
+          _cost_updated_at: new Date().toISOString(),
+          _cost_by: lastResetBy || ''
         };
       }
       
@@ -1012,10 +1026,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
         total_cost,
         total_profit: newProfit,
         items: updatedItems,
-        cost_updated_at: new Date().toISOString(),
       };
-
-      if (lastResetBy) updates.ordered_by = lastResetBy;
 
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
       await supabase.from('orders').update(updates).eq('id', orderId);
@@ -1055,7 +1066,9 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
       const profitSinceReset = orders
         .filter(o => {
           if (o.status === 'ຍົກເລີກອໍເດີ') return false;
-          const costTime = tsToDate(o.cost_updated_at);
+          const maxCostTimeStr = o.items?.reduce((max: string, i: any) => (i._cost_updated_at && i._cost_updated_at > max) ? i._cost_updated_at : max, '');
+          const costTimeStr = maxCostTimeStr || o.cost_updated_at;
+          const costTime = tsToDate(costTimeStr);
           const createTime = tsToDate(o.created_at);
           const d = costTime || createTime;
           return resetTime ? (d && d >= resetTime) : true;
@@ -1183,7 +1196,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
               <BanknotesIcon className="w-4 h-4 text-indigo-500" />
             </div>
             <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums leading-none">
-              {fmtNum(orders.reduce((s, o) => s + (o.total_sales || 0), 0))} <span className="text-sm font-bold text-indigo-400 ml-0.5">₭</span>
+              {fmtNum(orders.reduce((s, o) => s + (o.total_sales || o.price || 0), 0))} <span className="text-sm font-bold text-indigo-400 ml-0.5">₭</span>
             </p>
           </div>
           {/* Card 5: Cost */}
@@ -1368,11 +1381,15 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 truncate max-w-[100px]">{order.id.slice(-10)}</span>
                           <span className="text-xs text-slate-400">{formatDate(order.created_at)}</span>
-                          {order.ordered_by && (
-                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 w-fit border border-amber-200/60 dark:border-amber-500/30">
-                              <UserIcon className="w-3 h-3" /> {order.ordered_by}
-                            </span>
-                          )}
+                          {(() => {
+                            const costBy = order.ordered_by || order.items?.find((i: any) => i._cost_by)?._cost_by;
+                            if (!costBy) return null;
+                            return (
+                              <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 w-fit border border-amber-200/60 dark:border-amber-500/30">
+                                <UserIcon className="w-3 h-3" /> {costBy}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
 

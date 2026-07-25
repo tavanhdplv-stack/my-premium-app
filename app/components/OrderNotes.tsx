@@ -269,8 +269,12 @@ export default function OrderNotes() {
                   </div>
                 </div>
                 
-                <div className="mb-5">
-                  <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap line-clamp-4 leading-relaxed bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm p-3.5 rounded-xl border border-slate-100 dark:border-white/5 font-medium">
+                <div 
+                  className="mb-5 cursor-pointer group/content" 
+                  onClick={() => openEditModal(note)} 
+                  title="ກົດເພື່ອເບິ່ງ/ແກ້ໄຂຂໍ້ຄວາມເຕັມ"
+                >
+                  <div className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap line-clamp-4 leading-relaxed bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm p-3.5 rounded-xl border border-slate-100 dark:border-white/5 font-medium group-hover/content:bg-slate-100 dark:group-hover/content:bg-slate-800 group-hover/content:border-violet-200 dark:group-hover/content:border-violet-500/30 transition-all">
                     {note.content}
                   </div>
                 </div>

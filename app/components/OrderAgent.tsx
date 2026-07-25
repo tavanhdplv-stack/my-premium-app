@@ -114,7 +114,8 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
       if (updatedItems[itemIndex]) {
         updatedItems[itemIndex] = {
           ...updatedItems[itemIndex],
-          cost: newCostPerUnit
+          cost: newCostPerUnit,
+          _cost_updated_at: new Date().toISOString()
         };
       }
       
