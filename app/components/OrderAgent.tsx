@@ -133,18 +133,25 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
-      await supabase.from('agents').insert({
-        name: agentName.trim(),
+      const { error } = await supabase.from('agents').insert({
+        agent_name: agentName.trim(),
         phone: phone.trim(),
         level,
-        initial_sales: initialSales ? Number(initialSales) : 0,
+        total_sales: initialSales ? Number(initialSales) : 0,
         notes: notes.trim(),
       });
+      
+      if (error) {
+        console.error('Insert agent error:', error);
+        throw error;
+      }
+      
       setMessage({ type: 'success', text: '✅ ລົງທະບຽນຕົວແທນສຳເລັດແລ້ວ!' });
       setAgentName(''); setPhone(''); setInitialSales(''); setNotes('');
       setLevel('General');
-    } catch {
-      setMessage({ type: 'error', text: 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່' });
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ type: 'error', text: err.message || 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່' });
     } finally {
       setLoading(false);
     }
