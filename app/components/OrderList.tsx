@@ -977,39 +977,36 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
     }
   }, [orders]);
 
-  const saveCost = useCallback(async (orderId: string, cost: number) => {
+  const saveItemCost = useCallback(async (orderId: string, itemIndex: number, newCostPerUnit: number) => {
     try {
       const order = orders.find(o => o.id === orderId);
-      const calculated_sales = (order?.items || []).reduce((s: number, i: any) => s + (Number(i.price) * Number(i.qty)), 0);
-      const newProfit = calculated_sales
-        - cost
-        - Number(order?.shipping_fee || 0)
-        - Number(order?.total_expenses || 0);
+      if (!order) return;
       
-      // Update items array so Edit Modal doesn't show old item cost
-      let updatedItems = [...(order?.items || [])];
-      const totalQty = updatedItems.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
-      if (totalQty > 0) {
-        const costPerUnit = cost / totalQty;
-        updatedItems = updatedItems.map(item => ({
-          ...item,
-          cost: costPerUnit
-        }));
+      const updatedItems = [...(order.items || [])];
+      if (updatedItems[itemIndex]) {
+        updatedItems[itemIndex] = {
+          ...updatedItems[itemIndex],
+          cost: newCostPerUnit
+        };
       }
+      
+      const total_cost = updatedItems.reduce((sum, item) => sum + (Number(item.cost || 0) * Number(item.qty || 1)), 0);
+      const calculated_sales = updatedItems.reduce((s, i) => s + (Number(i.price || 0) * Number(i.qty || 1)), 0);
+      
+      const newProfit = calculated_sales
+        - total_cost
+        - Number(order.shipping_fee || 0)
+        - Number(order.total_expenses || 0);
 
       const updates: any = {
-        total_cost: cost,
+        total_cost,
         total_profit: newProfit,
         items: updatedItems,
       };
 
-      if (lastResetBy) {
-        updates.ordered_by = lastResetBy;
-      }
+      if (lastResetBy) updates.ordered_by = lastResetBy;
 
-      // Optimistic Update
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
-
       await supabase.from('orders').update(updates).eq('id', orderId);
       setToast({ msg: 'ບັນທຶກຕ້ນທຶນແລ້ວ', type: 'success' });
     } catch {
@@ -1481,9 +1478,17 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                       </td>
 
                       {/* Cost (inline edit) */}
-                      <td className="px-4 py-4">
-                        <div className="space-y-0.5">
-                          <InlineCostInput orderId={order.id} value={order.total_cost || 0} onSave={saveCost} />
+                      <td className="px-4 py-4 align-top pt-4">
+                        <div className="space-y-1.5 flex flex-col justify-center">
+                          {(order.items || []).map((item, i) => (
+                            <div key={i} className="flex items-center h-7 mt-[0.5px]">
+                              <InlineCostInput 
+                                orderId={order.id} 
+                                value={item.cost || 0} 
+                                onSave={(id, cost) => saveItemCost(id, i, cost)} 
+                              />
+                            </div>
+                          ))}
                           {(order.shipping_fee || 0) > 0 && (
                             <p className="text-[11px] text-slate-400 tabular-nums">+{fmtNum(order.shipping_fee)} ₭ ຂົນສົ່ງ</p>
                           )}
