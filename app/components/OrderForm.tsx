@@ -416,7 +416,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     const newItems: OrderItem[] = [];
     
     // Ignore lines that match summary words
-    const ignoreRegex = /(?:ຊື່|ເບີ|ບ້ານ|ເມືອງ|ແຂວງ|ມັດຈຳ|ມັດຈໍາ|ສາຂາ|ໂອນ|ຈ່າຍ|ລວມຍອດ|ຍອດຄົງເຫຼືອ|ຮັບອໍເດີ|ອໍເດີ|ເວລາ|ຊ້າ|ໄວ|ງົດເລັ່ງ|ເຄື່ອງມາແລ້ວ|ບາງອໍເດີ|ຂອບໃຈ)/i;
+    const ignoreRegex = /(?:ຊື່ລູກຄ້າ|ຊື່:|Name:|ເບີໂທ|ເບີແອັບ|ເບີຕິດຕໍ່|ບ້ານ:|ເມືອງ:|ແຂວງ:|ມັດຈຳ|ມັດຈໍາ|ສາຂາ|ໂອນ|ຈ່າຍ|ລວມຍອດ|ຍອດຄົງເຫຼືອ|ຮັບອໍເດີ|ເວລາ|ຊ້າ|ໄວ|ງົດເລັ່ງ|ເຄື່ອງມາແລ້ວ|ບາງອໍເດີ|ຂອບໃຈ)/i;
 
     lines.forEach(line => {
       if (!ignoreRegex.test(line) && line.trim().length > 3) {
