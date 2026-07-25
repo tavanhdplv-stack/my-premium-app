@@ -255,12 +255,12 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
       if (data && !error) {
         setAgents(data.map(d => ({
           id: d.id,
-          agentName: d.agent_name || d.name,
+          agent_name: d.agent_name || d.name,
           phone: d.phone,
           level: d.level,
-          totalSales: d.total_sales || d.initial_sales,
+          total_sales: d.total_sales || d.initial_sales,
           notes: d.notes || '',
-          joinDate: d.join_date || d.created_at
+          created_at: d.join_date || d.created_at
         } as Agent)));
       }
     };
@@ -285,7 +285,10 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
   const [province, setProvince] = useState(PROVINCES[0]);
   const [orderedBy, setOrderedBy] = useState('');
 
-  const [orderDate, setOrderDate] = useState(new Date().toLocaleDateString('en-GB'));
+  const today = new Date();
+  const [orderDate, setOrderDate] = useState(
+    `${today.getDate().toString().padStart(2,'0')}/${(today.getMonth()+1).toString().padStart(2,'0')}/${today.getFullYear()}`
+  );
   const [status, setStatus] = useState(STATUSES[0]);
   const [wallet, setWallet] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'ຈ່າຍແລ້ວ'>('COD');
@@ -567,7 +570,14 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         price: Number(totalSales),
         payment_method: paymentMethod,
         status: status,
-        phone, transport, village, district, province, order_date: orderDate, wallet,
+        phone, transport, village, district, province,
+        order_date: (() => {
+          // Convert DD/MM/YYYY → YYYY-MM-DD for Supabase
+          const parts = orderDate.split('/');
+          if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+          return orderDate;
+        })(),
+        wallet,
         deposit: Number(deposit) || 0,
         shipping_fee: totalShipping,
         items: items,
@@ -583,16 +593,31 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
       if (editId) {
         // Update existing order
-        await supabase.from('orders').update({
+        const { error: updateError } = await supabase.from('orders').update({
           ...orderData,
           updated_at: new Date().toISOString()
         }).eq('id', editId);
+        
+        if (updateError) {
+          setMessage({ type: 'error', text: `ເກີດຂໍ້ຜິດພາດໃນການແກ້ໄຂ: ${updateError.message}` });
+          setLoading(false);
+          return;
+        }
         setMessage({ type: 'success', text: 'ແກ້ໄຂອໍເດີສຳເລັດແລ້ວ!' });
       } else {
         // Create new order
-        await supabase.from('orders').insert({
+        const { error } = await supabase.from('orders').insert({
           ...orderData,
+          created_at: new Date().toISOString(), // explicitly add created_at
+          id: crypto.randomUUID() // use UUID for compatibility with Supabase UUID columns
         });
+        
+        if (error) {
+          const errString = typeof error === 'object' ? JSON.stringify(error) : String(error);
+          setMessage({ type: 'error', text: `เกิดข้อผิดพลาดในการบันทึก: ${error.message} \nรายละเอียด: ${errString}` });
+          setLoading(false);
+          return;
+        }
         
         // ตัดสต๊อกอัตโนมัติเมื่อสร้างอໍเດີใหม่
         for (const item of items) {
@@ -713,14 +738,14 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                     setAgentId(val);
                     const ag = agents.find(a => a.id === val);
                     if (ag) {
-                      setCustomerName(ag.agentName);
+                      setCustomerName(ag.agent_name);
                       setPhone(ag.phone);
                     }
                   }}
                   className={`${field} appearance-none pr-8 ${agentId ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-400 font-semibold' : ''}`}
                 >
                   <option value="">— ລູກຄ້າທົ່ວໄປ —</option>
-                  {agents.map(ag => <option key={ag.id} value={ag.id}>{ag.agentName} ({ag.level})</option>)}
+                  {agents.map(ag => <option key={ag.id} value={ag.id}>{ag.agent_name} ({ag.level})</option>)}
                 </select>
                 <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
               </div>

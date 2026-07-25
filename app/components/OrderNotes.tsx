@@ -81,6 +81,8 @@ export default function OrderNotes() {
           .insert([{ title, content }]);
       }
       setShowModal(false);
+      const { data } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
+      if (data) setNotes(data as Note[]);
     } catch (e) {
       console.error('Error saving note:', e);
       Swal.fire({
@@ -116,6 +118,8 @@ export default function OrderNotes() {
         .from('notes')
         .delete()
         .eq('id', id);
+      const { data } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
+      if (data) setNotes(data as Note[]);
     } catch (e) {
       console.error(e);
     }

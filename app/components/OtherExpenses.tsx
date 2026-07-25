@@ -1,79 +1,80 @@
 'use client';
 
+import type { Wallet } from '../types';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/app/lib/supabase';
-import Swal from 'sweetalert2';
-
-interface Wallet {
-  id: string;
-  name: string;
-  type: string;
-}
+import { BaseModal } from './BaseModal';
 
 interface ExpenseTransaction {
   id: string;
   note: string;
   amount: number;
-  walletId: string;
+  wallet_id: string;
   date: string;
   type: string;
 }
 
-export default function OtherExpenses() {
+export default function OtherExpenses({ onSaved }: { onSaved?: () => void }) {
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  
+  // Main form states
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [walletId, setWalletId] = useState('');
-  
+  const [wallet_id, setWalletId] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // History Modal
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<ExpenseTransaction[]>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editAmount, setEditAmount] = useState('');
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
-  const handleUpdateAmount = async (id: string) => {
-    if (!editAmount) return;
-    try {
-      await supabase.from('transactions').update({
-        amount: Number(editAmount.replace(/,/g, ''))
-      }).eq('id', id);
-      setEditingId(null);
-      setEditAmount('');
-    } catch (e) {
-      console.error(e);
-      Swal.fire({ title: 'ອັບເດດບໍ່ສຳເລັດ', text: 'ກະລຸນາລອງໃໝ່', icon: 'error', confirmButtonColor: '#ef4444', background: '#1e293b', color: '#f1f5f9' });
+  // Edit Expense Dialog
+  const [editingExpense, setEditingExpense] = useState<ExpenseTransaction | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editWallet, setEditWallet] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Delete Confirm Modal
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  
+  // Temporary toast inside the component
+  const [toast, setToast] = useState<{msg: string, type: 'success'|'error'} | null>(null);
+
+  const fetchWallets = async () => {
+    const { data } = await supabase.from('wallets').select('*');
+    if (data) {
+      const w: Wallet[] = data.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        type: d.type
+      }));
+      setWallets(w);
+      if (w.length > 0 && !wallet_id) {
+        const comp = w.find((x: any) => x.type === 'W-COMP');
+        setWalletId(comp ? comp.id : w[0].id);
+      }
     }
   };
 
-  useEffect(() => {
-    const fetchWallets = async () => {
-      const { data } = await supabase.from('wallets').select('*');
-      if (data) {
-        const w: Wallet[] = data.map((d: any) => ({
-          id: d.id,
-          name: d.name,
-          type: d.type
-        }));
-        setWallets(w);
-        if (w.length > 0 && !walletId) {
-          const comp = w.find((x: any) => x.type === 'W-COMP');
-          setWalletId(comp ? comp.id : w[0].id);
-        }
-      }
-    };
-
-    const fetchHistory = async () => {
-      const { data } = await supabase.from('transactions').select('*').order('date', { ascending: false });
+  const fetchHistory = async () => {
+    setHistoryError(null);
+    try {
+      const { data, error } = await supabase.from('transactions').select('*').order('date', { ascending: false });
+      if (error) throw error;
       if (data) {
         const h: ExpenseTransaction[] = [];
         data.forEach((d: any) => {
-          // Ignore order expenses which usually start with 'Order #' or are related to orders
-          if (d.type === 'expense' && !d.note.startsWith('Order #')) {
+          const noteText = d.notes || d.note || '';
+          if (d.type === 'expense' && !noteText.startsWith('Order #')) {
             h.push({
               id: d.id,
-              note: d.note,
+              note: noteText,
               amount: Number(d.amount) || 0,
-              walletId: d.wallet_id,
+              wallet_id: d.wallet_id,
               date: d.date,
               type: d.type
             });
@@ -81,8 +82,14 @@ export default function OtherExpenses() {
         });
         setHistory(h);
       }
-    };
+    } catch (err: any) {
+      setHistoryError('ບໍ່ສາມາດໂຫຼດຂໍ້ມູນໄດ້: ' + err.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchWallets();
     fetchHistory();
 
@@ -94,58 +101,117 @@ export default function OtherExpenses() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [walletId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const showToast = (msg: string, type: 'success' | 'error') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const handleSave = async () => {
-    if (!name || !amount || !walletId) return;
+    if (!name || !amount || !wallet_id) return;
     setLoading(true);
     try {
-      await supabase.from('transactions').insert({
+      const { error } = await supabase.from('transactions').insert({
         type: 'expense',
-        note: name,
+        notes: name,
         amount: Number(amount),
-        wallet_id: walletId,
+        wallet_id: wallet_id,
         date: new Date().toISOString()
       });
+      if (error) throw error;
       setName('');
       setAmount('');
-    } catch (error) {
+      fetchHistory(); // <-- Explicitly fetch to update UI instantly
+      if (onSaved) onSaved();
+      showToast('ບັນທຶກສຳເລັດ', 'success');
+    } catch (error: any) {
       console.error(error);
-      Swal.fire({ title: 'ບັນທຶກບໍ່ສຳເລັດ', text: 'ກະລຸນາລອງໃໝ່', icon: 'error', confirmButtonColor: '#ef4444', background: '#1e293b', color: '#f1f5f9' });
+      showToast('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    const result = await Swal.fire({
-      title: 'ລຶບລາຍການຈ່າຍ?',
-      text: 'ແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບລາຍການນີ້? (ເງິນຈະຖືກຄືນເຂົ້າກະເປົາ)',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'ລຶບເລີຍ',
-      cancelButtonText: 'ຍົກເລີກ',
-      confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#64748b',
-      background: '#1e293b',
-      color: '#f1f5f9',
-      customClass: { popup: 'rounded-2xl' },
-    });
-    if (!result.isConfirmed) return;
+  const handleEditOpen = (item: ExpenseTransaction) => {
+    setEditingExpense(item);
+    setEditName(item.note);
+    setEditAmount(String(item.amount));
+    setEditWallet(item.wallet_id);
+    // Format date for input datetime-local
     try {
-      await supabase.from('transactions').delete().eq('id', id);
-    } catch (e) {
+      const d = new Date(item.date);
+      // yyyy-MM-ddThh:mm
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const formatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      setEditDate(formatted);
+    } catch {
+      setEditDate('');
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editingExpense) return;
+    if (!editName || !editAmount || !editWallet || !editDate) {
+      showToast('ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບ', 'error');
+      return;
+    }
+    setEditLoading(true);
+    try {
+      const { error } = await supabase.from('transactions').update({
+        notes: editName,
+        amount: Number(editAmount.replace(/,/g, '')),
+        wallet_id: editWallet,
+        date: new Date(editDate).toISOString()
+      }).eq('id', editingExpense.id);
+      
+      if (error) throw error;
+      
+      setEditingExpense(null);
+      fetchHistory(); // <-- Explicitly fetch
+      showToast('ແກ້ໄຂສຳເລັດແລ້ວ ✅', 'success');
+      if (onSaved) onSaved();
+    } catch (e: any) {
       console.error(e);
+      showToast('ເກີດຂໍ້ຜິດພາດ: ' + e.message, 'error');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    setDeleteLoading(true);
+    try {
+      const { error } = await supabase.from('transactions').delete().eq('id', deleteConfirmId);
+      if (error) throw error;
+      setDeleteConfirmId(null);
+      fetchHistory(); // <-- Explicitly fetch
+      showToast('ລຶບລາຍການສຳເລັດ 🗑️', 'success');
+      if (onSaved) onSaved();
+    } catch (e: any) {
+      console.error(e);
+      showToast('ບໍ່ສາມາດລຶບໄດ້: ' + e.message, 'error');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
   const field = "w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-500/10 outline-none transition-all";
   const label = "block text-[11px] font-bold text-slate-500 mb-1.5";
+  const modalField = "w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all";
 
   return (
     <>
-      <div className="bg-white dark:bg-slate-900/50 rounded-[24px] p-4 sm:p-5 border border-slate-200/80 dark:border-white/5 shadow-sm mb-6 flex flex-col lg:flex-row lg:items-center gap-5">
+      <div className="bg-white dark:bg-slate-900/50 rounded-[24px] p-4 sm:p-5 border border-slate-200/80 dark:border-white/5 shadow-sm mb-6 flex flex-col lg:flex-row lg:items-center gap-5 relative">
         
+        {toast && (
+          <div className={`absolute -top-12 right-0 px-4 py-2 rounded-xl text-sm font-bold text-white shadow-lg animate-bounce ${toast.type === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`}>
+            {toast.msg}
+          </div>
+        )}
+
         {/* Left: Icon & Title */}
         <div className="flex items-center gap-4 shrink-0 w-full lg:w-auto">
           <div className="w-[52px] h-[52px] rounded-2xl bg-gradient-to-br from-[#FF7A50] to-[#FF4B5C] flex items-center justify-center shadow-lg shadow-orange-500/30 text-white">
@@ -199,7 +265,7 @@ export default function OtherExpenses() {
           <div className="w-full md:w-[200px]">
             <label className={label}>ຫັກຈາກກະເປົາ</label>
             <div className="relative">
-              <select value={walletId} onChange={e => setWalletId(e.target.value)} className={`${field} appearance-none pr-10 font-bold text-violet-700 dark:text-violet-400`}>
+              <select value={wallet_id} onChange={e => setWalletId(e.target.value)} className={`${field} appearance-none pr-10 font-bold text-violet-700 dark:text-violet-400`}>
                 {wallets.map(w => (
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
@@ -213,7 +279,7 @@ export default function OtherExpenses() {
         <div className="flex gap-2 shrink-0 w-full lg:w-auto mt-2 lg:mt-0 lg:pt-5">
           <button 
             onClick={handleSave} 
-            disabled={!name || !amount || !walletId || loading}
+            disabled={!name || !amount || !wallet_id || loading}
             className="flex-1 lg:flex-none h-11 px-7 rounded-xl bg-gradient-to-r from-[#FF7A50] to-[#FF4B5C] hover:opacity-90 active:scale-95 transition-all text-white font-bold text-sm shadow-md shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (
@@ -232,89 +298,205 @@ export default function OtherExpenses() {
         </div>
       </div>
 
-      {/* History Modal */}
+      {/* ══ History Modal ══ */}
       {showHistory && (
-        <div className="fixed inset-0 z-[110] flex flex-col sm:items-center sm:justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowHistory(false)} />
-          <div className="relative w-full h-full sm:h-auto max-w-2xl sm:max-h-[85vh] bg-white dark:bg-slate-900 sm:rounded-2xl shadow-xl flex flex-col animate-[fadeIn_0.2s_ease-out]">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/10">
-              <h3 className="text-lg font-bold flex items-center gap-2 text-slate-800 dark:text-white">
-                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-[#FF7A50]"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                ປະຫວັດລາຍຈ່າຍອື່ນໆ
-              </h3>
-              <button onClick={() => setShowHistory(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500"><svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+        <BaseModal
+          isOpen
+          onClose={() => setShowHistory(false)}
+          maxWidth="max-w-3xl"
+          width="w-[96%] md:w-full"
+          bodyClassName="p-0 bg-slate-50 dark:bg-slate-900"
+          title={
+            <div className="flex items-center gap-2 text-slate-800 dark:text-white">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6 text-[#FF7A50]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-xl font-bold">ປະຫວັດລາຍຈ່າຍອື່ນໆ</span>
             </div>
-            <div className="flex-1 overflow-y-auto p-2">
-              {history.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 text-sm">ຍັງບໍ່ມີປະຫວັດລາຍຈ່າຍ</div>
-              ) : (
-                <div className="space-y-1">
-                  {history.map(item => {
-                    const w = wallets.find(x => x.id === item.walletId);
-                    return (
-                      <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl transition-colors gap-3">
+          }
+        >
+          <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+            {historyLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="w-8 h-8 border-4 border-[#FF7A50]/20 border-t-[#FF7A50] rounded-full animate-spin" />
+                <p className="text-slate-500 font-medium">ກຳລັງໂຫຼດຂໍ້ມູນ...</p>
+              </div>
+            ) : historyError ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-4">
+                <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                </div>
+                <p className="text-slate-500 font-medium">{historyError}</p>
+                <button onClick={fetchHistory} className="px-6 py-2 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 font-bold transition-colors">
+                  ລອງໃໝ່
+                </button>
+              </div>
+            ) : history.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center gap-4 animate-[fadeIn_0.3s_ease-out]">
+                <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
+                  <span className="text-5xl">📄</span>
+                </div>
+                <div className="text-center">
+                  <h4 className="text-lg font-bold text-slate-700 dark:text-slate-200">ຍັງບໍ່ມີປະຫວັດລາຍຈ່າຍ</h4>
+                  <p className="text-slate-400 text-sm mt-1">ລາຍການຄ່າໃຊ້จ่ายອື່ນໆຈະສະແດງຢູ່ບ່ອນນີ້</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {history.map(item => {
+                  const w = wallets.find(x => x.id === item.wallet_id);
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="group bg-white dark:bg-slate-800/80 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="flex gap-4 items-start sm:items-center">
+                        <div className="w-10 h-10 shrink-0 rounded-full bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-500 hidden sm:flex">
+                          <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12h-15" /></svg>
+                        </div>
                         <div>
-                          <div className="font-bold text-sm text-slate-800 dark:text-slate-200">{item.note}</div>
-                          <div className="text-[11px] text-slate-500 flex gap-2 mt-0.5">
-                            <span>{new Date(item.date).toLocaleString('en-GB')}</span>
-                            <span>•</span>
-                            <span>ກະເປົາ: {w?.name || 'Unknown'}</span>
+                          <div className="font-extrabold text-base text-slate-800 dark:text-slate-100">{item.note}</div>
+                          <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md">
+                              {new Date(item.date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-violet-600 dark:text-violet-400 font-bold bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-md">
+                              กระเป๋า: {w?.name || 'Unknown'}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between sm:justify-end gap-3">
-                          {editingId === item.id ? (
-                            <div className="flex items-center gap-2">
-                              <input 
-                                type="text"
-                                inputMode="decimal"
-                                value={editAmount}
-                                onChange={e => {
-                                  const raw = e.target.value.replace(/,/g, '');
-                                  if (raw === '' || raw === '-') setEditAmount(raw);
-                                  else if (/^-?\d*\.?\d*$/.test(raw)) setEditAmount(raw);
-                                }}
-                                className="w-24 h-9 px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-right outline-none focus:border-violet-500"
-                              />
-                              <button onClick={() => handleUpdateAmount(item.id)} className="px-3 h-9 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-colors">ບັນທຶກ</button>
-                              <button onClick={() => setEditingId(null)} className="px-3 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300 transition-colors">ຍົກເລີກ</button>
-                            </div>
-                          ) : (
-                            <>
-                              <span 
-                                className="font-extrabold text-rose-500 text-base sm:text-sm cursor-pointer hover:underline"
-                                onClick={() => {
-                                  setEditingId(item.id);
-                                  setEditAmount(String(item.amount));
-                                }}
-                                title="ແຕະເພື່ອແກ້ໄຂ"
-                              >
-                                -{item.amount.toLocaleString()}
-                              </span>
-                              <div className="flex gap-1">
-                                <button 
-                                  onClick={() => {
-                                    setEditingId(item.id);
-                                    setEditAmount(String(item.amount));
-                                  }} 
-                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors"
-                                >
-                                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
-                                </button>
-                                <button onClick={() => handleDelete(item.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors">
-                                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-                                </button>
-                              </div>
-                            </>
-                          )}
+                      </div>
+                      
+                      <div className="flex items-center justify-between sm:justify-end gap-5 border-t sm:border-0 border-slate-100 dark:border-slate-700 pt-3 sm:pt-0">
+                        <span className="font-extrabold text-rose-600 dark:text-rose-400 text-lg tabular-nums">
+                          -{item.amount.toLocaleString()} ₭
+                        </span>
+                        
+                        <div className="flex gap-1.5">
+                          <button 
+                            onClick={() => handleEditOpen(item)}
+                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700/50 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                            title="ແກ້ໄຂ"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4.5 h-4.5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                          </button>
+                          <button 
+                            onClick={() => setDeleteConfirmId(item.id)}
+                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700/50 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                            title="ລຶບ"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4.5 h-4.5"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                          </button>
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </BaseModal>
+      )}
+
+      {/* ══ Edit Expense Dialog ══ */}
+      {editingExpense && (
+        <BaseModal
+          isOpen
+          onClose={() => setEditingExpense(null)}
+          maxWidth="max-w-md"
+          width="w-[96%] md:w-full"
+          title={<h3 className="text-xl font-bold text-slate-800 dark:text-white">✏️ ແກ້ໄຂລາຍການ</h3>}
+          bodyClassName="p-6 bg-white dark:bg-slate-900"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className={label}>ชื่อรายการ / หมายเหตุ</label>
+              <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className={modalField} />
+            </div>
+            
+            <div>
+              <label className={label}>จำนวนเงิน</label>
+              <input 
+                type="text" 
+                inputMode="decimal"
+                value={editAmount} 
+                onChange={e => {
+                  const raw = e.target.value.replace(/,/g, '');
+                  if (raw === '' || raw === '-') setEditAmount(raw);
+                  else if (/^-?\d*\.?\d*$/.test(raw)) setEditAmount(raw);
+                }} 
+                className={modalField} 
+              />
+            </div>
+
+            <div>
+              <label className={label}>วันที่</label>
+              <input type="datetime-local" value={editDate} onChange={e => setEditDate(e.target.value)} className={modalField} />
+            </div>
+
+            <div>
+              <label className={label}>หักจากกระเป๋า</label>
+              <select value={editWallet} onChange={e => setEditWallet(e.target.value)} className={modalField}>
+                {wallets.map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex gap-3 pt-4 mt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => setEditingExpense(null)}
+                className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleEditSave}
+                disabled={editLoading}
+                className="flex-1 py-3 rounded-xl bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {editLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'บันทึกการแก้ไข'}
+              </button>
             </div>
           </div>
-        </div>
+        </BaseModal>
+      )}
+
+      {/* ══ Delete Confirm Modal ══ */}
+      {deleteConfirmId && (
+        <BaseModal
+          isOpen
+          onClose={() => setDeleteConfirmId(null)}
+          title={<h3 className="text-xl font-bold text-slate-900 dark:text-white">🗑️ ยืนยันการลบ</h3>}
+          maxWidth="max-w-sm"
+          width="w-[92%] md:w-full"
+          bodyClassName="p-6 bg-white dark:bg-slate-900"
+        >
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-rose-100 dark:bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+            </div>
+            <p className="text-slate-600 dark:text-slate-300 text-sm font-medium">
+              คุณต้องการลบรายการนี้ใช่หรือไม่? <br/> <span className="text-xs text-slate-400 mt-1 block">(เงินจะถูกคืนเข้ากระเป๋าและไม่สามารถกู้คืนได้)</span>
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setDeleteConfirmId(null)}
+              className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              ยกเลิก
+            </button>
+            <button
+              onClick={handleConfirmDelete}
+              disabled={deleteLoading}
+              className="flex-1 py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold shadow-lg shadow-rose-500/30 transition-all flex items-center justify-center disabled:opacity-50"
+            >
+               {deleteLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'ลบรายการ'}
+            </button>
+          </div>
+        </BaseModal>
       )}
     </>
   );

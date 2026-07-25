@@ -722,7 +722,7 @@ function InlineCostInput({ orderId, value, onSave }: { orderId: string; value: n
 // ═══════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
-export default function OrderList({ onEdit }: { onEdit?: (id: string) => void }) {
+export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => void; onAdd?: () => void; }) {
   const now = useNow();
 
   // ── Data ─────────────────────────────────────────────────────────────
@@ -753,17 +753,20 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
       
       const updateData: any = { items: newItems };
       
+      let newMainStatus = order.status;
       if (newItems.length > 0 && newItems.every((item: any) => item.status === newStatus)) {
-        if (newStatus === 'ເຄື່ອງມາແລ້ວ') {
-          updateData.status = 'ເຄື່ອງມາຮອດແລ້ວ';
-        } else if (newStatus === 'ສັ່ງເຄື່ອງແລ້ວ') {
-          updateData.status = 'ສັ່ງເຄື່ອງແລ້ວ';
-        } else if (newStatus === 'ສົ່ງໃຫ້ລູກຄ້າແລ້ວ') {
-          updateData.status = 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ';
-        }
+        newMainStatus = newStatus;
       }
 
-      if (newStatus === 'ຍົກເລີກ' && oldStatus !== 'ຍົກເລີກ') {
+      if (newMainStatus !== order.status) {
+        updateData.status = newMainStatus;
+        updateData.status_updated_at = new Date().toISOString();
+      }
+
+      // Optimistic Update
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: newItems, status: newMainStatus } : o));
+
+      if (newStatus === 'ຍົກເລີກອໍເດີ' && oldStatus !== 'ຍົກເລີກອໍເດີ') {
         const result = await Swal.fire({
           title: '📦 ນຳສິນຄ້າເຂົ້າສາງ?',
           html: `ລູກຄ້າຍົກເລີກ <b>"${newItems[itemIdx].name}"</b><br/>ຕ້ອງການນຳສິນຄ້ານີ້ເຂົ້າສະຕັອກ (Stock) ຫຼືບໍ່?`,
@@ -809,6 +812,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
   const [showReset,   setShowReset]   = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [updatingId,  setUpdatingId]  = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [shopName,    setShopName]    = useState('');
   const [shopPhone,   setShopPhone]   = useState('');
 
@@ -949,35 +953,62 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
   const updateStatus = useCallback(async (orderId: string, newStatus: string) => {
     setStatusModal(null);
     setUpdatingId(orderId);
+
+    // Optimistic Update for Real-Time feel
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
     try {
+      const order = orders.find(o => o.id === orderId);
+      
       await supabase.from('orders').update({
         status: newStatus,
         status_updated_at: new Date().toISOString(),
       }).eq('id', orderId);
+
+      // NOTE: No manual transaction needed here.
+      // OrderWallet computes income directly from order.status and order.deposit.
+      // Creating a transaction record here would cause double-counting.
+
       setToast({ msg: `ປ່ຽນສະຖານະເປັນ "${newStatus}" ສຳເລັດ`, type: 'success' });
-    } catch {
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') console.error('updateStatus error:', err);
       setToast({ msg: 'ບໍ່ສາມາຖປ່ຽນສະຖານະໄດ້', type: 'error' });
     } finally {
       setUpdatingId(null);
     }
-  }, []);
+  }, [orders]);
 
   const saveCost = useCallback(async (orderId: string, cost: number) => {
     try {
       const order = orders.find(o => o.id === orderId);
-      const newProfit = (order?.total_sales ?? order?.total_sales ?? order?.price ?? 0)
+      const calculated_sales = (order?.items || []).reduce((s: number, i: any) => s + (Number(i.price) * Number(i.qty)), 0);
+      const newProfit = calculated_sales
         - cost
-        - (order?.shipping_fee ?? order?.shipping_fee ?? 0)
-        - (order?.total_expenses ?? order?.total_expenses ?? 0);
+        - Number(order?.shipping_fee || 0)
+        - Number(order?.total_expenses || 0);
       
+      // Update items array so Edit Modal doesn't show old item cost
+      let updatedItems = [...(order?.items || [])];
+      const totalQty = updatedItems.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
+      if (totalQty > 0) {
+        const costPerUnit = cost / totalQty;
+        updatedItems = updatedItems.map(item => ({
+          ...item,
+          cost: costPerUnit
+        }));
+      }
+
       const updates: any = {
         total_cost: cost,
         total_profit: newProfit,
+        items: updatedItems,
       };
 
       if (lastResetBy) {
         updates.ordered_by = lastResetBy;
       }
+
+      // Optimistic Update
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
 
       await supabase.from('orders').update(updates).eq('id', orderId);
       setToast({ msg: 'ບັນທຶກຕ້ນທຶນແລ້ວ', type: 'success' });
@@ -986,34 +1017,29 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
     }
   }, [orders, lastResetBy]);
 
-  const deleteOrder = useCallback(async (orderId: string) => {
-    const result = await Swal.fire({
-      title: '🗑️ ລຶບອໍເດີ?',
-      text: 'ຕ້ອງການລຶບອໍເດີນີ້ອອກຈາກລະບົບແທ້ບໍ? ການກະທຳນີ້ບໍ່ສາມາດຍ້ອນກັບໄດ້!',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: '🗑️ ລຶບເລີຍ',
-      cancelButtonText: '↩️ ຍົກເລີກ',
-      confirmButtonColor: '#EF4444',
-      cancelButtonColor: '#94A3B8',
-      background: '#FFFFFF',
-      color: '#0F172A',
-      customClass: {
-        popup: 'rounded-[30px] shadow-xl',
-        title: 'text-lg font-bold',
-        htmlContainer: 'text-sm text-slate-500',
-        confirmButton: 'rounded-[20px] px-6 py-2.5 font-bold shadow-lg shadow-rose-500/25',
-        cancelButton: 'rounded-[20px] px-6 py-2.5 font-bold',
-      },
-    });
-    if (!result.isConfirmed) return;
+  const deleteOrder = useCallback((orderId: string) => {
+    // Use custom in-app confirm modal instead of Swal (avoids z-index/SSR issues)
+    setDeleteConfirmId(orderId);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteConfirmId) return;
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
+    // Optimistic removal — instant UI feedback
+    setOrders(prev => prev.filter(o => o.id !== id));
     try {
-      await supabase.from('orders').delete().eq('id', orderId);
-      setToast({ msg: 'ລຶບອໍເດີສຳເລັດ', type: 'success' });
+      const { error } = await supabase.from('orders').delete().eq('id', id);
+      if (error) {
+        setToast({ msg: 'ບໍ່ສາມາດລຶບໄດ້: ' + error.message, type: 'error' });
+      } else {
+        setToast({ msg: 'ລຶບອໍເດີສຳເລັດ ✅', type: 'success' });
+      }
     } catch {
       setToast({ msg: 'ບໍ່ສາມາດລຶບໄດ້', type: 'error' });
     }
-  }, []);
+  }, [deleteConfirmId]);
+
 
   const handleReset = useCallback(async (personName: string) => {
     try {
@@ -1066,7 +1092,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
     >
       {/* Toast */}
       <AnimatePresence>
-        {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+        {toast && <Toast key="toast-notification" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       </AnimatePresence>
 
       {/* Modals */}
@@ -1074,215 +1100,207 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
         <AnimatePresence>
           {statusModal && (
             <StatusModal
+              key="status-modal"
               current={orders.find(o => o.id === statusModal)?.status || ''}
               onSelect={s => updateStatus(statusModal, s)}
               onClose={() => setStatusModal(null)}
             />
           )}
-          {billModal && <BillModal order={billModal} shopName={shopName} shopPhone={shopPhone} onClose={() => setBillModal(null)} />}
-          {shippingModal && <ShippingModal order={shippingModal} onClose={() => setShippingModal(null)} />}
+          {billModal && <BillModal key="bill-modal" order={billModal} shopName={shopName} shopPhone={shopPhone} onClose={() => setBillModal(null)} />}
+          {shippingModal && <ShippingModal key="shipping-modal" order={shippingModal} onClose={() => setShippingModal(null)} />}
           <ImageGalleryModal
+            key="gallery-modal"
             images={galleryImages}
             initialIndex={galleryIndex}
             isOpen={galleryImages.length > 0}
             onClose={() => setGalleryImages([])}
           />
-        {showReset && <ResetModal wallets={wallets} onConfirm={handleReset} onClose={() => setShowReset(false)} />}
-        {showHistory && <HistoryModal orders={orders} lastReset={lastReset} onClose={() => setShowHistory(false)} />}
+        {showReset && <ResetModal key="reset-modal" wallets={wallets} onConfirm={handleReset} onClose={() => setShowReset(false)} />}
+        {showHistory && <HistoryModal key="history-modal" orders={orders} lastReset={lastReset} onClose={() => setShowHistory(false)} />}
       </AnimatePresence>
       , document.body)}
 
-      {/* ── HEADER ── */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className={`${card} ${pad} relative overflow-hidden`}
-      >
-        <div className="absolute -right-20 -top-20 w-64 h-64 bg-teal-100/40 dark:bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-emerald-100/30 dark:bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-[24px] bg-gradient-to-br from-teal-600 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-teal-500/25 shrink-0">
-              <DocumentTextIcon className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">ລາຍການອໍເດີ</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">ຈັດການອໍເດີທັງໝົດ · {filteredOrders.length} ລາຍການ</p>
-            </div>
+      {/* ── STATS SECTION ── */}
+      <div className="mb-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight">ພາບລວມລາຍການ (Overview)</h2>
+            {lastResetBy && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                <UserIcon className="w-3 h-3" /> {lastResetBy}
+              </span>
+            )}
           </div>
-          {/* Shop settings inline */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              value={shopName}
-              onChange={e => { setShopName(e.target.value); localStorage.setItem('shopName', e.target.value); }}
-              placeholder="ຊື່ຮ້ານ"
-              className={`${inputCls} w-36`}
-            />
-            <input
-              value={shopPhone}
-              onChange={e => { setShopPhone(e.target.value); localStorage.setItem('shopPhone', e.target.value); }}
-              placeholder="ເບີໂທຮ້ານ"
-              className={`${inputCls} w-32`}
-            />
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── SUMMARY WIDGET ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
-        className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-teal-50/80 to-emerald-50/80 dark:from-teal-950/30 dark:to-emerald-950/30 border border-teal-100/60 dark:border-teal-900/30 p-5 sm:p-6 shadow-[0_10px_35px_rgba(0,0,0,0.04)]"
-      >
-        <div className="absolute -right-10 -top-10 w-40 h-40 bg-teal-200/30 dark:bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-[24px] bg-gradient-to-br from-teal-400 to-emerald-500 text-white flex items-center justify-center shadow-lg shadow-teal-500/30 shrink-0">
-              <ChartBarIcon className="w-7 h-7" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <h3 className="text-xl font-extrabold text-slate-800 dark:text-white">ສະຫຼຸບຍອດປັດຈຸບັນ</h3>
-                {lastResetBy && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/80 dark:bg-white/10 text-teal-600 dark:text-teal-300 border border-teal-100/60 dark:border-teal-500/30 shadow-sm">
-                    <UserIcon className="w-3 h-3" /> {lastResetBy}
-                  </span>
-                )}
-                <button
-                  onClick={() => setShowReset(true)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-500/30 hover:bg-rose-100 transition-colors shadow-sm"
-                >
-                  <ArrowPathIcon className="w-3 h-3" /> ຜູ້ສັ່ງ & ລ້າງ 0
-                </button>
-                <button
-                  onClick={() => setShowHistory(true)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-500/30 hover:bg-indigo-100 transition-colors shadow-sm"
-                >
-                  <ClockIcon className="w-3 h-3" /> ເບິ່ງປະຫວັດ
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">ລວມມູນຄ່າທັງໝົດທີ່ເພີ່ມຫຼ້າສຸດ (ອັບເດດທຸກໆວິນາທີ)</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-8 lg:ml-auto">
-            <div className="text-right">
-              <div className="flex items-center justify-end gap-1 mb-1 text-rose-500">
-                <CurrencyDollarIcon className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">ຕົ້ນທຶນ</span>
-              </div>
-              <div className="flex items-end gap-1">
-                <span className="text-3xl sm:text-4xl font-black text-rose-600 dark:text-rose-500 tabular-nums leading-none tracking-tight">{fmtNum(summaryStats.cost)}</span>
-                <span className="text-rose-500 font-bold text-sm mb-1">₭</span>
-              </div>
-            </div>
-            <div className="w-px h-12 bg-rose-200/60 dark:bg-rose-500/20" />
-            <div className="text-right">
-              <div className="flex items-center justify-end gap-1 mb-1 text-emerald-500">
-                <ArrowTrendingUpIcon className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">ກຳໄລ</span>
-              </div>
-              <div className="flex items-end gap-1">
-                <span className="text-3xl sm:text-4xl font-black text-emerald-500 dark:text-emerald-400 tabular-nums leading-none tracking-tight">{fmtNum(summaryStats.profit)}</span>
-                <span className="text-emerald-500 font-bold text-sm mb-1">₭</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── FILTER BAR ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.15 }}
-        className={`${card} ${pad}`}
-      >
-        <div className="flex flex-col gap-3">
-          {/* Row 1: Search + Refresh */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm group">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="ຄົ້ນຫາ ຊື່, ເບີ, ID, ສິນຄ້າ..."
-                className={`${inputCls} w-full pl-11`}
-              />
-            </div>
-            <button
-              onClick={() => setSearch('')}
-              className={btnGhost}
-              title="Refresh"
-            >
-              <ArrowPathIcon className="w-4 h-4" />
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowReset(true)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[12px] text-xs font-bold bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition-colors">
+              <ArrowPathIcon className="w-3.5 h-3.5" /> ຜູ້ສັ່ງ & ລ້າງ 0
+            </button>
+            <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[12px] text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors">
+              <ClockIcon className="w-3.5 h-3.5" /> ປະຫວັດ
             </button>
           </div>
+        </div>
 
-          {/* Row 2: Date pills + Status + Theme */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Date pills */}
-            <div className="flex items-center bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/70 dark:border-white/10 rounded-[20px] p-1 gap-1">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          {/* Card 1: Total Orders */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ອໍເດີທັງໝົດ</span>
+              <DocumentTextIcon className="w-4 h-4 text-slate-400" />
+            </div>
+            <p className="text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none">{fmtNum(orders.length)}</p>
+          </div>
+          {/* Card 2: Completed */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ສຳເລັດແລ້ວ</span>
+              <CheckIcon className="w-4 h-4 text-teal-500" />
+            </div>
+            <p className="text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none">{fmtNum(orders.filter(o => o.status === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ').length)}</p>
+          </div>
+          {/* Card 3: Pending */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ກຳລັງດຳເນີນການ</span>
+              <ClockIcon className="w-4 h-4 text-orange-400" />
+            </div>
+            <p className="text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none">{fmtNum(orders.filter(o => o.status !== 'ຍົກເລີກອໍເດີ' && o.status !== 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' && o.status !== 'ໄດ້ຮັບເງິນແລ້ວ').length)}</p>
+          </div>
+          {/* Card 4: Revenue */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ຍອດຂາຍ</span>
+              <BanknotesIcon className="w-4 h-4 text-indigo-500" />
+            </div>
+            <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums leading-none">
+              {fmtNum(orders.reduce((s, o) => s + (o.total_sales || 0), 0))} <span className="text-sm font-bold text-indigo-400 ml-0.5">₭</span>
+            </p>
+          </div>
+          {/* Card 5: Cost */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ຕົ້ນທຶນ</span>
+              <CurrencyDollarIcon className="w-4 h-4 text-rose-500" />
+            </div>
+            <p className="text-2xl font-black text-rose-600 dark:text-rose-500 tabular-nums leading-none">
+              {fmtNum(summaryStats.cost)} <span className="text-sm font-bold text-rose-400 ml-0.5">₭</span>
+            </p>
+          </div>
+          {/* Card 6: Profit */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ກຳໄລ</span>
+              <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-500" />
+            </div>
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-500 tabular-nums leading-none">
+              {fmtNum(summaryStats.profit)} <span className="text-sm font-bold text-emerald-400 ml-0.5">₭</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── TOOLBAR ── */}
+      <div className="sticky top-0 z-40 bg-[var(--background)]/90 backdrop-blur-xl pb-4 pt-2 -mt-2">
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-800 p-2 sm:p-3 rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-200 dark:border-slate-700/50">
+          
+          {/* Search */}
+          <div className="relative w-full lg:max-w-md group flex-1">
+            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="ຄົ້ນຫາ ຊື່, ເບີ, ID, ສິນຄ້າ..."
+              className="h-10 sm:h-11 w-full bg-slate-50/50 dark:bg-slate-900/50 pl-11 pr-8 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none border border-transparent focus:border-indigo-500/30 focus:bg-white dark:focus:bg-slate-800 transition-all"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <XMarkIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="hidden lg:block w-px h-6 bg-slate-200 dark:bg-slate-700" />
+
+          {/* Filters & Actions */}
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            
+            {/* Status */}
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="h-10 sm:h-11 pl-3 sm:pl-4 pr-8 sm:pr-9 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl text-xs sm:text-sm font-semibold appearance-none outline-none focus:border-indigo-400 text-slate-700 dark:text-slate-200 cursor-pointer"
+              >
+                <option value="all">ທຸກສະຖານະ</option>
+                {STATUS_META.map(s => <option key={s.value} value={s.value}>{s.value}</option>)}
+              </select>
+              <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            </div>
+
+            {/* Date Pills */}
+            <div className="flex items-center bg-slate-50 dark:bg-slate-900/50 p-1 rounded-[14px] border border-slate-200/80 dark:border-slate-700/50">
               {([['all', 'ທັງໝົດ'], ['this', 'ເດືອນນີ້'], ['prev', 'ເດືອນກ່ອນ']] as const).map(([val, lbl]) => (
                 <button
                   key={val}
                   onClick={() => setDateFilter(val)}
-                  className={`px-3 py-1.5 rounded-[16px] text-xs font-bold transition-all ${
+                  className={`px-3 py-1.5 sm:py-2 rounded-[10px] text-[11px] sm:text-xs font-bold transition-all ${
                     dateFilter === val
-                      ? 'bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-sm'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                      ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                   }`}
                 >
                   {lbl}
                 </button>
               ))}
             </div>
-            <input
-              type="month"
-              value={customMonth}
-              onChange={e => { setCustomMonth(e.target.value); setDateFilter('custom'); }}
-              className={`${inputCls} w-40 text-xs`}
-              title="ເລືອກເດືອນ"
-            />
 
-            {/* Status dropdown */}
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className={`${inputCls} pl-4 pr-8 appearance-none cursor-pointer font-semibold min-w-[140px]`}
-              >
-                <option value="all">ທຸກສະຖານະ</option>
-                {STATUS_META.map(s => <option key={s.value} value={s.value}>{s.value}</option>)}
-              </select>
-              <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
+            {dateFilter === 'custom' && (
+              <input
+                type="month"
+                value={customMonth}
+                onChange={e => setCustomMonth(e.target.value)}
+                className="h-10 sm:h-11 px-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200"
+              />
+            )}
 
-            {/* Theme dropdown */}
-            <div className="relative">
+            {/* Theme Dropdown (Optional but keep it since it existed) */}
+            <div className="relative hidden sm:block">
               <select
                 value={theme}
                 onChange={e => saveTheme(e.target.value)}
-                className={`${inputCls} pl-4 pr-8 appearance-none cursor-pointer font-semibold`}
+                className="h-10 sm:h-11 pl-3 pr-8 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl text-xs sm:text-sm font-semibold appearance-none outline-none focus:border-indigo-400 text-slate-700 dark:text-slate-200 cursor-pointer"
               >
                 {Object.entries(THEMES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
-              <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             </div>
 
-            <span className="ml-auto text-xs text-slate-400 font-medium tabular-nums">{filteredOrders.length} / {orders.length} ລາຍການ</span>
+            {/* Refresh */}
+            <button onClick={() => window.location.reload()} className="h-10 sm:h-11 w-10 sm:w-11 flex items-center justify-center bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Refresh">
+              <ArrowPathIcon className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600 dark:text-slate-400" />
+            </button>
+
+            {/* Add Order Button */}
+            {onAdd && (
+              <button
+                onClick={onAdd}
+                className="h-10 sm:h-11 px-4 sm:px-5 ml-auto lg:ml-1 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs sm:text-sm font-bold rounded-xl flex items-center gap-2 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_15px_rgba(0,0,0,0.15)] hover:-translate-y-0.5"
+              >
+                <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>ສ້າງອໍເດີໃໝ່</span>
+              </button>
+            )}
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* ── ORDER TABLE ── */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.2 }}
-        className={`${card} overflow-hidden`}
+        className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden"
       >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
@@ -1296,7 +1314,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className={`border-b border-slate-200/80 dark:border-white/8 ${themeConfig.th}`}>
                   {['#', 'ວັນທີ / ID', 'ລູກຄ້າ & ເບີ', 'ທີ່ຢູ່ / ຂົນສົ່ງ', 'ສິນຄ້າ', 'ຕົ້ນທຶນ ₭', 'ຍອດຂາຍ ₭', 'ກຳໄລ ₭', 'ສະຖານະ', 'ຈັດການ'].map(h => (
@@ -1336,7 +1354,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                       <td className="px-4 py-4 text-sm text-slate-400 tabular-nums w-10">{idx + 1}</td>
 
                       {/* Date / ID */}
-                      <td className="px-4 py-4 min-w-[120px]">
+                      <td className="px-4 py-4">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 truncate max-w-[100px]">{order.id.slice(-10)}</span>
                           <span className="text-xs text-slate-400">{formatDate(order.created_at)}</span>
@@ -1349,7 +1367,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                       </td>
 
                       {/* Customer & Phone */}
-                      <td className="px-4 py-4 min-w-[150px]">
+                      <td className="px-4 py-4">
                         <div className="flex items-start">
                           <div>
                             <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">{order.customer_name || '—'}</p>
@@ -1372,7 +1390,7 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                       </td>
 
                       {/* Shipping / Address */}
-                      <td className="px-4 py-4 min-w-[140px]">
+                      <td className="px-4 py-4">
                         <button
                           onClick={() => setShippingModal(order)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-[16px] bg-slate-100/70 hover:bg-slate-200/80 dark:bg-white/5 dark:hover:bg-white/10 transition-colors text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200/60 dark:border-white/10"
@@ -1384,13 +1402,15 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                       </td>
 
                       {/* Items */}
-                      <td className="px-4 py-4 min-w-[300px]">
+                      <td className="px-4 py-4">
                         <div className="space-y-1.5">
-                          {(order.items || []).map((item, i) => (
+                          {(order.items || []).map((item, i) => {
+                            const imgUrl = item.image_url || item.imageUrl;
+                            return (
                             <div key={i} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                              {item.image_url ? (
+                              {imgUrl ? (
                                 <img
-                                  src={item.image_url}
+                                  src={imgUrl}
                                   alt=""
                                   className="w-6 h-6 rounded-[8px] border border-slate-200/60 dark:border-white/10 object-cover cursor-pointer hover:ring-2 hover:ring-teal-500 transition-all shrink-0 bg-white"
                                   onClick={() => {
@@ -1398,9 +1418,10 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                                     let clickedIndex = 0;
                                     let imgCount = 0;
                                     order.items.forEach((it) => {
-                                      if (it.image_url) {
-                                        images.push({ url: it.image_url, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
-                                        if (it.image_url === item.image_url) {
+                                      const itImg = it.image_url || it.imageUrl;
+                                      if (itImg) {
+                                        images.push({ url: itImg, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
+                                        if (itImg === imgUrl) {
                                           clickedIndex = imgCount;
                                         }
                                         imgCount++;
@@ -1414,49 +1435,48 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
                               ) : (
                                 <span className="text-slate-400 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-1"></span>
                               )}
-                              <span className="break-words flex-1 leading-tight py-0.5">{item.name}</span>
+                              <span className="truncate flex-1 min-w-0 max-w-[150px] leading-tight py-0.5" title={item.name}>
+                                {item.name.length > 16 ? item.name.slice(0, 16) + '...' : item.name}
+                              </span>
                               <span className={`font-bold shrink-0 ${
-                                item.status === 'ຍົກເລີກ' ? 'text-rose-600 dark:text-rose-400' :
-                                item.status === 'ສົ່ງໃຫ້ລູກຄ້າແລ້ວ' ? 'text-purple-600 dark:text-purple-400' :
-                                item.status === 'ເຄື່ອງມາແລ້ວ' ? 'text-indigo-600 dark:text-indigo-400' :
-                                item.status === 'ສັ່ງເຄື່ອງແລ້ວ' ? 'text-orange-600 dark:text-orange-400' :
-                                'text-teal-600 dark:text-teal-400'
+                                (() => {
+                                  const meta = STATUS_META.find(s => s.value === item.status);
+                                  if (!meta) return 'text-teal-600 dark:text-teal-400';
+                                  return meta.chip.includes('rose') ? 'text-rose-600 dark:text-rose-400' :
+                                         meta.chip.includes('purple') ? 'text-purple-600 dark:text-purple-400' :
+                                         meta.chip.includes('indigo') ? 'text-indigo-600 dark:text-indigo-400' :
+                                         meta.chip.includes('orange') ? 'text-orange-600 dark:text-orange-400' :
+                                         meta.chip.includes('yellow') ? 'text-yellow-600 dark:text-yellow-400' :
+                                         meta.chip.includes('cyan') ? 'text-cyan-600 dark:text-cyan-400' :
+                                         meta.chip.includes('emerald') ? 'text-emerald-600 dark:text-emerald-400' :
+                                         meta.chip.includes('lime') ? 'text-lime-600 dark:text-lime-400' :
+                                         'text-teal-600 dark:text-teal-400';
+                                })()
                               }`}>x{item.qty}</span>
                               <div className="relative ml-auto shrink-0 group">
                                 <select
                                   value={item.status || 'ຮັບອໍເດີແລ້ວ'}
                                   onChange={(e) => updateItemStatus(order.id, i, e.target.value)}
                                   className={`appearance-none text-[10px] font-bold rounded-full pl-4 pr-5 py-0.5 outline-none transition-all cursor-pointer border-0 hover:shadow-md active:scale-95 text-center min-w-[74px] ${
-                                    item.status === 'ຍົກເລີກ'
-                                      ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
-                                      : item.status === 'ສົ່ງໃຫ້ລູກຄ້າແລ້ວ'
-                                      ? 'bg-purple-50 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
-                                      : item.status === 'ເຄື່ອງມາແລ້ວ'
-                                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300'
-                                      : item.status === 'ສັ່ງເຄື່ອງແລ້ວ'
-                                      ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300'
-                                      : 'bg-teal-50 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300'
+                                    STATUS_META.find(s => s.value === item.status)?.chip ||
+                                    'bg-teal-50 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300'
                                   }`}
                                   style={{ textOverflow: 'ellipsis' }}
                                 >
-                                  <option value="ຮັບອໍເດີແລ້ວ">ຮັບແລ້ວ</option>
-                                  <option value="ສັ່ງເຄື່ອງແລ້ວ">ສັ່ງແລ້ວ</option>
-                                  <option value="ເຄື່ອງມາແລ້ວ">ມາແລ້ວ</option>
-                                  <option value="ສົ່ງໃຫ້ລູກຄ້າແລ້ວ">ສົ່ງແລ້ວ</option>
-                                  <option value="ຍົກເລີກ">ຍົກເລີກ</option>
+                                  {STATUS_META.map(s => (
+                                    <option key={s.value} value={s.value}>{s.value}</option>
+                                  ))}
                                 </select>
                                 <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60">
                                   <ChevronDownIcon className="w-2.5 h-2.5" />
                                 </div>
                                 <div className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full pointer-events-none ${
-                                    item.status === 'ຍົກເລີກ' ? 'bg-rose-500' :
-                                    item.status === 'ສົ່ງໃຫ້ລູກຄ້າແລ້ວ' ? 'bg-purple-500' :
-                                    item.status === 'ເຄື່ອງມາແລ້ວ' ? 'bg-indigo-500' :
-                                    item.status === 'ສັ່ງເຄື່ອງແລ້ວ' ? 'bg-orange-500' : 'bg-teal-500'
+                                    STATUS_META.find(s => s.value === item.status)?.dot || 'bg-teal-500'
                                 }`} />
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </td>
 
@@ -1549,6 +1569,41 @@ export default function OrderList({ onEdit }: { onEdit?: (id: string) => void })
           </div>
         )}
       </motion.div>
+
+      {/* ══ Custom Delete Confirm Modal ══ */}
+      {deleteConfirmId && (
+        <BaseModal
+          isOpen
+          onClose={() => setDeleteConfirmId(null)}
+          title={<h3 className="text-xl font-bold text-slate-900 dark:text-white">🗑️ ຍືນຍັນການລຶບ</h3>}
+          maxWidth="max-w-sm"
+          width="w-full"
+          bodyClassName="p-6 bg-white dark:bg-slate-900"
+        >
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-rose-100 dark:bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <TrashIcon className="w-8 h-8" />
+            </div>
+            <p className="text-slate-600 dark:text-slate-300 text-sm">
+              ຕ້ອງການລຶບອໍເດີນີ້ອອກຈາກລະບົບແທ້ບໍ? ການກະທຳນີ້ບໍ່ສາມາດຍ້ອນກັບໄດ້!
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setDeleteConfirmId(null)}
+              className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              ຍົກເລີກ
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="flex-1 py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold shadow-lg shadow-rose-500/30 transition-all active:scale-95"
+            >
+              ລຶບເລີຍ
+            </button>
+          </div>
+        </BaseModal>
+      )}
     </motion.div>
   );
 }

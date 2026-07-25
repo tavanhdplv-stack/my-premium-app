@@ -174,7 +174,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="relative min-h-[100dvh] font-lao text-slate-800 dark:text-slate-100 flex overflow-x-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
+    <div className="relative h-[100dvh] lg:overflow-hidden font-lao text-slate-800 dark:text-slate-100 flex overflow-x-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
       {/* Decorative Orbs handled in layout.tsx */}
 
       {/* ─── MOBILE OVERLAY BACKDROP ───────────────────────────────────── */}
@@ -276,7 +276,7 @@ export default function DashboardPage() {
       </aside>
 
       {/* ─── MAIN CONTENT ────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col min-h-[100dvh] relative z-10 min-w-0">
+      <main className="flex-1 flex flex-col h-[100dvh] relative z-10 min-w-0 lg:overflow-hidden">
         {/* Header */}
         <header className="glass !border-x-0 !border-t-0 border-b border-white/40 dark:border-white/5 px-4 sm:px-6 lg:px-10 py-4 lg:py-5 flex items-center justify-between z-20 sticky top-0 transition-colors duration-300 mx-4 mt-4 lg:rounded-t-[30px]">
           {/* Hamburger button (visible on all screens now) */}
@@ -322,7 +322,7 @@ export default function DashboardPage() {
 
         {/* Content */}
         <div 
-          className="flex-1 p-3 sm:p-6 lg:p-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none"
+          className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none scrollbar-thin scrollbar-thumb-teal-500/20 hover:scrollbar-thumb-teal-500/40 scrollbar-track-transparent"
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}
         >
           <div className="max-w-7xl mx-auto min-h-full">
@@ -335,7 +335,7 @@ export default function DashboardPage() {
                   <OrderDashboard onViewAll={() => handleTabChange('list')} />
                 )}
                 {activeTab === 'add' && <OrderForm editId={editOrderId || undefined} preSelectedAgentId={preSelectedAgentId || undefined} onSuccess={() => { setEditOrderId(null); setPreSelectedAgentId(null); handleTabChange('list'); }} />}
-                {activeTab === 'list' && <OrderList onEdit={handleEditOrder} />}
+                {activeTab === 'list' && <OrderList onEdit={handleEditOrder} onAdd={() => handleTabChange('add')} />}
                 {activeTab === 'stock' && <OrderStock />}
                 {activeTab === 'agent' && <OrderAgent onCreateOrder={(agId) => { setPreSelectedAgentId(agId); handleTabChange('add'); }} onEdit={handleEditOrder} />}
                 {activeTab === 'wallet' && <OrderWallet onEditOrder={handleEditOrder} />}

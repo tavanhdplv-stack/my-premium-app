@@ -38,6 +38,8 @@ export interface OrderItem {
   qty: number;
   cost: number;
   price: number;
+  status?: string;
+  image_url?: string;
 }
 
 export interface Expense {
@@ -48,31 +50,32 @@ export interface Expense {
 
 export interface Order {
   id: string;
-  customerName?: string;
-  phone?: string;
+  customer_name?: string;
+  customer_phone?: string;
   transport?: string;
-  village?: string;
-  district?: string;
-  province?: string;
-  orderDate?: string;
+  customer_address?: string;
+  customer_district?: string;
+  customer_province?: string;
+  order_date?: string;
   status?: string;
-  paymentMethod?: 'COD' | 'ຈ່າຍແລ້ວ';
-  wallet?: string;
-  deposit?: number;
-  shippingFee?: number;
-  totalCost?: number;
-  totalExpenses?: number;
-  totalProfit?: number;
+  payment_method?: 'COD' | 'ຈ່າຍແລ້ວ';
+  wallet_id?: string;
+  transfer_amount?: number;
+  shipping_cost?: number;
+  total_cost?: number;
+  total_expenses?: number;
+  total_profit?: number;
   /** Computed sum of (item.price * item.qty) across all items */
-  totalSales?: number;
-  imageUrl?: string;
+  price?: number;
+  image_url?: string;
   items?: OrderItem[];
   expenses?: Expense[];
-  createdAt?: FirestoreTimestamp;
-  createdAtClient?: number;
-  statusUpdatedAt?: FirestoreTimestamp;
-  /** Internal helper set client-side for stable sorting — never written to Firestore */
-  __createdAtVal?: number;
+  created_at?: string;
+  status_updated_at?: string;
+  /** Optional notes JSON string from Supabase */
+  notes?: string;
+  agent_id?: string;
+  ordered_by?: string;
 }
 
 // ─── Wallet ───────────────────────────────────────────────────────────────────
@@ -81,8 +84,8 @@ export interface Wallet {
   id: string;
   name: string;
   type: 'W-COMP' | 'partner';
-  sharePercent?: number;
-  createdAt?: string;
+  share_percent?: number;
+  created_at?: string;
 }
 
 export interface WalletStats {
@@ -96,27 +99,25 @@ export interface WalletStats {
 
 export interface Transaction {
   id: string;
-  walletId: string;
+  wallet_id: string;
   type: 'income' | 'expense' | 'profit_split';
   amount: number;
-  note: string;
+  notes: string;
   date: string;
-  partnerSplitId?: string;
+  partner_split_id?: string;
 }
 
 // ─── Stock ────────────────────────────────────────────────────────────────────
 
 export interface StockItem {
   id: string;
-  itemName: string;
+  item_name: string;
   quantity: number;
-  costPrice: number;
-  sellingPrice: number;
-  imageUrl?: string;
+  cost_price: number;
+  selling_price: number;
+  image_url?: string;
   notes?: string;
-  createdAt?: FirestoreTimestamp;
-  /** Internal helper for sorting */
-  __createdAtVal?: number;
+  created_at?: string;
 }
 
 // ─── Agent ────────────────────────────────────────────────────────────────────
@@ -125,26 +126,24 @@ export type AgentLevel = 'General' | 'VIP' | 'VVIP';
 
 export interface Agent {
   id: string;
-  agentName: string;
+  agent_name: string;
   phone: string;
   level: AgentLevel;
-  totalSales: number;
+  total_sales: number;
   notes: string;
-  createdAt?: FirestoreTimestamp;
-  /** Internal helper for sorting */
-  __createdAtVal?: number;
+  created_at?: string;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export interface AppSettings {
-  shopName: string;
-  shopPhone: string;
-  exchangeRate: number;
-  shippingTime: string;
-  defaultDeposit: number;
-  availableSizes: string;
-  showProfit: boolean;
+  shop_name: string;
+  shop_phone: string;
+  exchange_rate: number;
+  shipping_time: string;
+  default_deposit: number;
+  available_sizes: string;
+  show_profit: boolean;
 }
 
 // ─── Status ───────────────────────────────────────────────────────────────────

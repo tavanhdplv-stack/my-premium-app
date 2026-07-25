@@ -104,10 +104,10 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
       if (data) {
          const mapped = data.map(d => ({
             id: d.id,
-            agentName: d.name ?? '',
+            agentName: d.agent_name ?? d.name ?? '',
             phone: d.phone ?? '',
             level: d.level ?? 'General',
-            totalSales: d.initial_sales ?? 0,
+            totalSales: d.total_sales ?? d.initial_sales ?? 0,
             notes: d.notes ?? '',
             createdAt: d.created_at ? { seconds: new Date(d.created_at).getTime() / 1000 } : undefined,
          })) as Agent[];

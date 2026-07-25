@@ -308,6 +308,27 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  
+  // Explicit refresh trigger for OtherExpenses
+  const [txRefreshTrigger, setTxRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    if (txRefreshTrigger === 0) return;
+    const refetch = async () => {
+      const { data, error } = await supabase.from('transactions').select('*');
+      if (data) {
+        setWalletTransactions(data.map(d => ({
+          id: d.id,
+          walletId: d.wallet_id,
+          type: d.type,
+          amount: Number(d.amount) || 0,
+          note: d.note || '',
+          date: d.date || new Date().toISOString(),
+        })));
+      }
+    };
+    refetch();
+  }, [txRefreshTrigger]);
 
   // Real‑time listeners from Firestore
   useEffect(() => {
@@ -614,7 +635,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
     <div className={`animate-[fadeIn_0.35s_ease-out] space-y-6 pb-32 lg:space-y-8 transition-opacity duration-500 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
       
       {/* Other Expenses Widget */}
-      <OtherExpenses />
+      <OtherExpenses onSaved={() => setTxRefreshTrigger(prev => prev + 1)} />
 
       {/* Header + filters */}
       <div className={`${card} ${pad} relative overflow-hidden`}>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/app/lib/supabase';
@@ -16,8 +16,6 @@ import {
     EyeIcon, ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { ChevronDownIcon } from '@heroicons/react/20/solid';
-import imageCompression from 'browser-image-compression';
-import { uploadImageDirect } from '@/app/lib/uploadImage';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface StockItem {
@@ -140,38 +138,57 @@ export default function OrderStock() {
         return () => window.removeEventListener('keydown', onKey);
     }, []);
 
-    // Real-time Firestore listener
-    useEffect(() => {
-        const fetchStocks = async () => {
-            const { data, error } = await supabase.from('stocks').select('*').order('created_at', { ascending: false });
-            if (data) {
-                const docs = data.map(d => ({
-                    id: d.id,
-                    itemName: d.item_name || '',
-                    quantity: typeof d.quantity === 'number' ? d.quantity : 0,
-                    costPrice: typeof d.cost_price === 'number' ? d.cost_price : 0,
-                    sellingPrice: typeof d.selling_price === 'number' ? d.selling_price : 0,
-                    imageUrl: d.image_url || '',
-                    notes: d.notes || '',
-                }));
-                setStocks(docs as StockItem[]);
+    // Real-time Supabase listener
+    const fetchStocks = useCallback(async () => {
+        const { data, error } = await supabase.from('stocks').select('*');
+            if (data && !error) {
+                const arr = data.map((d: any) => {
+                    const createdAtVal = d.created_at ? new Date(d.created_at).getTime() : (d.created_at_client || Date.now());
+                    return {
+                        id: d.id,
+                        itemName: d.itemName || d.item_name || '',
+                        quantity: typeof d.quantity === 'number' ? d.quantity : 0,
+                        costPrice: typeof d.costPrice === 'number' ? d.costPrice : (d.cost_price || 0),
+                        sellingPrice: typeof d.sellingPrice === 'number' ? d.sellingPrice : (d.selling_price || 0),
+                        imageUrl: d.imageUrl || d.image_url || '',
+                        notes: d.notes || '',
+                        __createdAtVal: createdAtVal,
+                    } as StockItem & { __createdAtVal: number };
+                });
+                arr.sort((a, b) => b.__createdAtVal - a.__createdAtVal);
+                setStocks(arr);
+                setListLoading(false);
+            } else {
+                if (process.env.NODE_ENV !== 'production') console.error('[OrderStock] fetch error:', error);
+                setListLoading(false);
             }
-            setListLoading(false);
-        };
-        
+    }, []);
+
+    // Real-time Supabase listener
+    useEffect(() => {
         fetchStocks();
 
         const channel = supabase
-            .channel('stocks_channel')
+            .channel('stocks_changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, () => {
                 fetchStocks();
             })
             .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
+        return () => { supabase.removeChannel(channel); };
+    }, [fetchStocks]);
+
+    // Handle Esc to close inline preview modal
+    useEffect(() => {
+        if (!previewModalUrl) return;
+        const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreviewModalUrl(null); };
+        window.addEventListener('keydown', handleEsc);
+        document.body.style.overflow = 'hidden';
+        return () => { 
+            window.removeEventListener('keydown', handleEsc); 
+            document.body.style.overflow = '';
         };
-    }, []);
+    }, [previewModalUrl]);
 
     // ── File helpers ────────────────────────────────────────────────────
     const handleFileSelection = (file: File) => {
@@ -198,14 +215,61 @@ export default function OrderStock() {
 
     // ── Upload to Cloudinary via API route ─────────────────────────────
     const uploadImage = async (file: File): Promise<string> => {
+        const compressImage = (file: File, maxWidth = 1200): Promise<File> => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new window.Image();
+                    img.src = event.target?.result as string;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) return resolve(file);
+
+                        ctx.drawImage(img, 0, 0, width, height);
+                        canvas.toBlob(
+                            (blob) => {
+                                if (!blob) return resolve(file);
+                                resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }));
+                            },
+                            'image/jpeg',
+                            0.8
+                        );
+                    };
+                    img.onerror = () => resolve(file);
+                };
+                reader.onerror = () => resolve(file);
+            });
+        };
+
+        const compressedFile = await compressImage(file);
+        const formData = new FormData();
+        formData.append('file', compressedFile);
+        const sizeMap: Record<string, number> = { small: 400, medium: 800, large: 1400 };
+        formData.append('width', String(sizeMap[imageSizeOption]));
+
         setUploadProgress(10);
-        try {
-            const url = await uploadImageDirect(file);
-            setUploadProgress(100);
-            return url;
-        } catch (error) {
-            throw new Error(error instanceof Error ? error.message : 'ອັບໂຫຼດຮູບບໍ່ສຳເລັດ');
+        const response = await fetch('/api/upload', { method: 'POST', body: formData });
+        setUploadProgress(80);
+
+        const data = await response.json();
+        const url = data?.secure_url ?? data?.url;
+        if (!response.ok || !url) {
+            throw new Error(typeof data?.error === 'string' ? data.error : 'ອັບໂຫຼດຮູບບໍ່ສຳເລັດ');
         }
+        setUploadProgress(100);
+        return url;
     };
 
     // ── Submit form ─────────────────────────────────────────────────────
@@ -228,32 +292,52 @@ export default function OrderStock() {
 
             if (editingId) {
                 const { error } = await supabase.from('stocks').update({
-                    item_name: itemName.trim(),
                     quantity: Number(quantity),
+                    notes: notes.trim(),
+                    item_name: itemName.trim(),
                     cost_price: costPrice ? Number(costPrice) : 0,
                     selling_price: Number(sellingPrice),
-                    image_url: finalImageUrl,
-                    notes: notes.trim(),
+                    image_url: finalImageUrl
                 }).eq('id', editingId);
+                
                 if (error) throw error;
                 setMessage({ type: 'success', text: '✅ ແກ້ໄຂຂໍ້ມູນສິນຄ້າສຳເລັດແລ້ວ!' });
             } else {
                 const { error } = await supabase.from('stocks').insert({
-                    item_name: itemName.trim(),
                     quantity: Number(quantity),
+                    notes: notes.trim(),
+                    item_name: itemName.trim(),
                     cost_price: costPrice ? Number(costPrice) : 0,
                     selling_price: Number(sellingPrice),
                     image_url: finalImageUrl,
-                    notes: notes.trim(),
+                    created_at: new Date().toISOString()
                 });
+                
                 if (error) throw error;
+
+                // --- Deduct from Company Wallet ---
+                if (costPrice && Number(costPrice) > 0) {
+                    const totalCost = Number(costPrice) * Number(quantity);
+                    const { data: compWallet } = await supabase.from('wallets').select('id').eq('type', 'W-COMP').limit(1).single();
+                    if (compWallet) {
+                        await supabase.from('transactions').insert({
+                            wallet_id: compWallet.id,
+                            type: 'expense',
+                            amount: totalCost,
+                            notes: `ຊື້ສິນຄ້າເຂົ້າສາງ: ${itemName.trim()} (${quantity} ອັນ)`,
+                            date: new Date().toISOString()
+                        });
+                    }
+                }
+                // ----------------------------------
                 setMessage({ type: 'success', text: '✅ ບັນທຶກສິນຄ້າເຂົ້າສາງສຳເລັດແລ້ວ!' });
             }
 
             resetForm();
-        } catch (err) {
+            fetchStocks(); // <-- explicitly fetch
+        } catch (err: any) {
             if (process.env.NODE_ENV !== 'production') console.error(err);
-            setMessage({ type: 'error', text: `ເກີດຂໍ້ຜິດພາດ: ${err instanceof Error ? err.message : 'ບໍ່ສາມາດບັນທຶກໄດ້'}` });
+            setMessage({ type: 'error', text: `ເກີດຂໍ້ຜິດພາດ: ${err?.message || 'ບໍ່ສາມາດບັນທຶກໄດ້'}` });
             setUploadProgress(0);
         } finally {
             setLoading(false);
@@ -292,7 +376,10 @@ export default function OrderStock() {
     const updateQty = async (id: string, current: number, delta: number) => {
         const next = current + delta;
         if (next < 0) return;
-        await supabase.from('stocks').update({ quantity: next }).eq('id', id);
+        const { error } = await supabase.from('stocks').update({ quantity: next }).eq('id', id);
+        if (!error) {
+            fetchStocks(); // update UI instantly
+        }
     };
 
     // ── Delete item ─────────────────────────────────────────────────────
@@ -318,7 +405,10 @@ export default function OrderStock() {
         });
         if (!result.isConfirmed) return;
         setDeletingId(id);
-        try { await supabase.from('stocks').delete().eq('id', id); } catch {
+        try { 
+            await supabase.from('stocks').delete().eq('id', id); 
+            fetchStocks();
+        } catch {
             Swal.fire({
                 title: 'ລຶບບໍ່ສຳເລັດ',
                 text: 'ກະລຸນາລອງໃໝ່',
@@ -346,7 +436,7 @@ export default function OrderStock() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
-            className="space-y-8 pb-32 max-w-7xl mx-auto px-4 sm:px-6"
+            className="space-y-8 pb-8 max-w-7xl mx-auto px-4 sm:px-6"
         >
 
             {/* ── Header ── */}
@@ -400,29 +490,36 @@ export default function OrderStock() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                        transition={{ duration: 0.25 }}
+                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 backdrop-blur-[8px] p-4 sm:p-6"
                         onClick={() => setPreviewModalUrl(null)}
                     >
                         <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
-                            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                            className="max-w-[90%] max-h-[90%] p-4"
+                            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                            transition={{ duration: 0.25, ease: 'easeOut' }}
+                            className="relative bg-white rounded-[20px] shadow-2xl flex flex-col p-5 sm:p-6"
+                            style={{ maxWidth: '90vw', maxHeight: '85vh', width: 'auto', height: 'auto' }}
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <img
-                                src={previewModalUrl}
-                                alt="Preview"
-                                className="max-w-full max-h-[80vh] rounded-[24px] shadow-2xl"
-                            />
-                            <div className="mt-4 text-right">
-                                <button
-                                    onClick={() => setPreviewModalUrl(null)}
-                                    className="px-5 py-2.5 bg-white/90 dark:bg-slate-800/90 rounded-[20px] text-sm font-bold shadow-lg hover:scale-105 transition-all"
-                                >
-                                    ປິດ
-                                </button>
+                            {/* Close Button Top Right */}
+                            <button
+                                onClick={() => setPreviewModalUrl(null)}
+                                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors z-10"
+                                title="ປິດ"
+                            >
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                            
+                            {/* Image Container */}
+                            <div className="w-full h-full flex items-center justify-center bg-white">
+                                <img
+                                    src={previewModalUrl}
+                                    alt="Preview"
+                                    className="max-w-full max-h-full object-contain rounded-md select-none"
+                                    style={{ maxHeight: 'calc(85vh - 48px)', maxWidth: 'calc(90vw - 48px)' }}
+                                />
                             </div>
                         </motion.div>
                     </motion.div>
