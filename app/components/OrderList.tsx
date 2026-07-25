@@ -1405,7 +1405,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                       <td className="px-4 py-4">
                         <div className="space-y-1.5">
                           {(order.items || []).map((item, i) => {
-                            const imgUrl = item.image_url || item.imageUrl;
+                            const imgUrl = item.image_url || (item as any).imageUrl;
                             return (
                             <div key={i} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                               {imgUrl ? (
@@ -1418,7 +1418,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                                     let clickedIndex = 0;
                                     let imgCount = 0;
                                     order.items.forEach((it) => {
-                                      const itImg = it.image_url || it.imageUrl;
+                                      const itImg = it.image_url || (it as any).imageUrl;
                                       if (itImg) {
                                         images.push({ url: itImg, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
                                         if (itImg === imgUrl) {
