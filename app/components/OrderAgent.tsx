@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ExclamationTriangleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { ImageGalleryModal, GalleryImage } from './ImageGalleryModal';
 import { supabase } from '@/app/lib/supabase';
+import { STATUS_META } from './OrderList';
 
 // ── Types ────────────────────────────────────────────────────────────────
 interface Agent {
@@ -485,42 +486,98 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
                               </td>
                               <td className="px-4 py-4 font-bold text-blue-600 dark:text-blue-400 align-top">[{o.id.slice(-8)}]</td>
                               <td className="px-4 py-4 whitespace-normal min-w-[250px] align-top">
-                                <div className="flex items-start gap-3">
-                                  {(() => {
-                                    const imgUrl = o.imageUrl || (o.items && o.items.length > 0 && o.items[0].imageUrl);
-                                    return imgUrl ? (
-                                      <img src={imgUrl} alt="Product" className="w-10 h-10 object-cover rounded-lg shadow-sm border border-slate-100 cursor-pointer hover:opacity-80 transition-opacity shrink-0" 
-                                        onClick={() => {
-                                          const images: GalleryImage[] = [];
-                                          if (o.imageUrl) {
-                                            images.push({ url: o.imageUrl, title: 'ຫຼັກຖານການໂອນ (Slip)', subtitle: o.customerName });
-                                          }
-                                          if (o.items) {
-                                            o.items.forEach((item: any) => {
-                                              if (item.imageUrl) {
-                                                images.push({ url: item.imageUrl, title: item.name, subtitle: `ຈຳນວນ: ${item.qty}` });
+                                <div className="space-y-1.5">
+                                  <div className="font-bold text-slate-800 dark:text-slate-200 mb-2">{o.customerName || '-'}</div>
+                                  {(o.items || []).map((item: any, i: number) => {
+                                    const imgUrl = item.image_url || item.imageUrl;
+                                    return (
+                                      <div key={i} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                                        {imgUrl ? (
+                                          <img 
+                                            src={imgUrl} 
+                                            alt="" 
+                                            className="w-6 h-6 rounded-[8px] border border-slate-200/60 dark:border-white/10 object-cover cursor-pointer hover:ring-2 hover:ring-violet-500 transition-all shrink-0 bg-white"
+                                            onClick={() => {
+                                              const images: GalleryImage[] = [];
+                                              let clickedIndex = 0;
+                                              let imgCount = 0;
+                                              if (o.imageUrl) {
+                                                images.push({ url: o.imageUrl, title: 'ຫຼັກຖານການໂອນ', subtitle: o.customerName });
+                                                imgCount++;
                                               }
-                                            });
-                                          }
-                                          if (images.length === 0 && imgUrl) {
-                                            images.push({ url: imgUrl, title: 'ຮູບສິນຄ້າ', subtitle: o.customerName });
-                                          }
-                                          setGalleryImages(images);
-                                          setGalleryIndex(0);
-                                        }} 
-                                      />
-                                    ) : (
-                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 shrink-0">
-                                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    </div>
+                                              o.items.forEach((it: any) => {
+                                                const itImg = it.image_url || it.imageUrl;
+                                                if (itImg) {
+                                                  images.push({ url: itImg, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
+                                                  if (itImg === imgUrl) {
+                                                    clickedIndex = imgCount;
+                                                  }
+                                                  imgCount++;
+                                                }
+                                              });
+                                              if (images.length === 0 && imgUrl) {
+                                                images.push({ url: imgUrl, title: item.name, subtitle: o.customerName });
+                                              }
+                                              setGalleryImages(images);
+                                              setGalleryIndex(clickedIndex);
+                                            }}
+                                          />
+                                        ) : (
+                                          <span className="text-slate-400 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-1"></span>
+                                        )}
+                                        <span className="truncate flex-1 min-w-0 max-w-[150px] leading-tight py-0.5" title={item.name}>
+                                          {item.name.length > 16 ? item.name.slice(0, 16) + '...' : item.name}
+                                        </span>
+                                        <span className={`font-bold shrink-0 ${
+                                          (() => {
+                                            const meta = STATUS_META.find(s => s.value === item.status);
+                                            if (!meta) return 'text-violet-600 dark:text-violet-400';
+                                            return meta.chip.includes('rose') ? 'text-rose-600 dark:text-rose-400' :
+                                                   meta.chip.includes('purple') ? 'text-purple-600 dark:text-purple-400' :
+                                                   meta.chip.includes('indigo') ? 'text-indigo-600 dark:text-indigo-400' :
+                                                   meta.chip.includes('orange') ? 'text-orange-600 dark:text-orange-400' :
+                                                   meta.chip.includes('yellow') ? 'text-yellow-600 dark:text-yellow-400' :
+                                                   meta.chip.includes('cyan') ? 'text-cyan-600 dark:text-cyan-400' :
+                                                   meta.chip.includes('emerald') ? 'text-emerald-600 dark:text-emerald-400' :
+                                                   meta.chip.includes('lime') ? 'text-lime-600 dark:text-lime-400' :
+                                                   'text-violet-600 dark:text-violet-400';
+                                          })()
+                                        }`}>x{item.qty}</span>
+                                        <div className="relative ml-auto shrink-0 group">
+                                          <select
+                                            value={item.status || 'ຮັບອໍເດີແລ້ວ'}
+                                            onChange={async (e) => {
+                                              const newStatus = e.target.value;
+                                              const newItems = [...o.items];
+                                              newItems[i] = { ...newItems[i], status: newStatus };
+                                              let newMainStatus = o.status;
+                                              if (newItems.length > 0 && newItems.every((it: any) => it.status === newStatus)) {
+                                                newMainStatus = newStatus;
+                                              }
+                                              try {
+                                                await supabase.from('orders').update({ items: newItems, status: newMainStatus }).eq('id', o.id);
+                                              } catch(err) {
+                                                console.error("Error updating item status:", err);
+                                              }
+                                            }}
+                                            className={`appearance-none text-[10px] font-bold rounded-full pl-4 pr-5 py-0.5 outline-none transition-all cursor-pointer border-0 hover:shadow-md active:scale-95 text-center min-w-[74px] ${
+                                              STATUS_META.find(s => s.value === item.status)?.chip ||
+                                              'bg-teal-50 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300'
+                                            }`}
+                                          >
+                                            {STATUS_META.map(s => (
+                                              <option key={s.value} value={s.value} className="font-semibold text-slate-700 bg-white">
+                                                {s.value}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <div className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full pointer-events-none ${
+                                            STATUS_META.find(s => s.value === item.status)?.dot || 'bg-teal-500'
+                                          }`} />
+                                        </div>
+                                      </div>
                                     );
-                                  })()}
-                                  <div>
-                                    <div className="font-bold text-slate-800 dark:text-slate-200">{o.customerName || '-'}</div>
-                                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                      {o.items ? o.items.map((i:any) => `${i.name} (x${i.qty})`).join(', ') : ''}
-                                    </div>
-                                  </div>
+                                  })}
                                 </div>
                               </td>
                               <td className="px-4 py-4 text-right font-bold text-rose-500 align-top">
@@ -533,23 +590,17 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
                                 {(Number(o.totalProfit) || 0).toLocaleString()}
                               </td>
                               <td className="px-4 py-4 text-center align-top">
-                                <select 
-                                  value={o.status || 'ລໍຖ້າຈ່າຍເງິນ'}
-                                  onChange={async (e) => {
-                                    try {
-                                      await supabase.from('orders').update({ status: e.target.value }).eq('id', o.id);
-                                    } catch(err) {
-                                      console.error("Error updating status:", err);
-                                    }
-                                  }}
-                                  className={`appearance-none outline-none text-[10px] font-bold px-2 py-1 rounded border cursor-pointer ${
-                                    o.status === 'ປິດບິນແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ' 
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                                      : 'bg-amber-50 text-amber-700 border-amber-200'
-                                  }`}
-                                >
-                                  {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                                {(() => {
+                                  const m = STATUS_META.find(s => s.value === o.status);
+                                  if (!m) return <span className="text-xs text-slate-400">{o.status}</span>;
+                                  return (
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border-0 transition-all cursor-default relative">
+                                      <div className={`absolute inset-0 rounded-full opacity-100 ${m.chip}`} />
+                                      <span className={`relative z-10 w-1.5 h-1.5 rounded-full ${m.dot}`} />
+                                      <span className={`relative z-10 ${m.chip.split(' ')[1]}`}>{m.value}</span>
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td className="px-4 py-4 text-center align-top">
                                 <button onClick={() => { setSelectedAgent(null); if(onEdit) onEdit(o.id); }} title="ແກ້ໄຂອໍເດີ"
