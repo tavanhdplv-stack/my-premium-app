@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ExclamationTriangleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { ImageGalleryModal, GalleryImage } from './ImageGalleryModal';
 import { supabase } from '@/app/lib/supabase';
-import { STATUS_META, StatusBadge, StatusModal } from './OrderList';
+import { STATUS_META, StatusBadge, StatusModal, InlineCostInput, fmtNum } from './OrderList';
 
 // ── Types ────────────────────────────────────────────────────────────────
 interface Agent {
@@ -100,6 +100,46 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
       await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
     } catch (err) {
       console.error('updateStatus error:', err);
+    }
+  };
+
+  const saveItemCost = async (orderId: string, itemIndex: number, newCostPerUnit: number) => {
+    try {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+      
+      const updatedItems = [...(order.items || [])];
+      if (updatedItems[itemIndex]) {
+        updatedItems[itemIndex] = {
+          ...updatedItems[itemIndex],
+          cost: newCostPerUnit
+        };
+      }
+      
+      const total_cost = updatedItems.reduce((sum, item) => sum + (Number(item.cost || 0) * Number(item.qty || 1)), 0);
+      const calculated_sales = updatedItems.reduce((s, i) => s + (Number(i.price || 0) * Number(i.qty || 1)), 0);
+      
+      const newProfit = calculated_sales
+        - total_cost
+        - Number(order.shipping_fee || 0)
+        - Number(order.total_expenses || 0);
+
+      const updates: any = {
+        total_cost,
+        total_profit: newProfit,
+        items: updatedItems,
+      };
+
+      setOrders(prev => prev.map(o => o.id === orderId ? { 
+        ...o, 
+        totalCost: total_cost, 
+        totalProfit: newProfit, 
+        items: updatedItems 
+      } : o));
+      
+      await supabase.from('orders').update(updates).eq('id', orderId);
+    } catch (err) {
+      console.error('saveItemCost error:', err);
     }
   };
 
@@ -603,14 +643,55 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
                                   })}
                                 </div>
                               </td>
-                              <td className="px-4 py-4 text-right font-bold text-rose-500 align-top">
-                                {(Number(o.totalCost) || 0).toLocaleString()}
+                              <td className="px-4 py-4 align-top pt-4">
+                                <div className="space-y-1.5 flex flex-col items-end justify-center">
+                                  {(o.items || []).map((item: any, i: number) => (
+                                    <div key={i} className="flex items-center justify-end h-7 mt-[0.5px]">
+                                      <InlineCostInput 
+                                        orderId={o.id} 
+                                        value={item.cost || 0} 
+                                        onSave={(id, cost) => saveItemCost(id, i, cost)} 
+                                      />
+                                    </div>
+                                  ))}
+                                  {(o.shipping_fee || 0) > 0 && (
+                                    <p className="text-[11px] text-slate-400 tabular-nums text-right">+{fmtNum(o.shipping_fee)} ₭ ຂົນສົ່ງ</p>
+                                  )}
+                                </div>
                               </td>
-                              <td className="px-4 py-4 text-right font-bold text-blue-500 align-top">
-                                {(Number(o.price) || 0).toLocaleString()}
+
+                              {/* Sales */}
+                              <td className="px-4 py-4 align-top text-right pt-5">
+                                <div className="flex flex-col items-end gap-1.5">
+                                  <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
+                                    {fmtNum(o.price || 0)}
+                                  </p>
+                                  {(o.deposit || 0) > 0 && (
+                                    <div className="flex flex-col gap-1 w-full max-w-[110px]">
+                                      <div className="flex items-center justify-between text-[10px] bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full border border-amber-200/60 dark:border-amber-500/30">
+                                        <span className="font-medium opacity-80">ມັດຈຳ:</span>
+                                        <span className="font-bold tabular-nums">{fmtNum(o.deposit)}</span>
+                                      </div>
+                                      {((o.price || 0) - o.deposit) > 0 ? (
+                                        <div className="flex items-center justify-between text-[10px] bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded-full border border-rose-200/60 dark:border-rose-500/30">
+                                          <span className="font-medium opacity-80">ເຫຼືອ:</span>
+                                          <span className="font-bold tabular-nums">{fmtNum((o.price || 0) - o.deposit)}</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center justify-center text-[10px] bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-500/30 font-bold">
+                                          ຈ່າຍຄົບແລ້ວ
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </td>
-                              <td className="px-4 py-4 text-right font-bold text-emerald-500 align-top">
-                                {(Number(o.totalProfit) || 0).toLocaleString()}
+
+                              {/* Profit */}
+                              <td className="px-4 py-4 align-top text-right pt-5">
+                                <p className={`text-sm font-extrabold tabular-nums ${(o.totalProfit || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                  {fmtNum(o.totalProfit || 0)} ₭
+                                </p>
                               </td>
                               <td className="px-4 py-4 text-center align-top">
                                 <StatusBadge status={o.status} onClick={() => setStatusModal(o.id)} />

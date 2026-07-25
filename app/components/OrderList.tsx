@@ -113,7 +113,7 @@ interface Wallet { id: string; name: string; type: string; }
 // UTILS (คงเดิม)
 // ═══════════════════════════════════════════════════════════════════════
 const fmt = (n: number) => n === 0 ? '' : new Intl.NumberFormat('en-US').format(n || 0) + ' ₭';
-const fmtNum = (n: number) => n === 0 ? '' : new Intl.NumberFormat('en-US').format(n || 0);
+export const fmtNum = (n: number) => n === 0 ? '' : new Intl.NumberFormat('en-US').format(n || 0);
 
 function tsToDate(ts: any): Date | null {
   if (!ts) return null;
@@ -668,7 +668,7 @@ function AlertBadge({ order, now, onQuickCheck }: { order: Order; now: number; o
 // ═══════════════════════════════════════════════════════════════════════
 // INLINE COST INPUT (ปรับดีไซน์)
 // ═══════════════════════════════════════════════════════════════════════
-function InlineCostInput({ orderId, value, onSave }: { orderId: string; value: number; onSave: (id: string, val: number) => void }) {
+export function InlineCostInput({ orderId, value, onSave }: { orderId: string; value: number; onSave: (id: string, val: number) => void }) {
   const [editing, setEditing] = useState(false);
   const [local, setLocal] = React.useState(() => {
     const s = fmtNum(value);
