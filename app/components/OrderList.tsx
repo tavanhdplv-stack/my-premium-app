@@ -106,6 +106,7 @@ interface Order {
   created_at?: unknown;
   image_url?: string;
   ordered_by?: string;
+  cost_updated_at?: string;
 }
 interface Wallet { id: string; name: string; type: string; }
 
@@ -938,7 +939,9 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
     const src = lastReset
       ? orders.filter(o => {
           if (o.status === 'ຍົກເລີກອໍເດີ') return false;
-          const d = tsToDate(o.created_at);
+          const costTime = tsToDate(o.cost_updated_at);
+          const createTime = tsToDate(o.created_at);
+          const d = costTime || createTime;
           return d && d >= lastReset;
         })
       : orders.filter(o => o.status !== 'ຍົກເລີກອໍເດີ');
@@ -1009,6 +1012,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
         total_cost,
         total_profit: newProfit,
         items: updatedItems,
+        cost_updated_at: new Date().toISOString(),
       };
 
       if (lastResetBy) updates.ordered_by = lastResetBy;
@@ -1051,7 +1055,9 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
       const profitSinceReset = orders
         .filter(o => {
           if (o.status === 'ຍົກເລີກອໍເດີ') return false;
-          const d = tsToDate(o.created_at);
+          const costTime = tsToDate(o.cost_updated_at);
+          const createTime = tsToDate(o.created_at);
+          const d = costTime || createTime;
           return resetTime ? (d && d >= resetTime) : true;
         })
         .reduce((s, o) => s + (o.total_profit || 0), 0);
