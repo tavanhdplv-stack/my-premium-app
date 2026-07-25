@@ -204,7 +204,7 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'success' | 'error';
 // ═══════════════════════════════════════════════════════════════════════
 // STATUS BADGE (แบบ Premium)
 // ═══════════════════════════════════════════════════════════════════════
-function StatusBadge({ status, onClick, loading }: { status: string; onClick?: () => void; loading?: boolean }) {
+export function StatusBadge({ status, onClick, loading }: { status: string; onClick?: () => void; loading?: boolean }) {
   const m = STATUS_META.find(s => s.value === status);
   if (!m) return <span className="text-xs text-slate-400">{status}</span>;
   return (
@@ -226,7 +226,7 @@ function StatusBadge({ status, onClick, loading }: { status: string; onClick?: (
 // ═══════════════════════════════════════════════════════════════════════
 // STATUS MODAL (ปรับดีไซน์)
 // ═══════════════════════════════════════════════════════════════════════
-function StatusModal({ current, onSelect, onClose }: { current: string; onSelect: (s: string) => void; onClose: () => void; }) {
+export function StatusModal({ current, onSelect, onClose }: { current: string; onSelect: (s: string) => void; onClose: () => void; }) {
   return (
     <BaseModal
       isOpen={true}

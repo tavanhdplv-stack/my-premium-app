@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ExclamationTriangleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { ImageGalleryModal, GalleryImage } from './ImageGalleryModal';
 import { supabase } from '@/app/lib/supabase';
-import { STATUS_META } from './OrderList';
+import { STATUS_META, StatusBadge, StatusModal } from './OrderList';
 
 // ── Types ────────────────────────────────────────────────────────────────
 interface Agent {
@@ -66,6 +66,42 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [filterMonth, setFilterMonth] = useState<string>('');
   const [orders, setOrders] = useState<any[]>([]);
+  const [statusModal, setStatusModal] = useState<string | null>(null);
+
+  const updateItemStatus = async (orderId: string, itemIdx: number, newStatus: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    const newItems = [...order.items];
+    newItems[itemIdx] = { ...newItems[itemIdx], status: newStatus };
+    
+    let newMainStatus = order.status;
+    if (newItems.length > 0 && newItems.every((it: any) => it.status === newStatus)) {
+      newMainStatus = newStatus;
+    }
+    
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: newItems, status: newMainStatus } : o));
+    
+    try {
+      await supabase.from('orders').update({ items: newItems, status: newMainStatus }).eq('id', orderId);
+    } catch (err) {
+      console.error('updateItemStatus error:', err);
+    }
+  };
+
+  const updateStatus = async (orderId: string, newStatus: string) => {
+    setStatusModal(null);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+    
+    try {
+      await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+    } catch (err) {
+      console.error('updateStatus error:', err);
+    }
+  };
 
   // Fetch orders for agent history
   useEffect(() => {
@@ -546,20 +582,7 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
                                         <div className="relative ml-auto shrink-0 group">
                                           <select
                                             value={item.status || 'ຮັບອໍເດີແລ້ວ'}
-                                            onChange={async (e) => {
-                                              const newStatus = e.target.value;
-                                              const newItems = [...o.items];
-                                              newItems[i] = { ...newItems[i], status: newStatus };
-                                              let newMainStatus = o.status;
-                                              if (newItems.length > 0 && newItems.every((it: any) => it.status === newStatus)) {
-                                                newMainStatus = newStatus;
-                                              }
-                                              try {
-                                                await supabase.from('orders').update({ items: newItems, status: newMainStatus }).eq('id', o.id);
-                                              } catch(err) {
-                                                console.error("Error updating item status:", err);
-                                              }
-                                            }}
+                                            onChange={(e) => updateItemStatus(o.id, i, e.target.value)}
                                             className={`appearance-none text-[10px] font-bold rounded-full pl-4 pr-5 py-0.5 outline-none transition-all cursor-pointer border-0 hover:shadow-md active:scale-95 text-center min-w-[74px] ${
                                               STATUS_META.find(s => s.value === item.status)?.chip ||
                                               'bg-teal-50 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300'
@@ -590,17 +613,7 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
                                 {(Number(o.totalProfit) || 0).toLocaleString()}
                               </td>
                               <td className="px-4 py-4 text-center align-top">
-                                {(() => {
-                                  const m = STATUS_META.find(s => s.value === o.status);
-                                  if (!m) return <span className="text-xs text-slate-400">{o.status}</span>;
-                                  return (
-                                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border-0 transition-all cursor-default relative">
-                                      <div className={`absolute inset-0 rounded-full opacity-100 ${m.chip}`} />
-                                      <span className={`relative z-10 w-1.5 h-1.5 rounded-full ${m.dot}`} />
-                                      <span className={`relative z-10 ${m.chip.split(' ')[1]}`}>{m.value}</span>
-                                    </div>
-                                  );
-                                })()}
+                                <StatusBadge status={o.status} onClick={() => setStatusModal(o.id)} />
                               </td>
                               <td className="px-4 py-4 text-center align-top">
                                 <button onClick={() => { setSelectedAgent(null); if(onEdit) onEdit(o.id); }} title="ແກ້ໄຂອໍເດີ"
@@ -628,6 +641,15 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
         isOpen={galleryImages.length > 0}
         onClose={() => setGalleryImages([])}
       />
+
+      {/* Status Modal */}
+      {statusModal && (
+        <StatusModal
+          current={orders.find(o => o.id === statusModal)?.status || 'ລໍຖ້າຈ່າຍເງິນ'}
+          onSelect={(s) => updateStatus(statusModal, s)}
+          onClose={() => setStatusModal(null)}
+        />
+      )}
     </div>
   );
 }
