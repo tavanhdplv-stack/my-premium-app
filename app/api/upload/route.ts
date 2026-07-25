@@ -1,16 +1,15 @@
-import { v2 as cloudinary } from 'cloudinary';
-import type { UploadApiResponse } from 'cloudinary';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
-// Configure once at module level (reads from .env.local)
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "zejld0zt",
-  api_key: process.env.CLOUDINARY_API_KEY || "452719257376477",
-  api_secret: process.env.CLOUDINARY_API_SECRET || "cy8V6U7z3UbWDzsYzQorgNYulpU",
-  secure: true,
-});
+async function sha1(message: string) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(message);
+  const hash = await crypto.subtle.digest('SHA-1', data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,10 +18,7 @@ export async function POST(request: NextRequest) {
     const apiSecret = process.env.CLOUDINARY_API_SECRET || "cy8V6U7z3UbWDzsYzQorgNYulpU";
 
     if (!cloudName || !apiKey || !apiSecret) {
-      return NextResponse.json(
-        { error: 'Cloudinary configuration is missing' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Cloudinary configuration is missing' }, { status: 500 });
     }
 
     const formData = await request.formData();
@@ -30,26 +26,48 @@ export async function POST(request: NextRequest) {
     const widthField = formData.get('width');
     const resizeWidth = widthField ? Number(String(widthField)) : undefined;
 
-    if (!file || typeof (file as { arrayBuffer?: unknown }).arrayBuffer !== 'function') {
+    if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    const bytes = await (file as Blob).arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const timestamp = Math.round(new Date().getTime() / 1000).toString();
+    
+    // Cloudinary signature parameters
+    const paramsToSign: Record<string, string> = { timestamp };
+    
+    let transformationStr = '';
+    if (resizeWidth && Number.isFinite(resizeWidth) && resizeWidth > 0) {
+      transformationStr = `c_scale,w_${resizeWidth}`;
+      paramsToSign.transformation = transformationStr;
+    }
 
-    const result = await new Promise<UploadApiResponse>((resolve, reject) => {
-      const options: any = { folder: 'tawan-orders', resource_type: 'image' };
-      if (resizeWidth && Number.isFinite(resizeWidth) && resizeWidth > 0) {
-        options.transformation = [{ width: resizeWidth, crop: 'scale' }];
-      }
-      cloudinary.uploader
-        .upload_stream(options, (error, uploadResult) => {
-          if (error) reject(error);
-          else if (!uploadResult?.secure_url) reject(new Error('Upload failed'));
-          else resolve(uploadResult);
-        })
-        .end(buffer);
+    // Sort keys and create signature string
+    const sortedKeys = Object.keys(paramsToSign).sort();
+    const signatureString = sortedKeys.map(k => `${k}=${paramsToSign[k]}`).join('&') + apiSecret;
+    
+    const signature = await sha1(signatureString);
+
+    // Prepare FormData for Cloudinary API
+    const cloudinaryFormData = new FormData();
+    cloudinaryFormData.append('file', file);
+    cloudinaryFormData.append('api_key', apiKey);
+    cloudinaryFormData.append('timestamp', timestamp);
+    cloudinaryFormData.append('signature', signature);
+    if (transformationStr) {
+      cloudinaryFormData.append('transformation', transformationStr);
+    }
+
+    // Upload via standard fetch (Edge compatible)
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: 'POST',
+      body: cloudinaryFormData,
     });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error?.message || 'Upload failed');
+    }
 
     return NextResponse.json({ secure_url: result.secure_url, url: result.secure_url });
   } catch (error) {
