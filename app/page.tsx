@@ -136,9 +136,14 @@ export default function DashboardPage() {
     let cancelled = false;
     const fetchCount = async () => {
       try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
+
         const { count, error } = await supabase
           .from('orders')
-          .select('*', { count: 'exact', head: true });
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', today.toISOString());
+          
         if (!error && !cancelled) setOrderCount(count || 0);
       } catch (err) {
         console.error("Error fetching order count:", err);
