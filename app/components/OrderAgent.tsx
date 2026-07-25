@@ -94,10 +94,12 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
     
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+    const updatedItems = (order.items || []).map((item: any) => ({ ...item, status: newStatus }));
+
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus, items: updatedItems } : o));
     
     try {
-      await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+      await supabase.from('orders').update({ status: newStatus, items: updatedItems }).eq('id', orderId);
     } catch (err) {
       console.error('updateStatus error:', err);
     }

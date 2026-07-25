@@ -954,14 +954,21 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
     setStatusModal(null);
     setUpdatingId(orderId);
 
+    const order = orders.find(o => o.id === orderId);
+    if (!order) {
+      setUpdatingId(null);
+      return;
+    }
+
+    const updatedItems = (order.items || []).map(item => ({ ...item, status: newStatus }));
+
     // Optimistic Update for Real-Time feel
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus, items: updatedItems } : o));
     try {
-      const order = orders.find(o => o.id === orderId);
-      
       await supabase.from('orders').update({
         status: newStatus,
         status_updated_at: new Date().toISOString(),
+        items: updatedItems,
       }).eq('id', orderId);
 
       // NOTE: No manual transaction needed here.
