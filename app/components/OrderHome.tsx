@@ -182,7 +182,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       URL.revokeObjectURL(objectUrl);
 
       // Call Gemini API Directly
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyBa51oN_781RFMvmUw1j3txuwgZwbwvnF4';
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 

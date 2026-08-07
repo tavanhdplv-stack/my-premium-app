@@ -547,7 +547,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         }));
         
         // 4. Call Gemini API directly (Client-side)
-        const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyBa51oN_781RFMvmUw1j3txuwgZwbwvnF4';
+        const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
         if (!apiKey) {
            setMessage({ type: 'error', text: 'ບໍ່ພົບ API Key ຂອງระบบ AI' });
            setIsAIScanning(false);
