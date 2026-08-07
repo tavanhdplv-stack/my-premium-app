@@ -478,13 +478,13 @@ export default function DashboardPage() {
       >
         <div className={`py-8 transition-all duration-300 ${!sidebarExpanded ? 'px-8 lg:px-2 flex lg:justify-center' : 'px-8'}`}>
           <div className="flex items-center gap-3">
-            <div className="relative w-11 h-11 shrink-0 rounded-[20px] bg-gradient-to-tr from-[var(--primary)] via-[var(--secondary)] to-[var(--accent)] flex items-center justify-center shadow-lg shadow-teal-500/30">
-              <span className="text-white text-xl font-bold font-heading tracking-wider">T</span>
+            <div className="relative w-11 h-11 shrink-0 rounded-[20px] bg-gradient-to-tr from-[var(--primary)] via-[var(--secondary)] to-[var(--accent)] flex items-center justify-center shadow-lg shadow-teal-500/30 overflow-hidden">
+              <img src="/logo.png" alt="PreOrder Logo" className="w-full h-full object-cover" />
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-white dark:border-slate-900 rounded-full" />
             </div>
             <div className={`whitespace-nowrap overflow-hidden transition-[width,opacity] duration-300 ${!sidebarExpanded ? 'lg:w-0 lg:opacity-0' : 'w-[150px] opacity-100'}`}>
               <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-none">
-                Tawan East
+                PreOrder
               </h1>
               <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-1 font-medium">
                 Premium Order System
@@ -536,7 +536,7 @@ export default function DashboardPage() {
         </nav>
 
         <div className={`p-6 mt-auto transition-all duration-300 ${!sidebarExpanded ? 'lg:px-2 lg:py-6' : 'p-6'}`}>
-          <div className={`flex items-center gap-3 p-3 rounded-[24px] bg-white/70 dark:bg-white/5 backdrop-blur-md border border-white/80 dark:border-white/10 shadow-sm hover:shadow-[var(--premium-hover-shadow)] transition-all duration-400 cursor-pointer group hover:-translate-y-1 ${!sidebarExpanded ? 'lg:justify-center lg:p-2' : ''}`} title="Admin Tawan">
+          <div className={`flex items-center gap-3 p-3 rounded-[24px] bg-white/70 dark:bg-white/5 backdrop-blur-md border border-white/80 dark:border-white/10 shadow-sm hover:shadow-[var(--premium-hover-shadow)] transition-all duration-400 cursor-pointer group hover:-translate-y-1 ${!sidebarExpanded ? 'lg:justify-center lg:p-2' : ''}`} title="Admin PreOrder">
             <div className="w-10 h-10 shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700">
               <div className="w-full h-full rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-sm font-bold">
                 A
@@ -544,7 +544,7 @@ export default function DashboardPage() {
             </div>
             <div className={`flex-1 min-w-0 overflow-hidden whitespace-nowrap transition-[width,opacity] duration-300 ${!sidebarExpanded ? 'lg:w-0 lg:opacity-0' : 'w-[120px] opacity-100'}`}>
               <p className="text-[14px] font-bold text-slate-900 dark:text-white truncate group-hover:text-[var(--primary)] transition-colors">
-                Admin Tawan
+                Admin PreOrder
               </p>
               <p className="text-[12px] text-slate-500 dark:text-slate-400 truncate">Premium Member</p>
             </div>
@@ -579,7 +579,7 @@ export default function DashboardPage() {
                 {navConfig.find((n) => n.id === activeTab)?.label}
               </h2>
               <p className="text-[13px] lg:text-[14px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium hidden sm:block">
-                ພາບລວມ ແລະ ການຈັດການຂໍ້ມູນລ່າສຸດ — Tawan East Shop
+                ພາບລວມ ແລະ ການຈັດການຂໍ້ມູນລ່າສຸດ — PreOrder
               </p>
             </div>
           </div>

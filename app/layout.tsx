@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tawan East - ລະບົບຈັດການອໍເດີ",
-  description: "ລະບົບຈັດການອໍເດີແລະຄລັງສາງສໍາລັບ Tawan East Shop",
+  title: "PreOrder - ລະບົບຈັດການອໍເດີ",
+  description: "ລະບົບຈັດການອໍເດີແລະຄລັງສາງສໍາລັບ PreOrder",
   manifest: "/manifest.json",
   viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
   themeColor: [
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Tawan East",
+    title: "PreOrder",
   },
 };
 

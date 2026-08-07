@@ -130,7 +130,7 @@ function fmtNum(n: number) {
 
 export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendingOrder }: HomeProps) {
   const [bannerIdx, setBannerIdx] = useState(0);
-  const [shopName, setShopName] = useState('Tawan East Shop');
+  const [shopName, setShopName] = useState('PreOrder');
   const [todayOrders, setTodayOrders] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [todayProfit, setTodayProfit] = useState(0);
@@ -298,7 +298,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
   // Load shop settings
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setShopName(localStorage.getItem('shopName') || 'Tawan East Shop');
+      setShopName(localStorage.getItem('shopName') || 'PreOrder');
     }
   }, []);
 

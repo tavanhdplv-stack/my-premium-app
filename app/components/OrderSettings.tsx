@@ -108,7 +108,7 @@ function Toggle({
 
 export default function OrderSettings() {
   // ── State ─────────────────────────────────────────────────────────────
-  const [shopName, setShopName] = useState('Tawan East Shop');
+  const [shopName, setShopName] = useState('PreOrder');
   const [shopPhone, setShopPhone] = useState('');
   const [exchangeRate, setExchangeRate] = useState('750');
   const [shippingTime, setShippingTime] = useState('1-2 ອາທິດ');
@@ -136,7 +136,7 @@ export default function OrderSettings() {
       try {
         const { data: d, error } = await supabase.from('system').select('*').eq('id', 'settings').single();
         if (d) {
-          setShopName(d.shop_name || 'Tawan East Shop');
+          setShopName(d.shop_name || 'PreOrder');
           setShopPhone(d.shop_phone || '');
           setExchangeRate(String(d.exchange_rate || 750));
           setShippingTime(d.shipping_time || '1-2 ອາທິດ');
@@ -315,7 +315,7 @@ export default function OrderSettings() {
                 type="text"
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
-                placeholder="Tawan East Shop"
+                placeholder="PreOrder"
                 className={inputCls}
               />
             </div>

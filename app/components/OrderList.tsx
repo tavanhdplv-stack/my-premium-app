@@ -281,7 +281,7 @@ function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shop
   const remaining = total_sales - (order.deposit || 0);
 
   const copyText = [
-    `🏪 ${shopName || 'Tawan East Shop'}`,
+    `🏪 ${shopName || 'PreOrder'}`,
     `📞 ${shopPhone || ''}`,
     `━━━━━━━━━━━━━━━━━`,
     `👤 ຜູ້ຮັບ: ${order.customer_name}`,
@@ -875,7 +875,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('orderTableTheme') || 'default';
       setTheme(savedTheme);
-      setShopName(localStorage.getItem('shopName') || 'Tawan East Shop');
+      setShopName(localStorage.getItem('shopName') || 'PreOrder');
       setShopPhone(localStorage.getItem('shopPhone') || '');
     }
   }, []);

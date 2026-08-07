@@ -63,7 +63,7 @@ export default function OrdersListPage() {
             <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
               รายการพรีออเดอร์ทั้งหมด
             </h1>
-            <p className="text-xs text-slate-400 mt-1">ฐานข้อมูลคลาวด์เสถียรสูง — Tawan East Shop</p>
+            <p className="text-xs text-slate-400 mt-1">ฐานข้อมูลคลาวด์เสถียรสูง — PreOrder</p>
           </div>
           <a 
             href="/" 

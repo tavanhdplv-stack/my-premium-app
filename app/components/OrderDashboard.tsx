@@ -672,7 +672,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
                 ແດຊບອດພາບລວມ
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                ຍອດຂາຍ, ຕົ້ນທຶນ ແລະ ກຳໄລຂອງ Tawan East Shop
+                ຍອດຂາຍ, ຕົ້ນທຶນ ແລະ ກຳໄລຂອງ PreOrder
               </p>
             </div>
           </div>
