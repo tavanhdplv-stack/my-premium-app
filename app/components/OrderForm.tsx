@@ -9,6 +9,7 @@ import imageCompression from 'browser-image-compression';
 import { uploadImageDirect } from '@/app/lib/uploadImage';
 import { CustomSelect } from './CustomSelect';
 import Swal from 'sweetalert2';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // --- Constants ---
 const PROVINCES = [
@@ -536,7 +537,8 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
       const reader = new FileReader();
       reader.readAsDataURL(compressedFile);
       reader.onload = async () => {
-        const base64 = reader.result as string;
+        const base64WithPrefix = reader.result as string;
+        const base64Data = base64WithPrefix.replace(/^data:image\/\w+;base64,/, '');
         
         // 3. Prepare stock list
         const productsList = stocks.map(s => ({
@@ -544,20 +546,49 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           name: s.itemName,
         }));
         
-        // 4. Call our API route
-        const res = await fetch('/api/scan-product', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: base64,
+        // 4. Call Gemini API directly (Client-side)
+        const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+        if (!apiKey) {
+           setMessage({ type: 'error', text: 'ບໍ່ພົບ API Key ຂອງระบบ AI' });
+           setIsAIScanning(false);
+           return;
+        }
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+        const prompt = `
+        You are an expert AI product identifier for a retail store.
+        Analyze the provided image and find the BEST matching product from the inventory list provided below.
+
+        INVENTORY LIST:
+        ${JSON.stringify(productsList, null, 2)}
+
+        INSTRUCTIONS:
+        1. Identify the primary object/product in the image.
+        2. Read any text (labels, tags, packaging) on the product if visible.
+        3. Compare the visual features and text with the items in the INVENTORY LIST.
+        4. You MUST respond with ONLY a valid JSON object (no markdown, no backticks, no explanation).
+        
+        EXPECTED JSON FORMAT:
+        {
+          "matched_id": "string (the id of the matching product, or null if no match found)",
+          "confidence": number (1-100 indicating how sure you are),
+          "reasoning": "string (brief explanation of why this product matches)"
+        }
+        `;
+
+        const imagePart = {
+          inlineData: {
+            data: base64Data,
             mimeType: compressedFile.type,
-            products: productsList
-          })
-        });
-        
-        if (!res.ok) throw new Error('API failed');
-        
-        const data = await res.json();
+          },
+        };
+
+        const result = await model.generateContent([prompt, imagePart]);
+        const responseText = result.response.text();
+        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const data = JSON.parse(cleanedText);
         
         if (data.matched_id) {
           const stock = stocks.find(s => s.id === data.matched_id);
@@ -568,7 +599,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
              setMessage({ type: 'error', text: '🤖 AI ບໍ່ພົບສິນຄ້າທີ່ກົງກັບສະຕັອກ' });
           }
         } else {
-          setMessage({ type: 'error', text: '🤖 AI ບໍ່ພົບສິນຄ້າທີ່ກົງກັນໃນສະຕັອກ' });
+          setMessage({ type: 'error', text: '🤖 AI ບໍ່ພົບສິນຄ້າທີ່ກົງກັນในສະຕັອກ' });
         }
         setIsAIScanning(false);
       };

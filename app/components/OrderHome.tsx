@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/app/lib/supabase';
 import { useTheme } from '@/app/components/ThemeProvider';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import Swal from 'sweetalert2';
 
 interface HomeProps {
@@ -177,24 +178,47 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       if (!ctx) throw new Error('Could not get canvas context');
       
       ctx.drawImage(img, 0, 0, width, height);
-      const base64Data = canvas.toDataURL('image/jpeg', 0.8);
+      const base64Data = canvas.toDataURL('image/jpeg', 0.8).replace(/^data:image\/\w+;base64,/, '');
       URL.revokeObjectURL(objectUrl);
 
-      // Call API
-      const res = await fetch('/api/scan-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: base64Data,
-          mimeType: 'image/jpeg',
-        })
-      });
+      // Call Gemini API Directly
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyBa51oN_781RFMvmUw1j3txuwgZwbwvnF4';
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-      if (!res.ok) {
-        throw new Error('Failed to scan image');
+      const prompt = `
+      You are an expert AI assistant that extracts key information from images (like transfer slips, shipping labels, order screenshots, etc.) to help search for an order in an Order Management System.
+      Analyze the provided image and extract the most relevant text that can be used to search for an order.
+      Focus on extracting things like:
+      - Customer Name
+      - Phone Number
+      - Tracking Number
+      - Order ID
+      
+      INSTRUCTIONS:
+      1. Identify the most identifying piece of information. A phone number or tracking number is the best. If not found, look for a customer name.
+      2. Format the output as a JSON object.
+      3. You MUST respond with ONLY a valid JSON object (no markdown, no backticks, no explanation).
+      
+      EXPECTED JSON FORMAT:
+      {
+        "searchQuery": "string (the extracted phone number, tracking number, or customer name)",
+        "confidence": number (1-100 indicating how sure you are)
       }
+      `;
 
-      const data = await res.json();
+      const imagePart = {
+        inlineData: {
+          data: base64Data,
+          mimeType: 'image/jpeg',
+        },
+      };
+
+      const result = await model.generateContent([prompt, imagePart]);
+      const responseText = result.response.text();
+      
+      const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const data = JSON.parse(cleanedText);
       
       if (data.searchQuery) {
         setSearchQuery(data.searchQuery);
