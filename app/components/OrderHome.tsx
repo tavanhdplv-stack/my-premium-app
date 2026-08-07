@@ -187,22 +187,23 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
       const prompt = `
-      You are an expert AI assistant that extracts key information from images (like transfer slips, shipping labels, order screenshots, etc.) to help search for an order in an Order Management System.
+      You are an expert AI assistant that extracts key information from images to help search for an order in an Order Management System.
       Analyze the provided image and extract the most relevant text that can be used to search for an order.
-      Focus on extracting things like:
-      - Customer Name
-      - Phone Number
-      - Tracking Number
-      - Order ID
+      
+      Focus on extracting ONE of the following (in order of priority):
+      1. Phone Number (if it's a transfer slip or shipping label)
+      2. Tracking Number or Order ID
+      3. Customer Name
+      4. Product Name/Description (if the image is a picture of a product, e.g., "เสื้อสีดำ", "กระเป๋าหนัง", "iPhone", etc. Keep it brief and relevant to the product)
       
       INSTRUCTIONS:
-      1. Identify the most identifying piece of information. A phone number or tracking number is the best. If not found, look for a customer name.
+      1. Identify the most identifying piece of information.
       2. Format the output as a JSON object.
       3. You MUST respond with ONLY a valid JSON object (no markdown, no backticks, no explanation).
       
       EXPECTED JSON FORMAT:
       {
-        "searchQuery": "string (the extracted phone number, tracking number, or customer name)",
+        "searchQuery": "string (the extracted text/product name to search for)",
         "confidence": number (1-100 indicating how sure you are)
       }
       `;
@@ -463,7 +464,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
               </svg>
             )}
-            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAIScanOrder} disabled={isAIScanningOrder} />
+            <input type="file" accept="image/*" className="hidden" onChange={handleAIScanOrder} disabled={isAIScanningOrder} />
           </label>
         </div>
       </motion.div>
