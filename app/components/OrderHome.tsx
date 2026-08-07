@@ -186,15 +186,35 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
+      // Fetch all unique product names from the database to improve matching
+      const { data: allOrders } = await supabase.from('orders').select('items').neq('status', 'ຍົກເລີກອໍເດີ');
+      let uniqueItems: string[] = [];
+      if (allOrders) {
+        const allItemNames = allOrders
+          .flatMap((o: any) => {
+            if (!o.items) return [];
+            try {
+              const parsed = typeof o.items === 'string' ? JSON.parse(o.items) : o.items;
+              return Array.isArray(parsed) ? parsed.map((i: any) => i.name) : [];
+            } catch { return []; }
+          })
+          .filter(Boolean);
+        uniqueItems = Array.from(new Set(allItemNames));
+      }
+
+      const productListPrompt = uniqueItems.length > 0 
+        ? `\nHere is a list of EXACT product names that currently exist in our Order database:\n[${uniqueItems.join(', ')}]\n\nIf the uploaded image is a product, YOU MUST find the most visually similar product from this exact list and return its EXACT name as the searchQuery. If you are unsure, just guess the closest one.`
+        : '';
+
       const prompt = `
-      You are an expert AI assistant that extracts key information from images to help search for an order in an Order Management System.
-      Analyze the provided image and extract the most relevant text that can be used to search for an order.
+      You are an expert AI visual search assistant for an Order Management System.
+      Analyze the provided image and extract the most relevant text to search for an order.
       
-      Focus on extracting ONE of the following (in order of priority):
-      1. Phone Number (if it's a transfer slip or shipping label)
-      2. Tracking Number or Order ID
-      3. Customer Name
-      4. Product Name/Description (if the image is a picture of a product, e.g., "เสื้อสีดำ", "กระเป๋าหนัง", "iPhone", etc. Keep it brief and relevant to the product)
+      Focus on ONE of the following (in order of priority):
+      1. Product Name (if the image is a picture of a product, like a bag or shirt). ${productListPrompt}
+      2. Phone Number (if it's a transfer slip or shipping label)
+      3. Tracking Number or Order ID
+      4. Customer Name
       
       INSTRUCTIONS:
       1. Identify the most identifying piece of information.
@@ -203,7 +223,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       
       EXPECTED JSON FORMAT:
       {
-        "searchQuery": "string (the extracted text/product name to search for)",
+        "searchQuery": "string (the extracted text or EXACT matched product name from the list)",
         "confidence": number (1-100 indicating how sure you are)
       }
       `;
