@@ -152,8 +152,8 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
     setIsAIScanningOrder(true);
     try {
       // Compress image before sending
-      const maxWidth = 800;
-      const maxHeight = 800;
+      const maxWidth = 512;
+      const maxHeight = 512;
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
       
@@ -184,7 +184,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       // Call Gemini API Directly
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
 
       // Fetch all unique product names from the database to improve matching
       const { data: allOrders } = await supabase.from('orders').select('items').neq('status', 'ຍົກເລີກອໍເດີ');

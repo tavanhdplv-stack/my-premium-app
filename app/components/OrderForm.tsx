@@ -529,9 +529,12 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
     setMessage({ type: 'info', text: '🤖 ກຳລັງໃຫ້ AI ວິເຄາະຮູບພາບ...' });
     
     try {
-      // 1. Compress image to save bandwidth
-      const options = { maxSizeMB: 1, maxWidthOrHeight: 1024, useWebWorker: true };
-      const compressedFile = await imageCompression(file, options);
+      // 3. Compress the image before sending to AI to save time and bandwidth
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 512,
+        useWebWorker: true,
+      };const compressedFile = await imageCompression(file, options);
       
       // 2. Convert to base64
       const reader = new FileReader();
@@ -555,7 +558,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
 
         const prompt = `
         You are an expert AI product identifier for a retail store.
