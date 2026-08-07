@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
     // Get the Gemini 1.5 Flash model for multimodal tasks
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
 
     // Prepare the prompt
     const prompt = `

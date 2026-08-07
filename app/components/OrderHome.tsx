@@ -184,7 +184,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       // Call Gemini API Directly
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
 
       // Fetch all unique product names from the database to improve matching
       const { data: allOrders } = await supabase.from('orders').select('items').neq('status', 'ຍົກເລີກອໍເດີ');
