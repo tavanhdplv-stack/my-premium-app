@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/app/lib/supabase';
 import { useTheme } from '@/app/components/ThemeProvider';
+import Swal from 'sweetalert2';
 
 interface HomeProps {
   onNavigate: (tab: string, search?: string) => void;
@@ -139,8 +140,97 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
   const [searchQuery, setSearchQuery] = useState('');
   const [globalBanners, setGlobalBanners] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAIScanningOrder, setIsAIScanningOrder] = useState(false);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { theme, toggleTheme } = useTheme();
+
+  const handleAIScanOrder = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsAIScanningOrder(true);
+    try {
+      // Compress image before sending
+      const maxWidth = 800;
+      const maxHeight = 800;
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = objectUrl;
+      });
+      
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width *= ratio;
+        height *= ratio;
+      }
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not get canvas context');
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      const base64Data = canvas.toDataURL('image/jpeg', 0.8);
+      URL.revokeObjectURL(objectUrl);
+
+      // Call API
+      const res = await fetch('/api/scan-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64Data,
+          mimeType: 'image/jpeg',
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to scan image');
+      }
+
+      const data = await res.json();
+      
+      if (data.searchQuery) {
+        setSearchQuery(data.searchQuery);
+        // Navigate after a short delay so user can see the text
+        setTimeout(() => {
+          onNavigate('list', data.searchQuery);
+        }, 800);
+        Swal.fire({
+          title: 'ສຳເລັດ!',
+          text: `ຄົ້ນຫາ: ${data.searchQuery}`,
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        Swal.fire({
+          title: 'ບໍ່ພົບຂໍ້ມູນ',
+          text: 'AI ບໍ່ສາມາດອ່ານຂໍ້ມູນບິນ ຫຼື ຊື່ລູກຄ້າຈາກຮູບນີ້ໄດ້',
+          icon: 'warning',
+          confirmButtonColor: '#14b8a6'
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      Swal.fire({
+        title: 'ເກີດຂໍ້ຜິດພາດ',
+        text: 'ບໍ່ສາມາດສະແກນຮູບໄດ້ ກະລຸນາລອງໃໝ່',
+        icon: 'error',
+        confirmButtonColor: '#14b8a6'
+      });
+    } finally {
+      setIsAIScanningOrder(false);
+      // Reset input
+      e.target.value = '';
+    }
+  };
 
   // Load shop settings
   useEffect(() => {
@@ -341,12 +431,16 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
             </svg>
           </button>
           <div className="w-[1px] h-8 bg-slate-200 dark:bg-slate-700 mx-2" />
-          <button className="w-12 h-12 rounded-[14px] bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center shrink-0 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition-colors">
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-7 h-7">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
-            </svg>
-          </button>
+          <label className={`w-12 h-12 rounded-[14px] ${isAIScanningOrder ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100'} flex items-center justify-center shrink-0 transition-colors cursor-pointer relative overflow-hidden`} title="AI Scanner (ສະແກນຮູບ/ບິນ)">
+            {isAIScanningOrder ? (
+              <svg className="animate-spin w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-7 h-7">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+              </svg>
+            )}
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAIScanOrder} disabled={isAIScanningOrder} />
+          </label>
         </div>
       </motion.div>
 
