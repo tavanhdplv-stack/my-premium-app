@@ -971,6 +971,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                     <th className="px-4 py-4 text-left font-bold">ຮຸ້ນສ່ວນ</th>
                     <th className="px-4 py-4 text-left font-bold">ສ່ວນແບ່ງ (%)</th>
                     <th className="px-4 py-4 text-left font-bold text-rose-500">ເບີກໄປແລ້ວ</th>
+                    <th className="px-4 py-4 text-left font-bold text-orange-500">ປະຫວັດຖອນ (ແຕ່ລະເດືອນ)</th>
                     <th className="px-4 py-4 text-left font-black text-blue-600 dark:text-blue-400">ຖອນໄດ້ຈິງ (MAX)</th>
                   </tr>
                 </thead>
@@ -981,6 +982,14 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                     const withdrawn = transactions
                       .filter(t => t.type === 'profit_split' && t.partner_split_id === w.id)
                       .reduce((s, t) => s + t.amount, 0);
+
+                    const monthlyWithdrawals = transactions
+                      .filter(t => t.type === 'profit_split' && t.partner_split_id === w.id)
+                      .reduce((acc, t) => {
+                        const ym = ymOf(t.date);
+                        if (ym) acc[ym] = (acc[ym] || 0) + t.amount;
+                        return acc;
+                      }, {} as Record<string, number>);
                       
                     const totalHistoricalWithdrawn = transactions
                       .filter(t => t.type === 'profit_split')
@@ -1003,8 +1012,23 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                             className="w-16 text-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 text-slate-900 dark:text-white outline-none focus:border-violet-500"
                           />
                         </td>
-                        <td className="px-4 py-4 text-rose-500">{fmt(withdrawn)} ₭</td>
-                        <td className={`px-4 py-4 font-black ${remain > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{fmt(remain)} ₭</td>
+                        <td className="px-4 py-4 font-bold text-rose-500">{fmt(withdrawn)} ₭</td>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(monthlyWithdrawals).length > 0 ? (
+                              Object.entries(monthlyWithdrawals)
+                                .sort(([a], [b]) => b.localeCompare(a))
+                                .map(([ym, amount]) => (
+                                  <div key={ym} className="text-xs bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 px-2 py-1 rounded-md border border-orange-100 dark:border-orange-800">
+                                    <span className="font-bold">{ym}:</span> {fmt(amount)}
+                                  </div>
+                                ))
+                            ) : (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 font-black text-blue-600 dark:text-blue-400">{fmt(remain)} ₭</td>
                       </tr>
                     );
                   })}
