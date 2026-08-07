@@ -588,7 +588,19 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           },
         };
 
-        const result = await model.generateContent([prompt, imagePart]);
+        let result;
+        try {
+          result = await model.generateContent([prompt, imagePart]);
+        } catch (aiError: any) {
+          if (aiError.message?.includes('503') || aiError.message?.includes('high demand')) {
+            console.warn('Main AI model overloaded, falling back to lite model...');
+            const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
+            result = await fallbackModel.generateContent([prompt, imagePart]);
+          } else {
+            throw aiError;
+          }
+        }
+        
         const responseText = result.response.text();
         let data: any = {};
         try {
