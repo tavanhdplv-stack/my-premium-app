@@ -12,11 +12,15 @@ import {
   Eye,
   Moon,
   Info,
+  Bell,
   Loader2,
   CheckCircle,
   XCircle,
   Save,
+  Image as ImageIcon,
+  UploadCloud,
 } from 'lucide-react';
+import { uploadImageDirect } from '@/app/lib/uploadImage';
 
 // ── Design tokens ─────────────────────────────────────────────────────────
 const card =
@@ -112,6 +116,10 @@ export default function OrderSettings() {
   const [availableSizes, setAvailableSizes] = useState('S, M, L, XL, XXL');
   const [showProfit, setShowProfit] = useState(true);
   const [darkDefault, setDarkDefault] = useState(false);
+  const [notifyDelay, setNotifyDelay] = useState('0'); // local setting
+  const [banners, setBanners] = useState<string[]>([]); // global setting array
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [message, setMessage] = useState<{
@@ -122,7 +130,7 @@ export default function OrderSettings() {
   // ── Cleanup ref for toast timeout ────────────────────────────────────
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load from Firestore ───────────────────────────────────────────────
+  // ── Load from Firestore & Global Notes ─────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -136,6 +144,30 @@ export default function OrderSettings() {
           setAvailableSizes(d.available_sizes || 'S, M, L, XL, XXL');
           setShowProfit(d.show_profit !== false);
           setDarkDefault(d.dark_default || false);
+        }
+        
+        // Load Global Notify Delay from Notes
+        const { data: noteData } = await supabase.from('notes').select('*').eq('title', '___SYSTEM_SETTINGS___').maybeSingle();
+        if (noteData && noteData.content) {
+          try {
+            const settings = JSON.parse(noteData.content);
+            if (settings.notifyDelay !== undefined) setNotifyDelay(String(settings.notifyDelay));
+          } catch (err) {}
+        } else {
+          // Fallback to localStorage if no global setting yet
+          if (typeof window !== 'undefined') {
+            const storedDelay = localStorage.getItem('notifyDelay');
+            if (storedDelay) setNotifyDelay(storedDelay);
+          }
+        }
+
+        // Load Global Banners
+        const { data: bannerData } = await supabase.from('notes').select('*').eq('title', '___BANNERS___').maybeSingle();
+        if (bannerData && bannerData.content) {
+          try {
+            const loadedBanners = JSON.parse(bannerData.content);
+            if (Array.isArray(loadedBanners)) setBanners(loadedBanners);
+          } catch (err) {}
         }
       } catch (e) {
         if (process.env.NODE_ENV !== 'production')
@@ -159,7 +191,8 @@ export default function OrderSettings() {
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
-      const { error } = await supabase.from('system').update({
+      // 1. Try to update system table (might fail if table doesn't exist yet)
+      const { error: sysError } = await supabase.from('system').update({
         shop_name: shopName,
         shop_phone: shopPhone,
         exchange_rate: parseFloat(exchangeRate) || 0,
@@ -170,16 +203,43 @@ export default function OrderSettings() {
         dark_default: darkDefault,
         updated_at: new Date().toISOString(),
       }).eq('id', 'settings');
-      if (error) throw error;
-      // Also save shopName/shopPhone to localStorage for copy-text use
+      
+      if (sysError && sysError.code !== 'PGRST205') {
+        console.error('[OrderSettings] system update error:', sysError);
+      }
+      
+      // 2. Save global notify settings to notes
+      const globalSettings = { notifyDelay: parseInt(notifyDelay || '0', 10) };
+      const { data: existingNote } = await supabase.from('notes').select('id').eq('title', '___SYSTEM_SETTINGS___').maybeSingle();
+      if (existingNote) {
+        const { error: updateNoteErr } = await supabase.from('notes').update({ content: JSON.stringify(globalSettings) }).eq('id', existingNote.id);
+        if (updateNoteErr) throw updateNoteErr;
+      } else {
+        const { error: insertNoteErr } = await supabase.from('notes').insert([{ title: '___SYSTEM_SETTINGS___', content: JSON.stringify(globalSettings) }]);
+        if (insertNoteErr) throw insertNoteErr;
+      }
+
+      // 3. Save global banners to notes
+      const { data: existingBannerNote } = await supabase.from('notes').select('id').eq('title', '___BANNERS___').maybeSingle();
+      if (existingBannerNote) {
+        const { error: updateBannerErr } = await supabase.from('notes').update({ content: JSON.stringify(banners) }).eq('id', existingBannerNote.id);
+        if (updateBannerErr) throw updateBannerErr;
+      } else {
+        const { error: insertBannerErr } = await supabase.from('notes').insert([{ title: '___BANNERS___', content: JSON.stringify(banners) }]);
+        if (insertBannerErr) throw insertBannerErr;
+      }
+
+      // 4. Save shopName/shopPhone to localStorage for copy-text use
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('shopName', shopName);
           localStorage.setItem('shopPhone', shopPhone);
+          localStorage.setItem('notifyDelay', notifyDelay);
         } catch {
-          // localStorage may be unavailable in restricted environments
+          // ignore
         }
       }
+
       setMessage({
         type: 'success',
         text: 'ບັນທຶກການຕັ້ງຄ່າລະບົບສຳເລັດແລ້ວ!',
@@ -189,13 +249,34 @@ export default function OrderSettings() {
         () => setMessage({ type: '', text: '' }),
         3500
       );
-    } catch {
+    } catch (err: any) {
+      console.error('[OrderSettings] save error:', err);
       setMessage({
         type: 'error',
-        text: 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່',
+        text: `ເກີດຂໍ້ຜິດພາດ: ${err?.message || 'ກະລຸນາລອງໃໝ່'}`,
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Handle Banner Upload ──────────────────────────────────────────────
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingBanner(true);
+    setMessage({ type: '', text: '' });
+    try {
+      const url = await uploadImageDirect(file);
+      setBanners(prev => [...prev, url]);
+      setMessage({ type: 'success', text: 'ອັບໂຫຼດຮູບພາບສຳເລັດແລ້ວ! ຢ່າລືມກົດບັນທຶກ' });
+    } catch (err: any) {
+      console.error('[OrderSettings] upload error:', err);
+      setMessage({ type: 'error', text: `ອັບໂຫຼດບໍ່ສຳເລັດ: ${err.message || 'ລອງໃໝ່ອີກຄັ້ງ'}` });
+    } finally {
+      setUploadingBanner(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -339,7 +420,148 @@ export default function OrderSettings() {
           </div>
         </SettingSection>
 
-        {/* ── Section 3: Display & UI ── */}
+        {/* ── Section 3: Notifications (Global) ── */}
+        <SettingSection
+          label="ການແຈ້ງເຕືອນ (ມີຜົນກັບທຸກເຄື່ອງ)"
+          color="bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400"
+          icon={<Bell className="w-5 h-5" />}
+        >
+          <div>
+            <label className={lbl}>ເວລາໜ່ວງການແຈ້ງເຕືອນ (ພາຍຫຼັງປ່ຽນເປັນ "ສົ່ງບິນແລ້ວ")</label>
+            <div className="relative mb-3">
+              <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <select
+                value={['0', '5', '15', '30', '60', '120', '1440', '2880', '4320', '5760'].includes(notifyDelay) ? notifyDelay : 'custom'}
+                onChange={(e) => {
+                  if (e.target.value !== 'custom') {
+                    setNotifyDelay(e.target.value);
+                  } else {
+                    setNotifyDelay(''); // Clear for custom input
+                  }
+                }}
+                className={`${inputCls} pl-10 appearance-none`}
+              >
+                <option value="0">ສະແດງທັນທີ (Real-time)</option>
+                <option value="5">ຫຼັງຈາກ 5 ນາທີ</option>
+                <option value="15">ຫຼັງຈາກ 15 ນາທີ</option>
+                <option value="30">ຫຼັງຈາກ 30 ນາທີ</option>
+                <option value="60">ຫຼັງຈາກ 1 ຊົ່ວໂມງ</option>
+                <option value="120">ຫຼັງຈາກ 2 ຊົ່ວໂມງ</option>
+                <option value="1440">ຫຼັງຈາກ 1 ມື້ (24 ຊົ່ວໂມງ)</option>
+                <option value="2880">ຫຼັງຈາກ 2 ມື້ (48 ຊົ່ວໂມງ)</option>
+                <option value="4320">ຫຼັງຈາກ 3 ມື້ (72 ຊົ່ວໂມງ)</option>
+                <option value="5760">ຫຼັງຈາກ 4 ມື້ (96 ຊົ່ວໂມງ)</option>
+                <option value="custom">ກຳນົດເວລາເອງ... (Custom)</option>
+              </select>
+            </div>
+            
+            {!['0', '5', '15', '30', '60', '120', '1440', '2880', '4320', '5760'].includes(notifyDelay) && (
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="number"
+                  min="0"
+                  value={notifyDelay}
+                  onChange={(e) => setNotifyDelay(e.target.value)}
+                  placeholder="ລະບຸຈຳນວນນາທີ..."
+                  className={inputCls}
+                />
+                <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ນາທີ</span>
+              </div>
+            )}
+            
+            <p className="text-xs text-slate-400">
+              ກຳນົດວ່າຈະໃຫ້ປ້າຍແຈ້ງເຕືອນສີແດງສະແດງຕອນໃດ ພາຍຫຼັງກົດສົ່ງບິນແລ້ວ. <br/>(ການຕັ້ງຄ່ານີ້ຈະມີຜົນກັບທຸກເຄື່ອງທີ່ເຂົ້າໃຊ້ງານ)
+            </p>
+          </div>
+        </SettingSection>
+
+        {/* ── Section: Banner Ad ── */}
+        <SettingSection
+          label="ປ້າຍໂຄສະນາ (Banner Ads)"
+          color="bg-sky-50 dark:bg-sky-500/15 text-sky-600 dark:text-sky-400"
+          icon={<ImageIcon className="w-5 h-5" />}
+        >
+          <div>
+            <label className={lbl}>URL ຮູບພາບໂຄສະນາ (ສະແດງໜ້າຫຼັກ, ສູງສຸດ 5 ປ້າຍ)</label>
+            <div className="flex gap-2 mb-3">
+              <div className="relative flex-1">
+                <ImageIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  id="newBannerUrl"
+                  placeholder="https://... (ໃສ່ລິ້ງ ຫຼື ອັບໂຫຼດ)"
+                  className={`${inputCls} pl-10`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const val = (e.target as HTMLInputElement).value;
+                      if (val && banners.length < 5) {
+                        setBanners(prev => [...prev, val]);
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <input 
+                type="file" 
+                accept="image/*" 
+                ref={fileInputRef} 
+                onChange={handleBannerUpload} 
+                className="hidden" 
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const input = document.getElementById('newBannerUrl') as HTMLInputElement;
+                  if (input && input.value && banners.length < 5) {
+                    setBanners(prev => [...prev, input.value]);
+                    input.value = '';
+                  } else if (banners.length < 5) {
+                    fileInputRef.current?.click();
+                  }
+                }}
+                disabled={uploadingBanner || banners.length >= 5}
+                className="flex items-center justify-center gap-2 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-sm transition-colors border border-slate-200 dark:border-slate-700 disabled:opacity-50"
+              >
+                {uploadingBanner ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <UploadCloud className="w-4 h-4" />
+                    ເພີ່ມ
+                  </>
+                )}
+              </button>
+            </div>
+            
+            {banners.length > 0 && (
+              <div className="space-y-3 mb-4">
+                {banners.map((url, idx) => (
+                  <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 relative group aspect-[2/1] max-w-sm">
+                    <img src={url} alt={`Banner ${idx+1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setBanners(prev => prev.filter((_, i) => i !== idx))}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-rose-500/90 text-white flex items-center justify-center shadow-md backdrop-blur-sm hover:bg-rose-600 transition-colors"
+                    >
+                      <XCircle className="w-5 h-5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5">
+              <strong className="text-slate-700 dark:text-slate-200 block mb-1">💡 ຄຳແນະນຳຂະໜາດຮູບພາບ:</strong>
+              • ຂະໜາດທີ່ເໝາະສົມ: <strong>800 x 400 pixels</strong> (ອັດຕາສ່ວນ 2:1)<br/>
+              • ຖ້າບໍ່ມີປ້າຍໂຄສະນາ ລະບົບຈະສະແດງປ້າຍຂໍ້ຄວາມມາດຕະຖານແທນ<br/>
+              • ສາມາດອັບໂຫຼດຮູບ ຫຼື ເອົາລິ້ງຮູບຈາກບ່ອນອື່ນມາໃສ່ ແລ້ວກົດ Enter ໄດ້
+            </div>
+          </div>
+        </SettingSection>
+
+        {/* ── Section 4: Display & UI ── */}
         <SettingSection
           label="ການສະແດງຜົນ & UI"
           color="bg-purple-50 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400"

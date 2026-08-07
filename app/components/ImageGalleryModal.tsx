@@ -28,21 +28,39 @@ export function ImageGalleryModal({ images, initialIndex = 0, isOpen, onClose }:
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
 
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const [prevInitialIndex, setPrevInitialIndex] = useState(initialIndex);
+
+  // Sync state immediately during render to avoid flashes and out-of-bounds crashes
+  if (isOpen && !prevIsOpen) {
+    setPrevIsOpen(true);
+    setPrevInitialIndex(initialIndex);
+    setCurrentIndex(initialIndex);
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+    setIsLoading(true);
+    setHasError(false);
+  } else if (!isOpen && prevIsOpen) {
+    setPrevIsOpen(false);
+  } else if (isOpen && initialIndex !== prevInitialIndex) {
+    setPrevInitialIndex(initialIndex);
+    setCurrentIndex(initialIndex);
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+    setIsLoading(true);
+    setHasError(false);
+  }
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setCurrentIndex(initialIndex);
-      setScale(1);
-      setPan({ x: 0, y: 0 });
-      setIsLoading(true);
-      setHasError(false);
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [isOpen, initialIndex]);
+  }, [isOpen]);
 
   const handleChangeImage = useCallback((newIndex: number) => {
     setCurrentIndex(newIndex);
@@ -125,7 +143,10 @@ export function ImageGalleryModal({ images, initialIndex = 0, isOpen, onClose }:
 
   if (!isOpen || images.length === 0) return null;
 
-  const currentImage = images[currentIndex];
+  const safeIndex = Math.max(0, Math.min(currentIndex, images.length - 1));
+  const currentImage = images[safeIndex];
+
+  if (!currentImage) return null;
 
   const modalContent = (
     <AnimatePresence>
@@ -133,40 +154,32 @@ export function ImageGalleryModal({ images, initialIndex = 0, isOpen, onClose }:
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 sm:p-6"
+        transition={{ duration: 0.22 }}
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.82)] backdrop-blur-[10px]"
         onClick={handleClose}
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="relative w-full max-w-[1000px] max-h-[90vh] bg-white rounded-[20px] shadow-2xl flex flex-col overflow-hidden"
-          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden"
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
-            <h2 className="text-[15px] font-bold text-slate-800">
-              {currentImage.title || 'ເບິ່ງຮູບພາບ'}
-            </h2>
-            <button
-              onClick={handleClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-              title="ປິດ (Esc)"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          {/* Close Button */}
+          <button
+            onClick={handleClose}
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 w-12 h-12 flex items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white hover:bg-white/20 transition-all z-50 backdrop-blur-sm pointer-events-auto"
+            title="ປິດ (Esc)"
+          >
+            <X className="w-6 h-6" />
+          </button>
 
-          {/* Body */}
-          <div className="relative flex-1 flex flex-col bg-white overflow-hidden min-h-[300px]">
-            {/* Image Viewer Area */}
-            <div 
-              ref={containerRef}
-              className="relative flex-1 flex items-center justify-center p-6 overflow-hidden touch-none select-none"
-              onWheel={handleWheel}
-            >
+          {/* Image Viewer Area */}
+          <div 
+            ref={containerRef}
+            className="relative flex-1 w-full flex items-center justify-center p-6 overflow-hidden touch-none select-none"
+            onWheel={handleWheel}
+          >
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentIndex + '-' + retryKey}
@@ -178,12 +191,12 @@ export function ImageGalleryModal({ images, initialIndex = 0, isOpen, onClose }:
                 >
                   {/* Error State */}
                   {hasError && (
-                    <div className="flex flex-col items-center justify-center text-slate-400">
-                      <ImageOff className="w-10 h-10 mb-3 text-slate-300" />
-                      <p className="text-sm font-medium mb-4 text-slate-500">ບໍ່ສາມາດໂຫຼດຮູບພາບໄດ້</p>
+                    <div className="flex flex-col items-center justify-center text-white/50">
+                      <ImageOff className="w-12 h-12 mb-4 text-white/40" />
+                      <p className="text-sm font-medium mb-5 text-white/60">ບໍ່ສາມາດໂຫຼດຮູບພາບໄດ້</p>
                       <button
                         onClick={handleRetry}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition-colors"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-semibold transition-all backdrop-blur-md"
                       >
                         <RefreshCw className="w-4 h-4" />
                         ລອງໃໝ່
@@ -193,8 +206,8 @@ export function ImageGalleryModal({ images, initialIndex = 0, isOpen, onClose }:
 
                   {/* Loading State */}
                   {!hasError && isLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                      <div className="w-8 h-8 border-3 border-slate-200 border-t-teal-500 rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center z-10">
+                      <div className="w-10 h-10 border-3 border-white/20 border-t-white rounded-full animate-spin"></div>
                     </div>
                   )}
 
@@ -211,12 +224,18 @@ export function ImageGalleryModal({ images, initialIndex = 0, isOpen, onClose }:
                       animate={{ scale: scale, x: pan.x, y: pan.y }}
                       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                       onDoubleClick={toggleZoom}
-                      drag={scale > 1}
-                      dragConstraints={containerRef}
-                      dragElastic={0.1}
+                      drag={scale > 1 ? true : 'y'}
+                      dragConstraints={scale > 1 ? containerRef : { top: 0, bottom: 0 }}
+                      dragElastic={0.5}
                       onDragStart={() => setIsDragging(true)}
-                      onDragEnd={() => setTimeout(() => setIsDragging(false), 50)}
-                      className={`max-w-full max-h-full object-contain will-change-transform ${
+                      onDragEnd={(e, info) => {
+                        setTimeout(() => setIsDragging(false), 50);
+                        if (scale === 1 && Math.abs(info.offset.y) > 100) {
+                          handleClose();
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`w-auto h-auto max-w-[92vw] sm:max-w-[88vw] max-h-[88vh] object-contain rounded-[18px] shadow-[0_8px_40px_rgba(0,0,0,0.4)] will-change-transform ${
                         scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'
                       } ${isLoading ? 'opacity-0' : 'opacity-100 transition-opacity duration-300'}`}
                     />
@@ -229,72 +248,38 @@ export function ImageGalleryModal({ images, initialIndex = 0, isOpen, onClose }:
                 <>
                   <button
                     onClick={handlePrev}
-                    disabled={currentIndex === 0}
-                    className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-600 rounded-full flex items-center justify-center transition-all shadow-sm disabled:opacity-0 disabled:pointer-events-none z-20"
+                    disabled={safeIndex === 0}
+                    className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-md shadow-lg disabled:opacity-0 disabled:pointer-events-none z-20"
                   >
-                    <ChevronLeft className="w-5 h-5" />
+                    <ChevronLeft className="w-6 h-6" />
                   </button>
                   <button
                     onClick={handleNext}
-                    disabled={currentIndex === images.length - 1}
-                    className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-600 rounded-full flex items-center justify-center transition-all shadow-sm disabled:opacity-0 disabled:pointer-events-none z-20"
+                    disabled={safeIndex === images.length - 1}
+                    className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-md shadow-lg disabled:opacity-0 disabled:pointer-events-none z-20"
                   >
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-6 h-6" />
                   </button>
                 </>
               )}
             </div>
 
-            {/* Subtle Zoom Controls Toolbar (Only visible when image is loaded and not error) */}
-            {!hasError && !isLoading && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-full p-1 z-20 pointer-events-auto">
-                <button
-                  onClick={zoomOut}
-                  disabled={scale <= 1}
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-                  title="ຫຍໍ້ເຂົ້າ"
-                >
-                  <ZoomOut className="w-4 h-4" />
-                </button>
-                <span className="text-[11px] font-semibold text-slate-500 w-10 text-center select-none pointer-events-none">
-                  {Math.round(scale * 100)}%
-                </span>
-                <button
-                  onClick={zoomIn}
-                  disabled={scale >= 3}
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-                  title="ຂະຫຍາຍອອກ"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </button>
-                <div className="w-px h-4 bg-slate-200 mx-0.5"></div>
-                <button
-                  onClick={resetZoom}
-                  disabled={scale === 1}
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-                  title="ຂະໜາດເດີມ"
-                >
-                  <Maximize className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
 
           {/* Thumbnails Footer (Optional, only if multiple) */}
           {images.length > 1 && (
-            <div className="border-t border-slate-100 bg-slate-50/50 p-3 shrink-0">
-              <div className="flex items-center justify-center gap-2 overflow-x-auto scrollbar-hide">
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex justify-center items-end pointer-events-none z-10 h-32">
+              <div className="flex items-center justify-center gap-2 overflow-x-auto scrollbar-hide pointer-events-auto pb-2 px-4 max-w-full">
                 {images.map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleChangeImage(idx)}
-                    className={`relative w-12 h-12 rounded-lg overflow-hidden shrink-0 transition-all border-2 ${
-                      idx === currentIndex 
-                        ? 'border-teal-500 shadow-sm opacity-100' 
-                        : 'border-transparent opacity-60 hover:opacity-100 hover:border-slate-300'
+                    className={`relative w-14 h-14 rounded-xl overflow-hidden shrink-0 transition-all border-2 ${
+                      idx === safeIndex 
+                        ? 'border-white shadow-[0_0_10px_rgba(255,255,255,0.5)] opacity-100 scale-110 mx-1' 
+                        : 'border-transparent opacity-50 hover:opacity-100 hover:scale-105'
                     }`}
                   >
-                    <img src={img.url} alt="Thumbnail" className="w-full h-full object-cover bg-white" />
+                    <img src={img.url} alt="Thumbnail" className="w-full h-full object-cover bg-black/20" />
                   </button>
                 ))}
               </div>

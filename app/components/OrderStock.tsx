@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/app/lib/supabase';
+import { uploadImageDirect } from '@/app/lib/uploadImage';
+import { ImageGalleryModal } from './ImageGalleryModal';
 import Swal from 'sweetalert2';
 import {
     PlusIcon, PencilIcon, TrashIcon,
@@ -27,6 +29,7 @@ interface StockItem {
     imageUrl: string;
     notes: string;
     createdAt?: { seconds: number };
+    status?: 'Ordering' | 'InStock';
 }
 
 // ── Animation variants ────────────────────────────────────────────────
@@ -107,6 +110,7 @@ export default function OrderStock() {
     const [costPrice, setCostPrice] = useState('');
     const [sellingPrice, setSellingPrice] = useState('');
     const [notes, setNotes] = useState('');
+    const [status, setStatus] = useState<'Ordering' | 'InStock'>('InStock');
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState('');
     const [imageSizeOption, setImageSizeOption] = useState<'small' | 'medium' | 'large'>('medium');
@@ -144,6 +148,17 @@ export default function OrderStock() {
             if (data && !error) {
                 const arr = data.map((d: any) => {
                     const createdAtVal = d.created_at ? new Date(d.created_at).getTime() : (d.created_at_client || Date.now());
+                    
+                    let rawNotes = d.notes || '';
+                    let status: 'Ordering' | 'InStock' = 'InStock';
+                    if (rawNotes.startsWith('#ORDERING#')) {
+                        status = 'Ordering';
+                        rawNotes = rawNotes.replace('#ORDERING#', '').trim();
+                    } else if (rawNotes.startsWith('#INSTOCK#')) {
+                        status = 'InStock';
+                        rawNotes = rawNotes.replace('#INSTOCK#', '').trim();
+                    }
+
                     return {
                         id: d.id,
                         itemName: d.itemName || d.item_name || '',
@@ -151,7 +166,8 @@ export default function OrderStock() {
                         costPrice: typeof d.costPrice === 'number' ? d.costPrice : (d.cost_price || 0),
                         sellingPrice: typeof d.sellingPrice === 'number' ? d.sellingPrice : (d.selling_price || 0),
                         imageUrl: d.imageUrl || d.image_url || '',
-                        notes: d.notes || '',
+                        notes: rawNotes,
+                        status: status,
                         __createdAtVal: createdAtVal,
                     } as StockItem & { __createdAtVal: number };
                 });
@@ -215,61 +231,14 @@ export default function OrderStock() {
 
     // ── Upload to Cloudinary via API route ─────────────────────────────
     const uploadImage = async (file: File): Promise<string> => {
-        const compressImage = (file: File, maxWidth = 1200): Promise<File> => {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (event) => {
-                    const img = new window.Image();
-                    img.src = event.target?.result as string;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > maxWidth) {
-                            height = Math.round((height * maxWidth) / width);
-                            width = maxWidth;
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        if (!ctx) return resolve(file);
-
-                        ctx.drawImage(img, 0, 0, width, height);
-                        canvas.toBlob(
-                            (blob) => {
-                                if (!blob) return resolve(file);
-                                resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }));
-                            },
-                            'image/jpeg',
-                            0.8
-                        );
-                    };
-                    img.onerror = () => resolve(file);
-                };
-                reader.onerror = () => resolve(file);
-            });
-        };
-
-        const compressedFile = await compressImage(file);
-        const formData = new FormData();
-        formData.append('file', compressedFile);
-        const sizeMap: Record<string, number> = { small: 400, medium: 800, large: 1400 };
-        formData.append('width', String(sizeMap[imageSizeOption]));
-
         setUploadProgress(10);
-        const response = await fetch('/api/upload', { method: 'POST', body: formData });
-        setUploadProgress(80);
-
-        const data = await response.json();
-        const url = data?.secure_url ?? data?.url;
-        if (!response.ok || !url) {
-            throw new Error(typeof data?.error === 'string' ? data.error : 'ອັບໂຫຼດຮູບບໍ່ສຳເລັດ');
+        try {
+            const url = await uploadImageDirect(file);
+            setUploadProgress(100);
+            return url;
+        } catch (error: any) {
+            throw new Error(error.message || 'ອັບໂຫຼດຮູບບໍ່ສຳເລັດ');
         }
-        setUploadProgress(100);
-        return url;
     };
 
     // ── Submit form ─────────────────────────────────────────────────────
@@ -293,7 +262,7 @@ export default function OrderStock() {
             if (editingId) {
                 const { error } = await supabase.from('stocks').update({
                     quantity: Number(quantity),
-                    notes: notes.trim(),
+                    notes: (status === 'Ordering' ? '#ORDERING# ' : '#INSTOCK# ') + notes.trim(),
                     item_name: itemName.trim(),
                     cost_price: costPrice ? Number(costPrice) : 0,
                     selling_price: Number(sellingPrice),
@@ -305,7 +274,7 @@ export default function OrderStock() {
             } else {
                 const { error } = await supabase.from('stocks').insert({
                     quantity: Number(quantity),
-                    notes: notes.trim(),
+                    notes: (status === 'Ordering' ? '#ORDERING# ' : '#INSTOCK# ') + notes.trim(),
                     item_name: itemName.trim(),
                     cost_price: costPrice ? Number(costPrice) : 0,
                     selling_price: Number(sellingPrice),
@@ -351,6 +320,7 @@ export default function OrderStock() {
         setCostPrice('');
         setSellingPrice('');
         setNotes('');
+        setStatus('InStock');
         setImageFile(null);
         setImagePreviewUrl('');
         setUploadProgress(0);
@@ -366,6 +336,7 @@ export default function OrderStock() {
         setCostPrice(item.costPrice ? item.costPrice.toString() : '');
         setSellingPrice(item.sellingPrice ? item.sellingPrice.toString() : '');
         setNotes(item.notes || '');
+        setStatus(item.status || 'InStock');
         setImageFile(null);
         setImagePreviewUrl(item.imageUrl || '');
         setIsFormExpanded(true);
@@ -373,12 +344,41 @@ export default function OrderStock() {
     };
 
     // ── Quick quantity update ───────────────────────────────────────────
-    const updateQty = async (id: string, current: number, delta: number) => {
-        const next = current + delta;
+    const updateQty = async (item: StockItem, delta: number) => {
+        const next = item.quantity + delta;
         if (next < 0) return;
-        const { error } = await supabase.from('stocks').update({ quantity: next }).eq('id', id);
-        if (!error) {
+        
+        try {
+            const { error } = await supabase.from('stocks').update({ quantity: next }).eq('id', item.id);
+            if (error) throw error;
+
+            // --- Auto Deduct from Company Wallet if increasing quantity ---
+            if (delta > 0 && item.costPrice && Number(item.costPrice) > 0) {
+                const totalCost = Number(item.costPrice) * delta;
+                const { data: compWallet } = await supabase.from('wallets').select('id').eq('type', 'W-COMP').limit(1).single();
+                if (compWallet) {
+                    await supabase.from('transactions').insert({
+                        wallet_id: compWallet.id,
+                        type: 'expense',
+                        amount: totalCost,
+                        notes: `ຕື່ມສິນຄ້າເຂົ້າສາງ: ${item.itemName.trim()} (+${delta} ອັນ)`,
+                        date: new Date().toISOString()
+                    });
+                }
+            }
+
             fetchStocks(); // update UI instantly
+        } catch (err: any) {
+            console.error('Failed to update qty:', err);
+        }
+    };
+
+    // Quick status update
+    const updateStatus = async (item: StockItem, newStatus: 'Ordering' | 'InStock') => {
+        const updatedNotes = (newStatus === 'Ordering' ? '#ORDERING# ' : '#INSTOCK# ') + (item.notes || '').trim();
+        const { error } = await supabase.from('stocks').update({ notes: updatedNotes }).eq('id', item.id);
+        if (!error) {
+            fetchStocks();
         }
     };
 
@@ -427,9 +427,17 @@ export default function OrderStock() {
     );
 
     // ── Totals ──────────────────────────────────────────────────────────
-    const totalItems = stocks.reduce((s, i) => s + i.quantity, 0);
-    const totalValue = stocks.reduce((s, i) => s + i.sellingPrice * i.quantity, 0);
-    const lowStock = stocks.filter(i => i.quantity > 0 && i.quantity <= 5).length;
+    //  Totals 
+    const stockStats = {
+        total: stocks.length,
+        totalItems: stocks.reduce((sum, item) => sum + item.quantity, 0),
+        totalValue: stocks.reduce((sum, item) => sum + item.sellingPrice * item.quantity, 0),
+        totalCost: stocks.reduce((sum, item) => sum + (item.costPrice || 0) * item.quantity, 0),
+        expectedProfit: stocks.reduce((sum, item) => sum + (item.sellingPrice - (item.costPrice || 0)) * item.quantity, 0),
+        lowStock: stocks.filter(s => s.quantity > 0 && s.quantity <= 5),
+        outOfStock: stocks.filter(s => s.quantity === 0),
+        maxQty: Math.max(...stocks.map(s => s.quantity), 1)
+    };
 
     return (
         <motion.div
@@ -473,58 +481,193 @@ export default function OrderStock() {
                         📦 {stocks.length} ລາຍການ
                     </span>
                     <span className="text-xs font-bold px-4 py-2 rounded-[16px] bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-500/20 shadow-sm">
-                        🏷 {totalItems.toLocaleString()} ຊິ້ນ
+                        🏷 {stockStats.totalItems.toLocaleString()} ຊິ້ນ
                     </span>
-                    {lowStock > 0 && (
+                    {stockStats.lowStock.length > 0 && (
                         <span className="text-xs font-bold px-4 py-2 rounded-[16px] bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200/50 dark:border-amber-500/20 shadow-sm animate-pulse">
-                            ⚠️ ໃກ້ໝົດ {lowStock} ລາຍການ
+                            ⚠️ ໃກ້ໝົດ {stockStats.lowStock.length} ລາຍການ
                         </span>
                     )}
                 </motion.div>
             </motion.div>
 
             {/* ── Preview Modal ── */}
-            <AnimatePresence>
-                {previewModalUrl && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.25 }}
-                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 backdrop-blur-[8px] p-4 sm:p-6"
-                        onClick={() => setPreviewModalUrl(null)}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.95, opacity: 0, y: 10 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 10 }}
-                            transition={{ duration: 0.25, ease: 'easeOut' }}
-                            className="relative bg-white rounded-[20px] shadow-2xl flex flex-col p-5 sm:p-6"
-                            style={{ maxWidth: '90vw', maxHeight: '85vh', width: 'auto', height: 'auto' }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {/* Close Button Top Right */}
-                            <button
-                                onClick={() => setPreviewModalUrl(null)}
-                                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors z-10"
-                                title="ປິດ"
-                            >
-                                <XMarkIcon className="w-5 h-5" />
-                            </button>
-                            
-                            {/* Image Container */}
-                            <div className="w-full h-full flex items-center justify-center bg-white">
-                                <img
-                                    src={previewModalUrl}
-                                    alt="Preview"
-                                    className="max-w-full max-h-full object-contain rounded-md select-none"
-                                    style={{ maxHeight: 'calc(85vh - 48px)', maxWidth: 'calc(90vw - 48px)' }}
-                                />
-                            </div>
-                        </motion.div>
-                    </motion.div>
+            <ImageGalleryModal
+                isOpen={!!previewModalUrl}
+                onClose={() => setPreviewModalUrl(null)}
+                images={previewModalUrl ? [{ url: previewModalUrl, title: 'ຮູບພາບສິນຄ້າ' }] : []}
+            />
+
+            {/* ── Stock Status Widget (Moved from Dashboard) ── */}
+            <div className="bg-white/70 dark:bg-slate-800/40 backdrop-blur-sm rounded-[24px] p-5 sm:p-7 border border-white/60 dark:border-white/6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3 text-lg font-bold text-slate-800 dark:text-white">
+                        <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                            </svg>
+                        </span>
+                        ສະຖານະສາງສິນຄ້າ
+                    </div>
+                </div>
+
+                {stocks.length === 0 ? (
+                    <div className="py-10 text-center">
+                        <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                            <svg viewBox="0 0 24 24" fill="none" strokeWidth={1} stroke="currentColor" className="w-7 h-7 text-slate-400">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                            </svg>
+                        </div>
+                        <p className="text-sm text-slate-400 dark:text-slate-500 font-medium">ຍັງບໍ່ມີສິນຄ້າໃນສາງ</p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                            {[
+                                {
+                                    label: 'ສິນຄ້າທັງໝົດ',
+                                    value: stockStats.total + ' ລາຍການ',
+                                    sub: stockStats.totalItems.toLocaleString() + ' ຊິ້ນ',
+                                    bg: 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
+                                    text: 'text-violet-700 dark:text-violet-300',
+                                    icon: (
+                                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                                        </svg>
+                                    ),
+                                },
+                                {
+                                    label: 'ມູນຄ່າຂາຍລວມ',
+                                    value: stockStats.totalValue.toLocaleString() + ' ₭',
+                                    sub: 'ລາຄາຂາຍ × ຈຳນວນ',
+                                    bg: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
+                                    text: 'text-emerald-700 dark:text-emerald-300',
+                                    icon: (
+                                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                                        </svg>
+                                    ),
+                                },
+                                {
+                                    label: 'ຕົ້ນທຶນລວມ (ຈົມ)',
+                                    value: stockStats.totalCost.toLocaleString() + ' ₭',
+                                    sub: 'ຕົ້ນທຶນ × ຈຳນວນ',
+                                    bg: 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20',
+                                    text: 'text-rose-700 dark:text-rose-300',
+                                    icon: (
+                                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 8.25H9m6 3H9m3 6l-3-3h1.5a3 3 0 100-6M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    ),
+                                },
+                                {
+                                    label: 'ຄາດການກຳໄລ',
+                                    value: stockStats.expectedProfit.toLocaleString() + ' ₭',
+                                    sub: 'ມູນຄ່າ - ຕົ້ນທຶນ',
+                                    bg: 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20',
+                                    text: 'text-indigo-700 dark:text-indigo-300',
+                                    icon: (
+                                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+                                        </svg>
+                                    ),
+                                },
+                                {
+                                    label: 'ໃກ້ຈະໝົດ',
+                                    value: stockStats.lowStock.length + ' ລາຍການ',
+                                    sub: '≤ 5 ຊິ້ນ',
+                                    bg: 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
+                                    text: 'text-amber-700 dark:text-amber-300',
+                                    icon: (
+                                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                        </svg>
+                                    ),
+                                },
+                                {
+                                    label: 'ໝົດສາງ',
+                                    value: stockStats.outOfStock.length + ' ລາຍການ',
+                                    sub: 'ຈຳນວນ = 0',
+                                    bg: 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+                                    text: 'text-slate-700 dark:text-slate-300',
+                                    icon: (
+                                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                        </svg>
+                                    ),
+                                },
+                            ].map((s) => (
+                                <div key={s.label} className={`rounded-xl p-4 border flex flex-col xl:flex-row xl:items-start gap-3 ${s.bg}`}>
+                                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-white/60 dark:bg-black/20 ${s.text}`}>
+                                        {s.icon}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{s.label}</p>
+                                        <p className={`text-base font-extrabold tabular-nums leading-tight ${s.text} truncate`}>{s.value}</p>
+                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">{s.sub}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                            {[...stocks]
+                                .sort((a, b) => a.quantity - b.quantity)
+                                .slice(0, 10)
+                                .map((item) => {
+                                    const pct = Math.min((item.quantity / stockStats.maxQty) * 100, 100);
+                                    const isOut = item.quantity === 0;
+                                    const isLow = item.quantity > 0 && item.quantity <= 5;
+                                    const barColor = isOut
+                                        ? 'bg-rose-500'
+                                        : isLow
+                                        ? 'bg-amber-400'
+                                        : 'bg-emerald-500';
+                                    const qtyColor = isOut
+                                        ? 'text-rose-600 dark:text-rose-400'
+                                        : isLow
+                                        ? 'text-amber-600 dark:text-amber-400'
+                                        : 'text-emerald-600 dark:text-emerald-400';
+                                    return (
+                                        <div key={item.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
+                                            <div className="w-9 h-9 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0 relative">
+                                                {item.imageUrl?.startsWith('http') ? (
+                                                    <img src={item.imageUrl} alt={item.itemName} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">📦</div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-2 mb-1">
+                                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{item.itemName}</span>
+                                                    <span className={`text-sm font-extrabold tabular-nums shrink-0 ${qtyColor}`}>
+                                                        {item.quantity.toLocaleString()} ຊິ້ນ
+                                                    </span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-slate-100 dark:bg-white/8 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                                        style={{ width: isOut ? '100%' : `${pct}%`, opacity: isOut ? 0.4 : 1 }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            {isOut ? (
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 shrink-0">ໝົດ</span>
+                                            ) : isLow ? (
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30 shrink-0 animate-pulse">ໃກ້ໝົດ</span>
+                                            ) : null}
+                                        </div>
+                                    );
+                                })}
+                            {stocks.length > 10 && (
+                                <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">
+                                    ສະແດງ 10 ລາຍການທຳອິດ (ຈາກ {stocks.length} ທັງໝົດ)
+                                </p>
+                            )}
+                        </div>
+                    </>
                 )}
-            </AnimatePresence>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
@@ -712,7 +855,12 @@ export default function OrderStock() {
                                         <input
                                             type="text"
                                             inputMode="decimal"
-                                            value={quantity ? String(quantity).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                                            value={quantity ? (() => {
+                                              const str = String(quantity);
+                                              const parts = str.split('.');
+                                              parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                              return parts.join('.');
+                                            })() : ''}
                                             onChange={e => {
                                                 const raw = e.target.value.replace(/,/g, '');
                                                 if (/^-?\d*\.?\d*$/.test(raw)) setQuantity(raw);
@@ -727,7 +875,12 @@ export default function OrderStock() {
                                         <input
                                             type="text"
                                             inputMode="decimal"
-                                            value={costPrice ? String(costPrice).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                                            value={costPrice ? (() => {
+                                              const str = String(costPrice);
+                                              const parts = str.split('.');
+                                              parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                              return parts.join('.');
+                                            })() : ''}
                                             onChange={e => {
                                                 const raw = e.target.value.replace(/,/g, '');
                                                 if (/^-?\d*\.?\d*$/.test(raw)) setCostPrice(raw);
@@ -747,7 +900,12 @@ export default function OrderStock() {
                                     <input
                                         type="text"
                                         inputMode="decimal"
-                                        value={sellingPrice ? String(sellingPrice).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                                        value={sellingPrice ? (() => {
+                                          const str = String(sellingPrice);
+                                          const parts = str.split('.');
+                                          parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                          return parts.join('.');
+                                        })() : ''}
                                         onChange={e => {
                                             const raw = e.target.value.replace(/,/g, '');
                                             if (/^-?\d*\.?\d*$/.test(raw)) setSellingPrice(raw);
@@ -769,6 +927,20 @@ export default function OrderStock() {
                                         className={inputCls}
                                         disabled={loading}
                                     />
+                                </div>
+
+                                {/* Status */}
+                                <div>
+                                    <label className={labelCls}>ສະຖານະ</label>
+                                    <select
+                                        value={status}
+                                        onChange={e => setStatus(e.target.value as 'Ordering' | 'InStock')}
+                                        className={inputCls}
+                                        disabled={loading}
+                                    >
+                                        <option value="InStock">ເຄື່ອງເຂົ້າແລ້ວ</option>
+                                        <option value="Ordering">ກຳລັງສັ່ງເຄື່ອງ</option>
+                                    </select>
                                 </div>
 
                                 {/* Message */}
@@ -890,8 +1062,8 @@ export default function OrderStock() {
                         className="grid grid-cols-3 gap-3 mb-6"
                     >
                         <StatCard icon={ShoppingBagIcon} label="ທັງໝົດ" value={`${stocks.length} ລາຍການ`} color="teal" />
-                        <StatCard icon={CubeIcon} label="ຈຳນວນລວມ" value={`${totalItems.toLocaleString()} ຊິ້ນ`} color="emerald" />
-                        <StatCard icon={CurrencyDollarIcon} label="ມູນຄ່າສາງ" value={`${totalValue.toLocaleString()} ກີບ`} color="indigo" />
+                        <StatCard icon={CubeIcon} label="ຈຳນວນລວມ" value={`${stockStats.totalItems.toLocaleString()} ຊິ້ນ`} color="emerald" />
+                        <StatCard icon={CurrencyDollarIcon} label="ມູນຄ່າສາງ" value={`${stockStats.totalValue.toLocaleString()} ກີບ`} color="indigo" />
                     </motion.div>
 
                     {/* Table */}
@@ -930,8 +1102,10 @@ export default function OrderStock() {
                                         <th className="pb-4 px-2">ຮູບ</th>
                                         <th className="pb-4 px-2">ຊື່ສິນຄ້າ</th>
                                         <th className="pb-4 px-2 text-center">ຈຳນວນ</th>
+                                        <th className="pb-4 px-2 text-center">ສະຖານະ</th>
                                         <th className="pb-4 px-2">ລາຄາຂາຍ</th>
                                         <th className="pb-4 px-2 hidden md:table-cell">ທຶນ</th>
+                                        <th className="pb-4 px-2">ກຳໄລ</th>
                                         <th className="pb-4 px-2 hidden lg:table-cell">ໝາຍເຫດ</th>
                                         <th className="pb-4 px-2 text-center">ຈັດການ</th>
                                     </tr>
@@ -995,7 +1169,7 @@ export default function OrderStock() {
                                                             <motion.button
                                                                 whileHover={{ scale: 1.1 }}
                                                                 whileTap={{ scale: 0.9 }}
-                                                                onClick={() => updateQty(item.id, item.quantity, -1)}
+                                                                onClick={() => updateQty(item, -1)}
                                                                 className={`${iconBtn} bg-slate-100 dark:bg-white/6 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400`}
                                                             >
                                                                 <MinusIcon className="w-3.5 h-3.5" />
@@ -1006,12 +1180,25 @@ export default function OrderStock() {
                                                             <motion.button
                                                                 whileHover={{ scale: 1.1 }}
                                                                 whileTap={{ scale: 0.9 }}
-                                                                onClick={() => updateQty(item.id, item.quantity, 1)}
+                                                                onClick={() => updateQty(item, 1)}
                                                                 className={`${iconBtn} bg-slate-100 dark:bg-white/6 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400`}
                                                             >
                                                                 <PlusIconSmall className="w-3.5 h-3.5" />
                                                             </motion.button>
                                                         </div>
+                                                    </td>
+
+                                                    {/* Status */}
+                                                    <td className="py-3 px-2 text-center">
+                                                        <select
+                                                            value={item.status || 'InStock'}
+                                                            onChange={(e) => updateStatus(item, e.target.value as 'Ordering' | 'InStock')}
+                                                            className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap outline-none cursor-pointer appearance-none text-center ${item.status === 'Ordering' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-none' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border-none'}`}
+                                                            style={{ textAlignLast: 'center' }}
+                                                        >
+                                                            <option value="InStock" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">ເຄື່ອງເຂົ້າແລ້ວ</option>
+                                                            <option value="Ordering" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">ກຳລັງສັ່ງເຄື່ອງ</option>
+                                                        </select>
                                                     </td>
 
                                                     {/* Selling price */}
@@ -1026,6 +1213,20 @@ export default function OrderStock() {
                                                         <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
                                                             {item.costPrice ? item.costPrice.toLocaleString() : '—'}
                                                         </span>
+                                                    </td>
+
+                                                    {/* Profit */}
+                                                    <td className="py-3 px-2">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                                                {item.costPrice && item.sellingPrice ? ((item.sellingPrice - item.costPrice) * item.quantity).toLocaleString() : '—'}
+                                                            </span>
+                                                            {item.costPrice && item.sellingPrice ? (
+                                                                <span className="text-[10px] font-semibold text-amber-500 dark:text-amber-400 tabular-nums mt-0.5">
+                                                                    ({(item.sellingPrice - item.costPrice).toLocaleString()}/ຊິ້ນ)
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
                                                     </td>
 
                                                     {/* Notes */}
@@ -1070,7 +1271,7 @@ export default function OrderStock() {
 
                     {/* Low-stock warning */}
                     <AnimatePresence>
-                        {lowStock > 0 && (
+                        {stockStats.lowStock.length > 0 && (
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -1081,7 +1282,7 @@ export default function OrderStock() {
                                     <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                                 </div>
                                 <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                                    ມີ <strong className="font-bold">{lowStock} ລາຍການ</strong> ທີ່ຈຳນວນສາງໃກ້ຈະໝົດ (≤5 ຊິ້ນ) ກະລຸນາຕື່ມສາງ
+                                    ມີ <strong className="font-bold">{stockStats.lowStock.length} ລາຍການ</strong> ທີ່ຈຳນວນສາງໃກ້ຈະໝົດ (≤5 ຊິ້ນ) ກະລຸນາຕື່ມສາງ
                                 </p>
                             </motion.div>
                         )}

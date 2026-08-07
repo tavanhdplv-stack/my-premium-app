@@ -30,6 +30,7 @@ export default function OrderNotes() {
       const { data, error } = await supabase
         .from('notes')
         .select('*')
+        .neq('title', '___SYSTEM_SETTINGS___')
         .order('created_at', { ascending: false });
       
       if (!error && data) {
@@ -249,7 +250,7 @@ export default function OrderNotes() {
                     </p>
                   </div>
                   
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <div className="flex items-center gap-0.5 transition-opacity duration-200">
                     <button 
                       onClick={() => openEditModal(note)} 
                       className="p-2 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-xl transition-all duration-200"

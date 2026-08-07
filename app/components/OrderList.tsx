@@ -40,7 +40,7 @@ import { ImageGalleryModal, GalleryImage } from './ImageGalleryModal';
 // STATUS META (9 statuses)
 // ═══════════════════════════════════════════════════════════════════════
 export const STATUS_META = [
-  { value: 'ຮັບອໍເດີແລ້ວ',            chip: 'bg-teal-50 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300',         dot: 'bg-teal-500'    },
+  { value: 'ຮັບອໍເດີແລ້ວ',            chip: 'bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',         dot: 'bg-blue-500'    },
   { value: 'ສົ່ງບິນແລ້ວ',              chip: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300',          dot: 'bg-cyan-500'    },
   { value: 'ກວດສອບແລ້ວ',               chip: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300', dot: 'bg-emerald-500' },
   { value: 'ໂອນມັດຈຳແລ້ວ',            chip: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',   dot: 'bg-yellow-500'  },
@@ -227,7 +227,7 @@ export function StatusBadge({ status, onClick, loading }: { status: string; onCl
 // ═══════════════════════════════════════════════════════════════════════
 // STATUS MODAL (ปรับดีไซน์)
 // ═══════════════════════════════════════════════════════════════════════
-export function StatusModal({ current, onSelect, onClose }: { current: string; onSelect: (s: string) => void; onClose: () => void; }) {
+export function StatusModal({ current, onSelect, onClose, includeAll }: { current: string; onSelect: (s: string) => void; onClose: () => void; includeAll?: boolean }) {
   return (
     <BaseModal
       isOpen={true}
@@ -238,6 +238,20 @@ export function StatusModal({ current, onSelect, onClose }: { current: string; o
       bodyClassName="p-5"
     >
       <div className="space-y-1.5">
+        {includeAll && (
+          <button
+            onClick={() => onSelect('all')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-[18px] text-sm font-semibold transition-all ${
+              current === 'all'
+                ? 'bg-teal-50 dark:bg-teal-500/15 text-teal-700 dark:text-teal-300 shadow-inner'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-slate-400" />
+            ທຸກສະຖານະ
+            {current === 'all' && <CheckIcon className="ml-auto w-4 h-4 text-teal-500" />}
+          </button>
+        )}
         {STATUS_META.map(s => (
           <button
             key={s.value}
@@ -625,40 +639,17 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
 function AlertBadge({ order, now, onQuickCheck }: { order: Order; now: number; onQuickCheck: () => void }) {
   const updatedAt = tsToDate(order.status_updated_at) || tsToDate(order.created_at);
 
-  if (order.status === 'ສົ່ງບິນແລ້ວ' && updatedAt) {
-    const hrs = (now - updatedAt.getTime()) / 3600000;
-    if (hrs > 24) {
-      return (
-        <div className="flex items-center gap-1.5 mt-1">
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-500/30 animate-pulse">
-            <ExclamationTriangleIcon className="w-3 h-3" /> ເກີນ 24 ຊມ!
-          </span>
-          <button
-            onClick={onQuickCheck}
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/30 transition-colors border border-emerald-200/60 dark:border-emerald-500/30"
-          >
-            ກວດສອບ ✓
-          </button>
-        </div>
-      );
-    } else {
-      const remaining = 24 - hrs;
-      const hh = Math.floor(remaining);
-      const mm = Math.floor((remaining % 1) * 60);
-      return (
-        <div className="flex items-center gap-1.5 mt-1">
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-200/60 dark:border-yellow-500/30">
-            <ClockIcon className="w-3 h-3" /> {hh}ຊ {mm}ນ
-          </span>
-          <button
-            onClick={onQuickCheck}
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors border border-emerald-200/60 dark:border-emerald-500/30"
-          >
-            ກວດສອບ ✓
-          </button>
-        </div>
-      );
-    }
+  if (order.status === 'ສົ່ງບິນແລ້ວ') {
+    return (
+      <div className="flex items-center mt-1">
+        <button
+          onClick={onQuickCheck}
+          className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-500/30 hover:bg-rose-100 dark:hover:bg-rose-500/30 hover:scale-105 active:scale-95 transition-all animate-pulse cursor-pointer shadow-sm"
+        >
+          <ExclamationTriangleIcon className="w-3 h-3" /> ແຈ້ງລູກຄ້າມາຮັບເຄື່ອງ!
+        </button>
+      </div>
+    );
   }
 
   if (order.status === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' && updatedAt) {
@@ -681,20 +672,33 @@ function AlertBadge({ order, now, onQuickCheck }: { order: Order; now: number; o
 // ═══════════════════════════════════════════════════════════════════════
 export function InlineCostInput({ orderId, value, onSave }: { orderId: string; value: number; onSave: (id: string, val: number) => void }) {
   const [editing, setEditing] = useState(false);
+  
+  const formatInput = (val: string | number): string => {
+    if (val === '' || val === null || val === undefined) return '';
+    const str = String(val);
+    if (str === '-') return '-';
+    const parts = str.split('.');
+    const intPart = parts[0];
+    const decPart = parts.length > 1 ? '.' + parts[1] : '';
+    let formattedInt = intPart;
+    if (/^-?\d+$/.test(intPart)) {
+      formattedInt = BigInt(intPart).toLocaleString('en-US');
+    }
+    return formattedInt + decPart;
+  };
+
   const [local, setLocal] = React.useState(() => {
-    const s = fmtNum(value);
-    return s === '' ? '' : s;
+    return value === 0 ? '' : formatInput(value);
   });
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
-  useEffect(() => { if (!editing) setLocal(value === 0 ? '' : fmtNum(value)); }, [value, editing]);
+  useEffect(() => { if (!editing) setLocal(value === 0 ? '' : formatInput(value)); }, [value, editing]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/,/g, '');
     if (raw === '' || /^-?\d*\.?\d*$/.test(raw)) {
-      const num = Number(raw);
-      setLocal(raw === '' ? '' : isNaN(num) ? local : num.toLocaleString('en-US'));
+      setLocal(formatInput(raw));
     }
   };
 
@@ -709,11 +713,11 @@ export function InlineCostInput({ orderId, value, onSave }: { orderId: string; v
       <input
         ref={inputRef}
         type="text"
-        inputMode="numeric"
+        inputMode="decimal"
         value={local}
         onChange={handleChange}
         onBlur={handleBlur}
-        onKeyDown={e => { if (e.key === 'Enter') handleBlur(); if (e.key === 'Escape') { setEditing(false); setLocal(fmtNum(value)); } }}
+        onKeyDown={e => { if (e.key === 'Enter') handleBlur(); if (e.key === 'Escape') { setEditing(false); setLocal(formatInput(value)); } }}
         className="w-28 h-8 text-xs text-right px-3 bg-white dark:bg-slate-800 border-2 border-teal-400 rounded-[14px] outline-none tabular-nums font-bold text-slate-800 dark:text-white shadow-[0_0_0_4px_rgba(20,184,166,0.12)]"
       />
     );
@@ -733,7 +737,7 @@ export function InlineCostInput({ orderId, value, onSave }: { orderId: string; v
 // ═══════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
-export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => void; onAdd?: () => void; }) {
+export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch }: { onEdit?: (id: string) => void; onAdd?: () => void; initialFilter?: { filter: string; ts: number }; initialSearch?: { query: string; ts: number } }) {
   const now = useNow();
 
   // ── Data ─────────────────────────────────────────────────────────────
@@ -745,10 +749,18 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
 
   // ── Filters ───────────────────────────────────────────────────────────
   const [search,       setSearch]       = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(initialFilter?.filter || 'all');
   const [dateFilter,   setDateFilter]   = useState<'all' | 'this' | 'prev' | 'custom'>('all');
   const [customMonth,  setCustomMonth]  = useState('');
   const [theme,        setTheme]        = useState<string>('default');
+
+  useEffect(() => {
+    if (initialFilter?.filter) setStatusFilter(initialFilter.filter);
+  }, [initialFilter]);
+
+  useEffect(() => {
+    if (initialSearch?.query) setSearch(initialSearch.query);
+  }, [initialSearch]);
 
   // ── UI state ──────────────────────────────────────────────────────────
   const isInitialLoad = useRef(true);
@@ -765,8 +777,25 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
       const updateData: any = { items: newItems };
       
       let newMainStatus = order.status;
+      
+      const allItemsOrdered = newItems.every((item: any) => 
+        item.status && item.status !== 'ຮັບອໍເດີແລ້ວ' && item.status !== 'ຍົກເລີກອໍເດີ'
+      );
+      const noItemsOrdered = newItems.every((item: any) => 
+        !item.status || item.status === 'ຮັບອໍເດີແລ້ວ'
+      );
+
+      // If all items share the exact same status, use that.
       if (newItems.length > 0 && newItems.every((item: any) => item.status === newStatus)) {
         newMainStatus = newStatus;
+      } 
+      // Otherwise, if they are a mix but all are ordered/beyond, and the main is still pending, move it forward
+      else if (allItemsOrdered && order.status === 'ຮັບອໍເດີແລ້ວ') {
+        newMainStatus = 'ສັ່ງເຄື່ອງແລ້ວ';
+      }
+      // If none are ordered (all reverted), and main is not pending, revert it
+      else if (noItemsOrdered && order.status !== 'ຮັບອໍເດີແລ້ວ' && order.status !== 'ຍົກເລີກອໍເດີ') {
+        newMainStatus = 'ຮັບອໍເດີແລ້ວ';
       }
 
       if (newMainStatus !== order.status) {
@@ -776,6 +805,11 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
 
       // Optimistic Update
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, items: newItems, status: newMainStatus } : o));
+      
+      // Dispatch immediately
+      window.dispatchEvent(new CustomEvent('local_order_updated', { 
+        detail: { type: 'status_update', oldStatus: order.status, newStatus: newMainStatus } 
+      }));
 
       if (newStatus === 'ຍົກເລີກອໍເດີ' && oldStatus !== 'ຍົກເລີກອໍເດີ') {
         const result = await Swal.fire({
@@ -807,6 +841,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
       }
       
       await supabase.from('orders').update(updateData).eq('id', orderId);
+      setToast({ msg: 'ອັບເດດສະຖານະສິນຄ້າສຳເລັດ', type: 'success' });
     } catch (err) {
       if (process.env.NODE_ENV !== 'production') console.error(err);
       setToast({ msg: '❌ ບໍ່ສາມາດອັບເດດສະຖານະສິນຄ້າໄດ້', type: 'error' });
@@ -815,6 +850,8 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
 
   const [toast,       setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [statusModal, setStatusModal] = useState<string | null>(null);
+  const [itemStatusModal, setItemStatusModal] = useState<{ orderId: string, itemIndex: number } | null>(null);
+  const [filterStatusModal, setFilterStatusModal] = useState(false);
   const [billModal,   setBillModal]   = useState<Order | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
@@ -826,6 +863,12 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [shopName,    setShopName]    = useState('');
   const [shopPhone,   setShopPhone]   = useState('');
+  const [visibleCount, setVisibleCount] = useState(20);
+
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [search, statusFilter, dateFilter, customMonth]);
+
 
   // ── Load localStorage ─────────────────────────────────────────────────
   useEffect(() => {
@@ -979,6 +1022,12 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
 
     // Optimistic Update for Real-Time feel
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus, items: updatedItems } : o));
+    
+    // Dispatch immediately for global pill real-time feel
+    window.dispatchEvent(new CustomEvent('local_order_updated', { 
+      detail: { type: 'status_update', oldStatus: order.status, newStatus: newStatus } 
+    }));
+
     try {
       await supabase.from('orders').update({
         status: newStatus,
@@ -1028,8 +1077,35 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
         items: updatedItems,
       };
 
+      // Auto-update specific item status
+      // We only auto-update to 'ສັ່ງເຄື່ອງແລ້ວ' if they put a cost and it was previously pending.
+      // We only revert to 'ຮັບອໍເດີແລ້ວ' if they remove the cost AND it was specifically 'ສັ່ງເຄື່ອງແລ້ວ'.
+      if (newCostPerUnit > 0 && (!updatedItems[itemIndex].status || updatedItems[itemIndex].status === 'ຮັບອໍເດີແລ້ວ')) {
+        updatedItems[itemIndex].status = 'ສັ່ງເຄື່ອງແລ້ວ';
+      } else if (newCostPerUnit <= 0 && updatedItems[itemIndex].status === 'ສັ່ງເຄື່ອງແລ້ວ') {
+        updatedItems[itemIndex].status = 'ຮັບອໍເດີແລ້ວ';
+      }
+
+      // Check if all items are ordered (either by having a cost, or manually set)
+      const allItemsOrdered = updatedItems.every(it => 
+        it.status && it.status !== 'ຮັບອໍເດີແລ້ວ' && it.status !== 'ຍົກເລີກອໍເດີ'
+      );
+      
+      const noItemsOrdered = updatedItems.every(it => 
+        !it.status || it.status === 'ຮັບອໍເດີແລ້ວ'
+      );
+
+      if (allItemsOrdered && order.status === 'ຮັບອໍເດີແລ້ວ') {
+        updates.status = 'ສັ່ງເຄື່ອງແລ້ວ';
+        updates.status_updated_at = new Date().toISOString();
+      } else if (noItemsOrdered && order.status !== 'ຮັບອໍເດີແລ້ວ' && order.status !== 'ຍົກເລີກອໍເດີ') {
+        updates.status = 'ຮັບອໍເດີແລ້ວ';
+        updates.status_updated_at = new Date().toISOString();
+      }
+
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
       await supabase.from('orders').update(updates).eq('id', orderId);
+      window.dispatchEvent(new Event('local_order_updated'));
       setToast({ msg: 'ບັນທຶກຕ້ນທຶນແລ້ວ', type: 'success' });
     } catch {
       setToast({ msg: 'ບໍ່ສາມາຖບັນທຶກຕ້ນທຶນໄດ້', type: 'error' });
@@ -1046,7 +1122,15 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
     const id = deleteConfirmId;
     setDeleteConfirmId(null);
     // Optimistic removal — instant UI feedback
+    const orderToDelete = orders.find(o => o.id === id);
     setOrders(prev => prev.filter(o => o.id !== id));
+    
+    if (orderToDelete) {
+      window.dispatchEvent(new CustomEvent('local_order_updated', { 
+        detail: { type: 'delete_order', status: orderToDelete.status } 
+      }));
+    }
+
     try {
       const { error } = await supabase.from('orders').delete().eq('id', id);
       if (error) {
@@ -1085,11 +1169,29 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
         }]);
       }
 
+      let maxTime = Date.now();
+      orders.forEach(o => {
+        if (o.status === 'ຍົກເລີກອໍເດີ') return;
+        const maxCostTimeStr = o.items?.reduce((max: string, i: any) => (i._cost_updated_at && i._cost_updated_at > max) ? i._cost_updated_at : max, '');
+        const costTimeStr = maxCostTimeStr || o.cost_updated_at;
+        const costTime = tsToDate(costTimeStr);
+        const createTime = tsToDate(o.created_at);
+        const d = costTime || createTime;
+        if (d && d.getTime() > maxTime) {
+          maxTime = d.getTime();
+        }
+      });
+      // Add 1 second to the max time to ensure it clears everything
+      const nowStr = new Date(maxTime + 1000).toISOString();
+
       await supabase.from('settings').upsert({
         id: 'costCounter',
-        last_reset: new Date().toISOString(),
+        last_reset: nowStr,
         last_reset_by: personName,
       });
+
+      setLastReset(new Date(nowStr));
+      setLastResetBy(personName);
 
       setShowReset(false);
       setToast({
@@ -1102,6 +1204,8 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
   }, [orders, lastReset]);
 
   const themeConfig = THEMES[theme] || THEMES.default;
+
+  const pendingNotifyCount = orders.filter(o => o.status === 'ສົ່ງບິນແລ້ວ').length;
 
   // ═══════════════════════════════════════════════════════════════════
   // RENDER
@@ -1118,15 +1222,39 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
         {toast && <Toast key="toast-notification" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       </AnimatePresence>
 
-      {/* Modals */}
+      {/* Modals & Portals */}
       {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {statusModal && (
+        <>
+          <AnimatePresence>
+            {statusModal && (
+              <StatusModal
+                key="status-modal"
+                current={orders.find(o => o.id === statusModal)?.status || ''}
+                onSelect={s => updateStatus(statusModal, s)}
+                onClose={() => setStatusModal(null)}
+              />
+            )}
+            {itemStatusModal && (
+              <StatusModal
+                key="item-status-modal"
+                current={orders.find(o => o.id === itemStatusModal.orderId)?.items?.[itemStatusModal.itemIndex]?.status || ''}
+                onSelect={s => {
+                updateItemStatus(itemStatusModal.orderId, itemStatusModal.itemIndex, s);
+                setItemStatusModal(null);
+              }}
+              onClose={() => setItemStatusModal(null)}
+            />
+          )}
+          {filterStatusModal && (
             <StatusModal
-              key="status-modal"
-              current={orders.find(o => o.id === statusModal)?.status || ''}
-              onSelect={s => updateStatus(statusModal, s)}
-              onClose={() => setStatusModal(null)}
+              key="filter-status-modal"
+              current={statusFilter}
+              onSelect={s => {
+                setStatusFilter(s);
+                setFilterStatusModal(false);
+              }}
+              onClose={() => setFilterStatusModal(false)}
+              includeAll
             />
           )}
           {billModal && <BillModal key="bill-modal" order={billModal} shopName={shopName} shopPhone={shopPhone} onClose={() => setBillModal(null)} />}
@@ -1141,7 +1269,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
         {showReset && <ResetModal key="reset-modal" wallets={wallets} onConfirm={handleReset} onClose={() => setShowReset(false)} />}
         {showHistory && <HistoryModal key="history-modal" orders={orders} lastReset={lastReset} onClose={() => setShowHistory(false)} />}
       </AnimatePresence>
-      , document.body)}
+      </>, document.body)}
 
       {/* ── STATS SECTION ── */}
       <div className="mb-6 flex flex-col gap-4">
@@ -1249,17 +1377,16 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             
             {/* Status */}
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className="h-10 sm:h-11 pl-3 sm:pl-4 pr-8 sm:pr-9 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl text-xs sm:text-sm font-semibold appearance-none outline-none focus:border-indigo-400 text-slate-700 dark:text-slate-200 cursor-pointer"
-              >
-                <option value="all">ທຸກສະຖານະ</option>
-                {STATUS_META.map(s => <option key={s.value} value={s.value}>{s.value}</option>)}
-              </select>
-              <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-            </div>
+            <button
+              onClick={() => setFilterStatusModal(true)}
+              className="inline-flex items-center justify-between min-w-[120px] h-10 sm:h-11 px-3 sm:px-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-400 focus:outline-none focus:border-indigo-400 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${statusFilter === 'all' ? 'bg-slate-400' : STATUS_META.find(s => s.value === statusFilter)?.dot || 'bg-teal-500'}`} />
+                {statusFilter === 'all' ? 'ທຸກສະຖານະ' : statusFilter}
+              </div>
+              <ChevronDownIcon className="w-3.5 h-3.5 text-slate-400 ml-2" />
+            </button>
 
             {/* Date Pills */}
             <div className="flex items-center bg-slate-50 dark:bg-slate-900/50 p-1 rounded-[14px] border border-slate-200/80 dark:border-slate-700/50">
@@ -1348,7 +1475,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
-                {filteredOrders.map((order, idx) => {
+                {filteredOrders.slice(0, visibleCount).map((order, idx) => {
                   const total_sales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
                   const isUpdating = updatingId === order.id;
                   const remaining  = total_sales - (order.deposit || 0);
@@ -1462,8 +1589,8 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                               ) : (
                                 <span className="text-slate-400 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-1"></span>
                               )}
-                              <span className="truncate flex-1 min-w-0 max-w-[150px] leading-tight py-0.5" title={item.name}>
-                                {item.name.length > 16 ? item.name.slice(0, 16) + '...' : item.name}
+                              <span className="truncate flex-1 min-w-0 max-w-[280px] xl:max-w-[400px] leading-tight py-0.5" title={item.name}>
+                                {item.name}
                               </span>
                               <span className={`font-bold shrink-0 ${
                                 (() => {
@@ -1480,26 +1607,11 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                                          'text-teal-600 dark:text-teal-400';
                                 })()
                               }`}>x{item.qty}</span>
-                              <div className="relative ml-auto shrink-0 group">
-                                <select
-                                  value={item.status || 'ຮັບອໍເດີແລ້ວ'}
-                                  onChange={(e) => updateItemStatus(order.id, i, e.target.value)}
-                                  className={`appearance-none text-[10px] font-bold rounded-full pl-4 pr-5 py-0.5 outline-none transition-all cursor-pointer border-0 hover:shadow-md active:scale-95 text-center min-w-[74px] ${
-                                    STATUS_META.find(s => s.value === item.status)?.chip ||
-                                    'bg-teal-50 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300'
-                                  }`}
-                                  style={{ textOverflow: 'ellipsis' }}
-                                >
-                                  {STATUS_META.map(s => (
-                                    <option key={s.value} value={s.value}>{s.value}</option>
-                                  ))}
-                                </select>
-                                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60">
-                                  <ChevronDownIcon className="w-2.5 h-2.5" />
-                                </div>
-                                <div className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full pointer-events-none ${
-                                    STATUS_META.find(s => s.value === item.status)?.dot || 'bg-teal-500'
-                                }`} />
+                              <div className="ml-auto shrink-0 group">
+                                <StatusBadge 
+                                  status={item.status || 'ຮັບອໍເດີແລ້ວ'} 
+                                  onClick={() => setItemStatusModal({ orderId: order.id, itemIndex: i })} 
+                                />
                               </div>
                             </div>
                             );
@@ -1560,7 +1672,7 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-4 min-w-[170px]">
+                      <td className="px-4 py-4">
                         <StatusBadge status={order.status} loading={isUpdating} onClick={() => setStatusModal(order.id)} />
                         {order.status_updated_at != null && (
                           <p className="text-[10px] text-slate-400 mt-1 tabular-nums">{formatDate(order.status_updated_at as any, true)} {formatTime(order.status_updated_at as any)}</p>
@@ -1601,6 +1713,17 @@ export default function OrderList({ onEdit, onAdd }: { onEdit?: (id: string) => 
                 })}
               </tbody>
             </table>
+            {visibleCount < filteredOrders.length && (
+              <div className="flex justify-center p-6 border-t border-slate-100 dark:border-white/5">
+                <button
+                  onClick={() => setVisibleCount(prev => prev + 20)}
+                  className="px-8 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-full transition-all flex items-center gap-2"
+                >
+                  <ArrowPathIcon className="w-4 h-4" />
+                  ໂຫຼດເພີ່ມເຕີມ ({visibleCount} / {filteredOrders.length})
+                </button>
+              </div>
+            )}
           </div>
         )}
       </motion.div>

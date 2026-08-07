@@ -7,6 +7,8 @@ import { Handshake, User, Package, Phone, Truck, Home, Building2, MapPin, Sparkl
 import { BaseModal } from './BaseModal';
 import imageCompression from 'browser-image-compression';
 import { uploadImageDirect } from '@/app/lib/uploadImage';
+import { CustomSelect } from './CustomSelect';
+import Swal from 'sweetalert2';
 
 // --- Constants ---
 const PROVINCES = [
@@ -115,43 +117,8 @@ function MoneyInput({
   );
 }
 
-function SelectField({
-  value,
-  onChange,
-  options,
-  className = '',
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: string[];
-  className?: string;
-}) {
-  return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`${field} appearance-none pr-9 cursor-pointer ${className}`}
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-      <svg
-        viewBox="0 0 20 20"
-        fill="currentColor"
-        className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
-      >
-        <path
-          fillRule="evenodd"
-          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-          clipRule="evenodd"
-        />
-      </svg>
-    </div>
-  );
+function SelectField(props: any) {
+  return <CustomSelect {...props} />;
 }
 
 interface WalletOption {
@@ -164,6 +131,14 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
   const [rawText, setRawText] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  
+  // AI Scan State
+  const [isAIScanning, setIsAIScanning] = useState(false);
+  
+  // Announcement Modal State
+  const [isAnnounceModalOpen, setIsAnnounceModalOpen] = useState(false);
+  const [announceText, setAnnounceText] = useState('');
+  const [isSavingAnnounce, setIsSavingAnnounce] = useState(false);
 
   // Load existing order for edit
   useEffect(() => {
@@ -460,6 +435,13 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
   // --- Items Logic ---
   const updateItem = (id: string, fieldName: keyof OrderItem, val: string | number) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, [fieldName]: val } : item));
+    
+    // Auto-update status when cost is added or removed
+    if (fieldName === 'cost' && Number(val) > 0 && status === 'ຮັບອໍເດີແລ້ວ') {
+      setStatus('ສັ່ງເຄື່ອງແລ້ວ');
+    } else if (fieldName === 'cost' && Number(val) <= 0 && status !== 'ຮັບອໍເດີແລ້ວ') {
+      setStatus('ຮັບອໍເດີແລ້ວ');
+    }
   };
 
   const applyStockToItem = (id: string, stock: StockItem) => {
@@ -536,6 +518,72 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
   };
   const addItem = () => {
     setItems([...items, { id: Date.now().toString(), name: '', qty: 1, cost: 0, price: 0 }]);
+  };
+
+  const handleAIScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsAIScanning(true);
+    setMessage({ type: 'info', text: '🤖 ກຳລັງໃຫ້ AI ວິເຄາະຮູບພາບ...' });
+    
+    try {
+      // 1. Compress image to save bandwidth
+      const options = { maxSizeMB: 1, maxWidthOrHeight: 1024, useWebWorker: true };
+      const compressedFile = await imageCompression(file, options);
+      
+      // 2. Convert to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(compressedFile);
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        
+        // 3. Prepare stock list
+        const productsList = stocks.map(s => ({
+          id: s.id,
+          name: s.itemName,
+        }));
+        
+        // 4. Call our API route
+        const res = await fetch('/api/scan-product', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: base64,
+            mimeType: compressedFile.type,
+            products: productsList
+          })
+        });
+        
+        if (!res.ok) throw new Error('API failed');
+        
+        const data = await res.json();
+        
+        if (data.matched_id) {
+          const stock = stocks.find(s => s.id === data.matched_id);
+          if (stock) {
+            handleSelectFromStock(stock);
+            setMessage({ type: 'success', text: `🤖 AI ພົບສິນຄ້າ: ${stock.itemName} (${data.confidence || 100}%)` });
+          } else {
+             setMessage({ type: 'error', text: '🤖 AI ບໍ່ພົບສິນຄ້າທີ່ກົງກັບສະຕັອກ' });
+          }
+        } else {
+          setMessage({ type: 'error', text: '🤖 AI ບໍ່ພົບສິນຄ້າທີ່ກົງກັນໃນສະຕັອກ' });
+        }
+        setIsAIScanning(false);
+      };
+      
+      reader.onerror = () => {
+        setMessage({ type: 'error', text: 'ບໍ່ສາມາດອ່ານໄຟລ໌ໄດ້' });
+        setIsAIScanning(false);
+      };
+    } catch (err) {
+      console.error(err);
+      setMessage({ type: 'error', text: 'ເກີດຂໍ້ຜິດພາດໃນການວິເຄາະ AI' });
+      setIsAIScanning(false);
+    } finally {
+      e.target.value = ''; // reset input
+    }
   };
 
   // --- Expenses Logic ---
@@ -643,6 +691,9 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         setMessage({ type: 'success', text: 'ບັນທຶກອໍເດີສຳເລັດແລ້ວ!' });
       }
 
+      window.dispatchEvent(new CustomEvent('local_order_updated', { 
+        detail: { type: 'new_order', status: orderData.status, hasCost: totalCost > 0 } 
+      }));
       setTimeout(() => { resetForm(); if (onSuccess) onSuccess(); }, 2000);
     } catch (error) {
       console.error(error);
@@ -651,9 +702,100 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
       setLoading(false);
     }
   };
+  const handleSetAnnouncement = async () => {
+    try {
+      const { data: exist } = await supabase.from('notes').select('content').eq('title', '___SHOP_ANNOUNCEMENT___').maybeSingle();
+      setAnnounceText(exist?.content || '');
+      setIsAnnounceModalOpen(true);
+    } catch (e) {
+      console.error(e);
+      setAnnounceText('');
+      setIsAnnounceModalOpen(true);
+    }
+  };
+
+  const saveAnnouncement = async () => {
+    setIsSavingAnnounce(true);
+    try {
+      const { data: exist } = await supabase.from('notes').select('id').eq('title', '___SHOP_ANNOUNCEMENT___').maybeSingle();
+      if (exist) {
+        const { error: updateError } = await supabase.from('notes').update({ content: announceText.trim() }).eq('id', exist.id);
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase.from('notes').insert([{ title: '___SHOP_ANNOUNCEMENT___', content: announceText.trim() }]);
+        if (insertError) throw insertError;
+      }
+      
+      // Let page.tsx know to refetch and instantly update on THIS device
+      window.dispatchEvent(new CustomEvent('local_announcement_updated', { detail: announceText.trim() }));
+      
+      // Broadcast to ALL OTHER devices instantly
+      supabase.channel('global_announcements').send({
+        type: 'broadcast',
+        event: 'new_announcement',
+        payload: { content: announceText.trim() },
+      });
+      
+      setIsAnnounceModalOpen(false);
+      
+      Swal.fire({
+        title: 'ສຳເລັດ!',
+        text: 'ບັນທຶກຂໍ້ຄວາມປະກາດແລ້ວ',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false,
+        toast: true,
+        position: 'top-end'
+      });
+    } catch (err) {
+      Swal.fire('ຜິດພາດ', 'ບໍ່ສາມາດບັນທຶກໄດ້', 'error');
+    } finally {
+      setIsSavingAnnounce(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-transparent animate-[fadeIn_0.35s_ease-out]">
+      {/* Announcement Modal */}
+      <BaseModal
+        isOpen={isAnnounceModalOpen}
+        onClose={() => setIsAnnounceModalOpen(false)}
+        title="ປະກາດແຈ້ງເຕືອນ (Announcement)"
+        icon={<svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-indigo-500"><path d="M21 7.24a2.25 2.25 0 00-1.12-1.95l-6.75-3.9a2.25 2.25 0 00-2.26 0l-6.75 3.9A2.25 2.25 0 003 7.24v9.52a2.25 2.25 0 001.12 1.95l6.75 3.9a2.25 2.25 0 002.26 0l6.75-3.9A2.25 2.25 0 0021 16.76V7.24zm-9 11.26L5.25 14.6V9.4l6.75 3.9v5.2zm1.5-6.06L6.75 8.54l6.75-3.9 6.75 3.9-6.75 3.9zm.75 6.06v-5.2l6.75-3.9v5.2l-6.75 3.9z"/></svg>}
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            ພິມຂໍ້ຄວາມແຈ້ງເຕືອນເພື່ອໃຫ້ທຸກຄົນໃນລະບົບເຫັນເປັນແຖບກະພริบ. (ຖ້າຕ້ອງການປິດປະກາດ ໃຫ້ລຶບຂໍ້ຄວາມອອກແລ້ວກົດບັນທຶກ)
+          </p>
+          <textarea
+            value={announceText}
+            onChange={(e) => setAnnounceText(e.target.value)}
+            placeholder="ຕົວຢ່າງ: ມື້ນີ້ປິດຮັບອໍເດີແລ້ວເດີ້..."
+            className="w-full min-h-[120px] p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none transition-all shadow-inner"
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => setIsAnnounceModalOpen(false)}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              ຍົກເລີກ
+            </button>
+            <button
+              onClick={saveAnnouncement}
+              disabled={isSavingAnnounce}
+              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center min-w-[120px]"
+            >
+              {isSavingAnnounce ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                'ບັນທຶກປະກາດ'
+              )}
+            </button>
+          </div>
+        </div>
+      </BaseModal>
+
       {/* Floating status toast */}
       {message.text && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[60] animate-[toastIn_0.2s_ease-out]">
@@ -681,11 +823,15 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={resetForm} className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
+            <button onClick={resetForm} title="ຣີເຊັດຟອມ" className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
             </button>
-            <button className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.909A2.25 2.25 0 012.25 8.643V6.75m19.5 0v10.5A2.25 2.25 0 0119.5 19.5h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.909A2.25 2.25 0 012.25 8.643V6.75" /></svg>
+            <button onClick={handleSetAnnouncement} title="ຕັ້ງຄ່າປະກາດແຈ້ງເຕືອນ" className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors group">
+              <div className="absolute -top-1 -right-1 w-3 h-3 flex items-center justify-center">
+                <div className="absolute w-full h-full bg-rose-500 rounded-full animate-ping opacity-75" />
+                <div className="w-2 h-2 bg-rose-500 rounded-full" />
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:scale-110 transition-transform"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.909A2.25 2.25 0 012.25 8.643V6.75m19.5 0v10.5A2.25 2.25 0 0119.5 19.5h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.909A2.25 2.25 0 012.25 8.643V6.75" /></svg>
             </button>
           </div>
         </div>
@@ -731,11 +877,10 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div>
               <label className={label}><Handshake className="w-3.5 h-3.5" /> ຕົວແທນ (Agent)</label>
-              <div className="relative">
-                <select 
+              <div className="relative z-20">
+                <CustomSelect 
                   value={agentId}
-                  onChange={(e) => {
-                    const val = e.target.value;
+                  onChange={(val) => {
                     setAgentId(val);
                     const ag = agents.find(a => a.id === val);
                     if (ag) {
@@ -743,12 +888,13 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                       setPhone(ag.phone);
                     }
                   }}
-                  className={`${field} appearance-none pr-8 ${agentId ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-400 font-semibold' : ''}`}
-                >
-                  <option value="">— ລູກຄ້າທົ່ວໄປ —</option>
-                  {agents.map(ag => <option key={ag.id} value={ag.id}>{ag.agent_name} ({ag.level})</option>)}
-                </select>
-                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
+                  placeholder="— ລູກຄ້າທົ່ວໄປ —"
+                  options={[
+                    { value: '', label: '— ລູກຄ້າທົ່ວໄປ —' },
+                    ...agents.map(ag => ({ value: ag.id, label: `${ag.agent_name} (${ag.level})` }))
+                  ]}
+                  className={agentId ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-400 font-semibold' : ''}
+                />
               </div>
             </div>
 
@@ -805,6 +951,15 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <label className={`cursor-pointer h-9 px-3.5 rounded-lg text-xs font-bold transition-all duration-150 flex items-center gap-1.5 shrink-0 ${isAIScanning ? 'bg-amber-100 text-amber-600 opacity-70' : 'bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 active:scale-95'}`}>
+                {isAIScanning ? (
+                  <div className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" /></svg>
+                )}
+                {isAIScanning ? 'ກຳລັງສະແກນ...' : '🤖 AI Scan'}
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAIScan} disabled={isAIScanning} />
+              </label>
               <label className="cursor-pointer h-9 px-3.5 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5.04-6.71l-2.75 3.54-1.96-2.36L6.5 17h11l-3.54-4.71z"/></svg>
                 ອັບໂຫຼດຫຼາຍຮູບ

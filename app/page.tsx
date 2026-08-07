@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { supabase } from '@/app/lib/supabase';
 import ThemeToggle from './components/ThemeToggle';
 import OrderDashboard from './components/OrderDashboard';
@@ -11,22 +12,31 @@ import OrderAgent from './components/OrderAgent';
 import OrderWallet from './components/OrderWallet';
 import OrderSettings from './components/OrderSettings';
 import OrderNotes from './components/OrderNotes';
+import OtherExpenses from './components/OtherExpenses';
+import { InstallPWA } from './components/InstallPWA';
+import OrderHome from './components/OrderHome';
+import StorageUsage from './components/StorageUsage';
 
-type TabType = 'dashboard' | 'add' | 'list' | 'stock' | 'agent' | 'wallet' | 'settings' | 'notes';
+type TabType = 'home' | 'dashboard' | 'add' | 'list' | 'stock' | 'agent' | 'wallet' | 'settings' | 'notes' | 'expenses';
 
 const navConfig: { id: TabType; label: string; icon: string }[] = [
+  { id: 'home', label: 'ໜ້າຫຼັກ', icon: 'home' },
   { id: 'add', label: 'ເພີ່ມອໍເດີໃໝ່', icon: 'add' },
-  { id: 'dashboard', label: 'ໜ້າຫຼັກ', icon: 'dashboard' },
+  { id: 'dashboard', label: 'ລາຍງານ', icon: 'dashboard' },
   { id: 'list', label: 'ລາຍການອໍເດີ', icon: 'list' },
   { id: 'stock', label: 'ສາງສິນຄ້າ', icon: 'stock' },
   { id: 'agent', label: 'ຕົວແທນຈຳໜ່າຍ', icon: 'agent' },
   { id: 'wallet', label: 'ກະເປົາເງິນ', icon: 'wallet' },
   { id: 'notes', label: 'ໂນ້ດ & ຂໍ້ຄວາມ', icon: 'notes' },
-  { id: 'settings', label: 'ຕັ້ງຄ່າ', icon: 'settings' },
 ];
 
 const Icon = ({ name, className }: { name: string; className?: string }) => {
   const icons: Record<string, React.ReactNode> = {
+    home: (
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+      </svg>
+    ),
     dashboard: (
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
@@ -118,13 +128,19 @@ function AppSkeleton() {
 }
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('add');
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [orderCount, setOrderCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [preSelectedAgentId, setPreSelectedAgentId] = useState<string | null>(null);
   const [appReady, setAppReady] = useState(false);
+  const [globalPendingNotifyCount, setGlobalPendingNotifyCount] = useState(0);
+  const [globalPendingOrderCount, setGlobalPendingOrderCount] = useState(0);
+  const [globalPendingFilter, setGlobalPendingFilter] = useState<{ filter: string; ts: number } | undefined>(undefined);
+  const [globalSearch, setGlobalSearch] = useState<{ query: string; ts: number } | undefined>(undefined);
+  const [globalAnnouncement, setGlobalAnnouncement] = useState<string | null>(null);
+  const [dismissedAnnouncement, setDismissedAnnouncement] = useState<string | null>(null);
 
   // Lightweight count-only query — does NOT download all documents
   // Refreshes every 60 seconds so badge stays reasonably up to date
@@ -145,21 +161,194 @@ export default function DashboardPage() {
           .gte('created_at', today.toISOString());
           
         if (!error && !cancelled) setOrderCount(count || 0);
+
+        let delayMins = 0;
+        try {
+          const { data: noteData } = await supabase.from('notes').select('content').eq('title', '___SYSTEM_SETTINGS___').maybeSingle();
+          if (noteData && noteData.content) {
+            const settings = JSON.parse(noteData.content);
+            if (settings.notifyDelay !== undefined) {
+              delayMins = parseInt(settings.notifyDelay, 10);
+              if (typeof window !== 'undefined') localStorage.setItem('notifyDelay', String(delayMins));
+            }
+          } else {
+            const delayStr = typeof window !== 'undefined' ? localStorage.getItem('notifyDelay') : '0';
+            delayMins = parseInt(delayStr || '0', 10);
+          }
+        } catch (e) {
+          const delayStr = typeof window !== 'undefined' ? localStorage.getItem('notifyDelay') : '0';
+          delayMins = parseInt(delayStr || '0', 10);
+        }
+
+        let notifyQuery = supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'ສົ່ງບິນແລ້ວ');
+
+        if (delayMins > 0) {
+          const targetTime = new Date(Date.now() - delayMins * 60 * 1000).toISOString();
+          notifyQuery = notifyQuery.lte('status_updated_at', targetTime);
+        }
+
+        const { count: notifyCount, error: notifyError } = await notifyQuery;
+
+        if (!notifyError && !cancelled) setGlobalPendingNotifyCount(notifyCount || 0);
+
+        const { data: receiveOrders, error: receiveError } = await supabase
+          .from('orders')
+          .select('id, items')
+          .eq('status', 'ຮັບອໍເດີແລ້ວ');
+
+        if (!receiveError && !cancelled) {
+          const count = (receiveOrders || []).filter(o => o.items?.some((i: any) => !i.cost || Number(i.cost) === 0)).length;
+          setGlobalPendingOrderCount(count);
+        }
+
+        const { data: annData } = await supabase.from('notes').select('content').eq('title', '___SHOP_ANNOUNCEMENT___').maybeSingle();
+        if (!cancelled) {
+          setGlobalAnnouncement(annData?.content || null);
+        }
+
       } catch (err) {
-        console.error("Error fetching order count:", err);
+        console.error("Error fetching order counts:", err);
       }
     };
     fetchCount();
     const interval = setInterval(fetchCount, 60_000);
-    return () => { cancelled = true; clearInterval(interval); };
+
+    const subOrders = supabase.channel('page_orders_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        if (!cancelled) fetchCount();
+      })
+      .subscribe();
+
+    const playNotificationSound = () => {
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        // Pleasant double-ding sound
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.15); // E5
+        
+        gainNode.gain.setValueAtTime(0, ctx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.4);
+      } catch (e) {
+        console.error('Audio play failed', e);
+      }
+    };
+
+    const subNotes = supabase.channel('global_announcements')
+      .on('broadcast', { event: 'new_announcement' }, (payload) => {
+        if (!cancelled) {
+          const newContent = payload.payload?.content;
+          setGlobalAnnouncement(newContent || null);
+          setDismissedAnnouncement(null); // Reset dismiss state so they see the new announcement
+          if (newContent) {
+            playNotificationSound();
+          }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, (payload) => {
+        // Fallback to postgres_changes just in case it's enabled
+        if (!cancelled && payload.new && (payload.new as any).title === '___SHOP_ANNOUNCEMENT___') {
+          const newContent = (payload.new as any).content;
+          setGlobalAnnouncement(newContent || null);
+          setDismissedAnnouncement(null);
+        }
+      })
+      .subscribe();
+
+    const handleLocalUpdate = (e: any) => {
+      // Optimistic updates for real-time feel before network request finishes
+      const delayStr = typeof window !== 'undefined' ? localStorage.getItem('notifyDelay') : '0';
+      const delayMins = parseInt(delayStr || '0', 10);
+      
+      if (e.detail) {
+        if (e.detail.type === 'status_update') {
+          if (delayMins === 0) {
+            if (e.detail.newStatus === 'ສົ່ງບິນແລ້ວ' && e.detail.oldStatus !== 'ສົ່ງບິນແລ້ວ') {
+              setGlobalPendingNotifyCount(p => p + 1);
+            } else if (e.detail.oldStatus === 'ສົ່ງບິນແລ້ວ' && e.detail.newStatus !== 'ສົ່ງບິນແລ້ວ') {
+              setGlobalPendingNotifyCount(p => Math.max(0, p - 1));
+            }
+          }
+          
+          if (e.detail.oldStatus === 'ຮັບອໍເດີແລ້ວ' && e.detail.newStatus !== 'ຮັບອໍເດີແລ້ວ') {
+            setGlobalPendingOrderCount(p => Math.max(0, p - 1));
+          }
+        }
+        if (e.detail.type === 'new_order') {
+          if (delayMins === 0 && e.detail.status === 'ສົ່ງບິນແລ້ວ') {
+            setGlobalPendingNotifyCount(p => p + 1);
+          } else if (e.detail.status === 'ຮັບອໍເດີແລ້ວ' && !e.detail.hasCost) {
+            setGlobalPendingOrderCount(p => p + 1);
+          }
+        }
+        if (e.detail.type === 'delete_order') {
+          if (delayMins === 0 && e.detail.status === 'ສົ່ງບິນແລ້ວ') {
+            setGlobalPendingNotifyCount(p => Math.max(0, p - 1));
+          } else if (e.detail.status === 'ຮັບອໍເດີແລ້ວ') {
+            setGlobalPendingOrderCount(p => Math.max(0, p - 1));
+          }
+        }
+      }
+
+      // Delay the fetchCount so Supabase has time to process the update
+      if (!cancelled) {
+        setTimeout(() => {
+          if (!cancelled) fetchCount();
+        }, 1500);
+      }
+    };
+    
+    const handleLocalAnnouncementUpdated = (e: any) => {
+      if (e.detail !== undefined) {
+        setGlobalAnnouncement(e.detail || null);
+        if (!e.detail) setDismissedAnnouncement(null);
+      }
+      if (!cancelled) {
+        setTimeout(() => {
+          if (!cancelled) fetchCount();
+        }, 1000);
+      }
+    };
+
+    window.addEventListener('local_order_updated', handleLocalUpdate as EventListener);
+    window.addEventListener('local_announcement_updated', handleLocalAnnouncementUpdated);
+
+    return () => { 
+      cancelled = true; 
+      clearInterval(interval); 
+      supabase.removeChannel(subOrders);
+      supabase.removeChannel(subNotes);
+      window.removeEventListener('local_order_updated', handleLocalUpdate);
+      window.removeEventListener('local_announcement_updated', handleLocalAnnouncementUpdated);
+    };
   }, []);
 
   // Show skeleton until Firebase responds (avoids blank white screen)
   if (!appReady) return <AppSkeleton />;
 
-  const handleTabChange = (tab: TabType) => {
+  const handleTabChange = (tab: TabType, search?: string) => {
     setActiveTab(tab);
-    setSidebarOpen(false); // close mobile sidebar on tab change
+    if (search) {
+      setGlobalSearch({ query: search, ts: Date.now() });
+    }
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
     if (tab === 'add') setEditOrderId(null); // Clear edit ID when explicitly clicking 'Add'
   };
 
@@ -168,19 +357,102 @@ export default function DashboardPage() {
     setActiveTab('add');
   };
 
-  // Bottom nav shows 5 most important tabs on mobile
+  // Bottom nav — only 5 essential items (+ FAB for Add)
   const bottomNavItems: { id: TabType; label: string; icon: string }[] = [
-    { id: 'add', label: 'ເພີ່ມ', icon: 'add' },
-    { id: 'dashboard', label: 'ໜ້າຫຼັກ', icon: 'dashboard' },
+    { id: 'home', label: 'ໜ້າຫຼັກ', icon: 'home' },
     { id: 'list', label: 'ລາຍການ', icon: 'list' },
     { id: 'stock', label: 'ສາງ', icon: 'stock' },
     { id: 'wallet', label: 'ເງິນ', icon: 'wallet' },
-    { id: 'notes', label: 'ໂນ້ດ', icon: 'notes' },
   ];
 
   return (
     <div className="relative h-[100dvh] lg:overflow-hidden font-lao text-slate-800 dark:text-slate-100 flex overflow-x-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
       {/* Decorative Orbs handled in layout.tsx */}
+
+      {/* Global Notification Pills */}
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col sm:flex-row items-center gap-3">
+        <AnimatePresence>
+          {globalAnnouncement && globalAnnouncement !== dismissedAnnouncement && (
+            <motion.div
+              initial={{ y: -50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -50, opacity: 0, scale: 0.9 }}
+              className="flex items-center gap-3 px-3 py-1.5 sm:px-5 sm:py-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-indigo-100 dark:border-indigo-500/20 shadow-2xl shadow-indigo-500/20 rounded-full"
+            >
+              <div className="relative flex items-center justify-center shrink-0">
+                <div className="absolute w-4 h-4 bg-indigo-500/40 rounded-full animate-ping" />
+                <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+              </div>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                {globalAnnouncement}
+              </span>
+              <button 
+                onClick={() => setDismissedAnnouncement(globalAnnouncement)}
+                className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors ml-1 shrink-0"
+                title="ປິດ"
+              >
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {globalPendingNotifyCount > 0 && (
+            <motion.button
+              initial={{ y: -50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -50, opacity: 0, scale: 0.9 }}
+              onClick={() => {
+                setGlobalPendingFilter({ filter: 'ສົ່ງບິນແລ້ວ', ts: Date.now() });
+                handleTabChange('list');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="flex items-center gap-3 px-5 py-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-rose-100 dark:border-rose-500/20 shadow-2xl shadow-rose-500/20 rounded-full hover:scale-105 active:scale-95 transition-all group cursor-pointer"
+            >
+              <div className="relative flex items-center justify-center">
+                <div className="absolute w-4 h-4 bg-rose-500/40 rounded-full animate-ping" />
+                <div className="w-2.5 h-2.5 bg-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+              </div>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors whitespace-nowrap">
+                ລໍຖ້າແຈ້ງລູກຄ້າ
+              </span>
+              <span className="flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-rose-500 text-white text-xs font-bold shadow-sm">
+                {globalPendingNotifyCount}
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {globalPendingOrderCount > 0 && (
+            <motion.button
+              initial={{ y: -50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -50, opacity: 0, scale: 0.9 }}
+              onClick={() => {
+                setGlobalPendingFilter({ filter: 'ຮັບອໍເດີແລ້ວ', ts: Date.now() });
+                handleTabChange('list');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="flex items-center gap-3 px-5 py-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-orange-100 dark:border-orange-500/20 shadow-2xl shadow-orange-500/20 rounded-full hover:scale-105 active:scale-95 transition-all group cursor-pointer"
+            >
+              <div className="relative flex items-center justify-center">
+                <div className="absolute w-4 h-4 bg-orange-500/40 rounded-full animate-ping" />
+                <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
+              </div>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors whitespace-nowrap">
+                ລໍຖ້າສັ່ງເຄື່ອງ
+              </span>
+              <span className="flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-orange-500 text-white text-xs font-bold shadow-sm">
+                {globalPendingOrderCount}
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* ─── MOBILE OVERLAY BACKDROP ───────────────────────────────────── */}
       {sidebarOpen && (
@@ -198,7 +470,7 @@ export default function DashboardPage() {
         className={`
           fixed lg:sticky inset-y-0 left-0 top-0 lg:h-[100dvh]
           ${sidebarExpanded ? 'w-[280px]' : 'w-[280px] lg:w-[88px]'}
-          glass border-r-0 lg:my-4 lg:ml-4 lg:rounded-[30px]
+          bg-white dark:bg-slate-900 lg:bg-white/95 lg:dark:bg-slate-900/95 lg:backdrop-blur-2xl border-r border-slate-200/50 dark:border-white/10 lg:my-4 lg:ml-4 lg:rounded-[30px]
           shadow-[0_10px_40px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.2)]
           flex flex-col z-40 transition-[width,transform,margin,border-radius] duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -282,7 +554,8 @@ export default function DashboardPage() {
 
       {/* ─── MAIN CONTENT ────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col h-[100dvh] relative z-10 min-w-0 lg:overflow-hidden">
-        {/* Header */}
+        {/* Header — hidden on home tab for full-screen feel */}
+        {activeTab !== 'home' && (
         <header className="glass !border-x-0 !border-t-0 border-b border-white/40 dark:border-white/5 px-4 sm:px-6 lg:px-10 py-4 lg:py-5 flex items-center justify-between z-20 sticky top-0 transition-colors duration-300 mx-4 mt-4 lg:rounded-t-[30px]">
           {/* Hamburger button (visible on all screens now) */}
           <div className="flex items-center gap-3">
@@ -311,7 +584,16 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 lg:gap-5">
+          <div className="flex items-center gap-3 lg:gap-5">
+            <StorageUsage />
+            <button
+              onClick={() => handleTabChange('settings')}
+              className={`p-2 lg:p-2.5 rounded-[12px] lg:rounded-[14px] flex items-center justify-center transition-all ${activeTab === 'settings' ? 'bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
+              title="ຕັ້ງຄ່າ"
+            >
+              <Icon name="settings" className="w-5 h-5" />
+            </button>
+            <InstallPWA />
             <ThemeToggle />
             <button
               onClick={() => handleTabChange('add')}
@@ -324,8 +606,22 @@ export default function DashboardPage() {
             </button>
           </div>
         </header>
+        )}
 
-        {/* Content */}
+        {/* Content — full-screen on home tab, glass container on other tabs */}
+        {activeTab === 'home' ? (
+          <div
+            className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-teal-500/20 hover:scrollbar-thumb-teal-500/40 scrollbar-track-transparent"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}
+          >
+            <OrderHome
+              onNavigate={(tab, search) => handleTabChange(tab as TabType, search)}
+              orderCount={orderCount}
+              pendingNotify={globalPendingNotifyCount}
+              pendingOrder={globalPendingOrderCount}
+            />
+          </div>
+        ) : (
         <div 
           className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none scrollbar-thin scrollbar-thumb-teal-500/20 hover:scrollbar-thumb-teal-500/40 scrollbar-track-transparent"
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}
@@ -340,61 +636,108 @@ export default function DashboardPage() {
                   <OrderDashboard onViewAll={() => handleTabChange('list')} />
                 )}
                 {activeTab === 'add' && <OrderForm editId={editOrderId || undefined} preSelectedAgentId={preSelectedAgentId || undefined} onSuccess={() => { setEditOrderId(null); setPreSelectedAgentId(null); handleTabChange('list'); }} />}
-                {activeTab === 'list' && <OrderList onEdit={handleEditOrder} onAdd={() => handleTabChange('add')} />}
+                {activeTab === 'list' && <OrderList onEdit={handleEditOrder} onAdd={() => handleTabChange('add')} initialFilter={globalPendingFilter} initialSearch={globalSearch} />}
                 {activeTab === 'stock' && <OrderStock />}
                 {activeTab === 'agent' && <OrderAgent onCreateOrder={(agId) => { setPreSelectedAgentId(agId); handleTabChange('add'); }} onEdit={handleEditOrder} />}
                 {activeTab === 'wallet' && <OrderWallet onEditOrder={handleEditOrder} />}
                 {activeTab === 'notes' && <OrderNotes />}
                 {activeTab === 'settings' && <OrderSettings />}
+                {activeTab === 'expenses' && <OtherExpenses />}
               </div>
             </div>
           </div>
         </div>
+        )}
       </main>
 
-      {/* ─── MOBILE BOTTOM NAVIGATION ────────────────────────────────────── */}
+      {/* ─── PREMIUM MOBILE BOTTOM NAVIGATION ─── */}
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] dark:shadow-[0_-10px_40px_rgba(0,0,0,0.3)]"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 pb-[env(safe-area-inset-bottom)]"
       >
-        <div className="flex items-center justify-around px-1 py-4">
-          {bottomNavItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleTabChange(item.id)}
-                className={`relative flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl transition-all duration-200 ${
-                  isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
-                }`}
-              >
-                {isActive && (
-                  <span className="absolute inset-0 rounded-xl bg-indigo-50 dark:bg-indigo-500/10" />
-                )}
-                <Icon name={item.icon} className="relative w-7 h-7 mb-0.5" />
-                <span className="relative text-xs font-bold">{item.label}</span>
-                {item.id === 'list' && orderCount > 0 && (
-                  <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-sm">
-                    {orderCount > 99 ? '99+' : orderCount}
+        {/* Nav Background */}
+        <div className="absolute inset-x-0 bottom-0 h-[115px] bg-white/95 dark:bg-[#1a222c]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.08)] rounded-t-[36px]" />
+
+        <div className="relative h-[115px] flex items-center justify-between px-2 sm:px-4">
+          {/* Left 2 */}
+          <div className="flex-1 flex justify-around">
+            {bottomNavItems.slice(0, 2).map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleTabChange(item.id)}
+                  className="relative flex flex-col items-center justify-center h-full w-[90px]"
+                >
+                  <div className={`relative transition-all duration-300 ${isActive ? 'scale-110 text-teal-600 dark:text-teal-400 -translate-y-1' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
+                    <Icon name={item.icon} className="w-11 h-11" />
+                    {isActive && (
+                      <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
+                    )}
+                  </div>
+                  <span className={`text-[16px] mt-2 font-bold transition-all duration-300 ${isActive ? 'text-teal-600 dark:text-teal-400 opacity-100' : 'text-slate-400 opacity-70'}`}>
+                    {item.label}
                   </span>
-                )}
-              </button>
-            );
-          })}
-          {/* More button — opens sidebar to access agent/settings */}
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className={`relative flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl transition-all duration-200 ${
-              !bottomNavItems.find(i => i.id === activeTab)
-                ? 'text-indigo-600 dark:text-indigo-400'
-                : 'text-slate-400 dark:text-slate-500'
-            }`}
-          >
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-7 h-7 mb-0.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-            <span className="text-xs font-bold">ເພີ່ມເຕີມ</span>
-          </button>
+                  {item.id === 'list' && orderCount > 0 && (
+                    <span className="absolute top-3 right-2 w-7 h-7 bg-rose-500 text-white text-[12px] font-bold rounded-full flex items-center justify-center shadow-md border-2 border-white dark:border-[#1a222c]">
+                      {orderCount > 99 ? '99+' : orderCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Center FAB — Premium Notched Design */}
+          <div className="relative z-10 flex flex-col items-center shrink-0 w-[120px] -mt-[58px]">
+            {/* The Cutout Ring Effect (matches app background) */}
+            <div className="absolute top-1 left-1/2 -translate-x-1/2 w-[116px] h-[116px] bg-slate-50 dark:bg-[#0B1120] rounded-[40px] rotate-45 scale-105" />
+            <div className="absolute top-1 left-1/2 -translate-x-1/2 w-[116px] h-[116px] bg-slate-50 dark:bg-[#0B1120] rounded-full" />
+            
+            {/* The Actual Button */}
+            <button
+              onClick={() => handleTabChange('add')}
+              className="relative mt-2.5 flex flex-col items-center group"
+            >
+              <div className={`relative w-[94px] h-[94px] rounded-[32px] flex items-center justify-center shadow-2xl transition-all duration-300 ${
+                activeTab === 'add'
+                  ? 'bg-gradient-to-tr from-teal-400 via-blue-500 to-indigo-500 shadow-blue-500/60 scale-105 -rotate-3'
+                  : 'bg-gradient-to-tr from-teal-500 via-indigo-500 to-purple-600 shadow-indigo-500/40 hover:scale-105'
+              }`}>
+                {/* Inner subtle glow */}
+                <div className="absolute inset-0 rounded-[32px] border border-white/30" />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-[52px] h-[52px] text-white drop-shadow-md">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+              </div>
+              <span className={`text-[16px] font-extrabold mt-3 ${
+                activeTab === 'add' ? 'text-teal-600 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400'
+              }`}>ເພີ່ມອໍເດີ</span>
+            </button>
+          </div>
+
+          {/* Right 2 */}
+          <div className="flex-1 flex justify-around">
+            {bottomNavItems.slice(2).map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleTabChange(item.id)}
+                  className="relative flex flex-col items-center justify-center h-full w-[90px]"
+                >
+                  <div className={`relative transition-all duration-300 ${isActive ? 'scale-110 text-indigo-500 dark:text-indigo-400 -translate-y-1' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
+                    <Icon name={item.icon} className="w-11 h-11" />
+                    {isActive && (
+                      <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.8)]" />
+                    )}
+                  </div>
+                  <span className={`text-[16px] mt-2 font-bold transition-all duration-300 ${isActive ? 'text-indigo-600 dark:text-indigo-400 opacity-100' : 'text-slate-400 opacity-70'}`}>
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
     </div>

@@ -149,6 +149,13 @@ body {
   animation: shimmer 1.5s infinite;
 }
 
+.glass {
+  background: var(--surface);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+}
+
 .premium-card {
   background: var(--surface);
   backdrop-filter: blur(24px);

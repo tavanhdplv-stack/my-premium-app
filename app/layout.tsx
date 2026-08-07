@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tawan East - ລະບົບຈັດການອໍເດີ",
   description: "ລະບົບຈັດການອໍເດີແລະຄລັງສາງສໍາລັບ Tawan East Shop",
+  manifest: "/manifest.json",
   viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#F8FAFC" },

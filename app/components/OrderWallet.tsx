@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/app/lib/supabase';
 import { BaseModal } from './BaseModal';
+import Swal from 'sweetalert2';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Wallet {
@@ -105,6 +106,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   const [showAddWallet, setShowAddWallet] = useState(false);
   const [showTransModal, setShowTransModal] = useState<{ type: 'income' | 'expense'; wallet_id: string } | null>(null);
   const [showStatement, setShowStatement] = useState<Wallet | null>(null);
+  const [statementMonth, setStatementMonth] = useState<string>('all');
   const [showProfitSplit, setShowProfitSplit] = useState(false);
   const [editTx, setEditTx] = useState<{ id: string, amount: number } | null>(null);
   const [deleteTx, setDeleteTx] = useState<{ id: string } | null>(null);
@@ -192,16 +194,35 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
 
     // From manual transactions
     transactions.forEach(t => {
-      if (t.wallet_id !== wallet.id) return;
+      let amountToAdd = 0;
+      let amountToSub = 0;
+      let isIncome = false;
+
+      if (t.wallet_id === wallet.id) {
+        if (t.type === 'income') {
+          amountToAdd = t.amount;
+          isIncome = true;
+        } else {
+          amountToSub = t.amount;
+        }
+      } else if (t.type === 'profit_split' && t.partner_split_id === wallet.id) {
+        // Legacy dividend payout from another wallet (like W-COMP) to this partner's wallet
+        amountToAdd = t.amount;
+        isIncome = true;
+      } else {
+        return;
+      }
+
       const tYm = ymOf(t.date);
       const pastOrCurrent = month === 'all' || (tYm && tYm <= month);
       const isCurrent = month === 'all' || tYm === month;
-      if (t.type === 'income') {
-        if (pastOrCurrent) bal += t.amount;
-        if (isCurrent) { inAmt += t.amount; if (!t.notes?.includes('ຄືນທຶນ')) cap += t.amount; }
+
+      if (isIncome) {
+        if (pastOrCurrent) bal += amountToAdd;
+        if (isCurrent) { inAmt += amountToAdd; if (!t.notes?.includes('ຄືນທຶນ')) cap += amountToAdd; }
       } else {
-        if (pastOrCurrent) bal -= t.amount;
-        if (isCurrent) outAmt += t.amount;
+        if (pastOrCurrent) bal -= amountToSub;
+        if (isCurrent) outAmt += amountToSub;
       }
     });
 
@@ -222,12 +243,16 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   }
 
   const totalBalance = useMemo(() =>
-    wallets.reduce((sum, w) => sum + getWalletStats(w, 'all').bal, 0),
+    wallets.filter(w => w.type !== 'partner').reduce((sum, w) => sum + getWalletStats(w, 'all').bal, 0),
     [wallets, transactions, orders]  // eslint-disable-line
   );
 
   const totalProfit = useMemo(() =>
     orders.filter(o => o.status !== 'ຍົກເລີກອໍເດີ').reduce((s, o) => s + o.total_profit, 0),
+    [orders]);
+
+  const totalStockCost = useMemo(() =>
+    orders.filter(o => o.status !== 'ຍົກເລີກອໍເດີ').reduce((s, o) => s + (o.total_cost || 0), 0),
     [orders]);
 
   const totalExpenses = useMemo(() =>
@@ -248,10 +273,30 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
 
     // Manual transactions
     transactions
-      .filter(t => t.wallet_id === wallet.id)
+      .filter(t => t.wallet_id === wallet.id || (t.type === 'profit_split' && t.partner_split_id === wallet.id))
       .forEach(t => {
+        // If this is a legacy profit_split from another wallet (e.g. W-COMP) to THIS wallet
+        if (t.wallet_id !== wallet.id && t.type === 'profit_split' && t.partner_split_id === wallet.id) {
+          rows.push({
+            id: `legacy-${t.id}`,
+            date: new Date(t.date),
+            kind: 'income',
+            label: 'ຮັບເຂົ້າ / ປັນຜົນ (ເກົ່າ)',
+            labelColor: 'text-emerald-600 dark:text-emerald-400 font-bold',
+            detail: `ຮັບເງິນປັນຜົນ: ${t.notes || ''}`,
+            subDetail: null,
+            badges: [],
+            inAmt: t.amount,
+            outAmt: 0,
+            depositAmt: 0,
+            rawId: t.id,
+            isOrder: false,
+          });
+          return;
+        }
+
         let detailText = t.notes || (t.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນ');
-        if (t.type === 'profit_split' && t.partner_split_id) {
+        if (t.type === 'profit_split' && t.partner_split_id && t.wallet_id === wallet.id) {
           const partner = wallets.find(w => w.id === t.partner_split_id);
           if (partner) {
             detailText = `ເບີກໃຫ້: ${partner.name}${t.notes ? ` (${t.notes})` : ''}`;
@@ -359,6 +404,38 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
     const txType = showTransModal.type === 'income' ? 'income'
       : isProfitSplit ? 'profit_split' : 'expense';
     const note = transNote || (showTransModal.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນອອກ');
+
+    if (isProfitSplit && splitPartnerId) {
+      const partner = wallets.find(w => w.id === splitPartnerId);
+      if (partner) {
+        const percent = partner.share_percent ?? 50;
+        
+        const withdrawn = transactions
+          .filter(t => t.type === 'profit_split' && t.partner_split_id === splitPartnerId)
+          .reduce((s, t) => s + t.amount, 0);
+          
+        const totalHistoricalWithdrawn = transactions
+          .filter(t => t.type === 'profit_split')
+          .reduce((s, t) => s + t.amount, 0);
+          
+        const historicalPool = totalBalance + totalHistoricalWithdrawn;
+        const fairShare = (historicalPool * percent) / 100;
+        const remain = Math.max(0, Math.min(fairShare - withdrawn, totalBalance));
+
+        if (Number(transAmount) > remain) {
+          Swal.fire({
+            title: 'ບໍ່ສາມາດເບີກໄດ້!',
+            text: `ຍອດເງິນຄົງເຫຼືອຂອງ ${partner.name} ມີພຽງແຕ່ ${fmt(remain)} ₭`,
+            icon: 'error',
+            confirmButtonColor: '#e11d48',
+            confirmButtonText: 'ຕົກລົງ'
+          });
+          return;
+        }
+      }
+    }
+    
+    const nowStr = new Date().toISOString();
     
     // Optimistic Update
     const tempTx: Transaction = {
@@ -367,19 +444,23 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
       type: txType as any,
       amount: Number(transAmount), 
       notes: note, 
-      date: new Date().toISOString(),
+      date: nowStr,
       partner_split_id: isProfitSplit ? splitPartnerId : undefined
     };
-    setTransactions(prev => [tempTx, ...prev]);
     
-    await supabase.from('transactions').insert({
+    const newTxs: Transaction[] = [tempTx];
+    setTransactions(prev => [...newTxs, ...prev]);
+    
+    const insertData: any[] = [{
       wallet_id: showTransModal.wallet_id, 
       type: txType,
       amount: Number(transAmount), 
       notes: note, 
-      date: tempTx.date,
+      date: nowStr,
       category: isProfitSplit ? splitPartnerId : null
-    });
+    }];
+    
+    await supabase.from('transactions').insert(insertData);
     setShowTransModal(null); setTransAmount(''); setTransNote('');
     setIsProfitSplit(false); setSplitPartnerId('');
   };
@@ -395,7 +476,10 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   const handleDeleteWallet = async (wallet: Wallet) => {
     if (confirm(`ລຶບກະເປົາຮຸ້ນສ່ວນ "${wallet.name}"?\n(ລາຍການຕ່າງໆຂອງກະເປົານີ້ຈະຖືກລຶບນຳ)`)) {
       await supabase.from('wallets').delete().eq('id', wallet.id);
+      await supabase.from('transactions').delete().eq('wallet_id', wallet.id);
+      await supabase.from('transactions').delete().eq('category', wallet.id).eq('type', 'profit_split');
       setWallets(prev => prev.filter(w => w.id !== wallet.id));
+      setTransactions(prev => prev.filter(t => t.wallet_id !== wallet.id && t.partner_split_id !== wallet.id));
     }
   };
 
@@ -415,6 +499,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
             </div>
             <div className="flex flex-wrap gap-4 mt-2 text-xs text-indigo-200">
               <span>ກຳໄລລວມ: <span className="font-bold text-emerald-300">{fmt(totalProfit)} ₭</span></span>
+              <span>ຕົ້ນທຶນສັ່ງເຄື່ອງ: <span className="font-bold text-amber-300">{fmt(totalStockCost)} ₭</span></span>
               <span>ຄ່າໃຊ້ຈ່າຍອື່ນໆ: <span className="font-bold text-orange-300">{fmt(totalExpenses)} ₭</span></span>
               <span>ເບີກປັນຜົນ: <span className="font-bold text-rose-300">{fmt(totalDividends)} ₭</span></span>
             </div>
@@ -443,6 +528,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
           {wallets.map(wallet => {
             const stats = getWalletStats(wallet, monthFilter);
             const isMain = wallet.type === 'W-COMP';
+            const isPartner = wallet.type === 'partner';
             return (
               <motion.div
                 key={wallet.id}
@@ -486,7 +572,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                 {/* Balance */}
                 <div className="mb-5 relative z-10">
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-bold mb-1">
-                    ຍອດຄົງເຫຼືອ ({monthFilter === 'all' ? 'ທັງໝົດ' : monthFilter})
+                    {isPartner ? `ຍອດເບີກໄປແລ້ວ (${monthFilter === 'all' ? 'ທັງໝົດ' : monthFilter})` : `ຍອດຄົງເຫຼືອ (${monthFilter === 'all' ? 'ທັງໝົດ' : monthFilter})`}
                   </p>
                   <div className="flex items-end gap-1.5">
                     <span className={`text-4xl font-black tabular-nums tracking-tight ${stats.bal >= 0 ? (isMain ? 'text-white' : 'text-slate-800 dark:text-white') : 'text-rose-500 dark:text-rose-400'}`}>
@@ -497,50 +583,64 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                 </div>
 
                 {/* Stats */}
-                <div className="space-y-2 mb-5 relative z-10">
-                  {!isMain && (
-                    <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl px-4 py-2.5">
-                      <span className="text-xs text-blue-600 dark:text-blue-400 font-bold">ທຶນທີ່ລົງ:</span>
-                      <span className="text-sm font-bold text-blue-700 dark:text-blue-300 tabular-nums">+{fmt(stats.capital)}</span>
+                {!isPartner ? (
+                  <div className="space-y-2 mb-5 relative z-10">
+                    {!isMain && (
+                      <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl px-4 py-2.5">
+                        <span className="text-xs text-blue-600 dark:text-blue-400 font-bold">ທຶນທີ່ລົງ:</span>
+                        <span className="text-sm font-bold text-blue-700 dark:text-blue-300 tabular-nums">+{fmt(stats.capital)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl px-4 py-2.5">
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                        ຮັບເຂົ້າ (In):
+                      </span>
+                      <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">+{fmt(stats.in)}</span>
                     </div>
-                  )}
-                  <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl px-4 py-2.5">
-                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
-                      ຮັບເຂົ້າ (In):
-                    </span>
-                    <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">+{fmt(stats.in)}</span>
+                    <div className="flex justify-between items-center bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 rounded-xl px-4 py-2.5">
+                      <span className="text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1.5">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
+                        ຈ່າຍ/ຕົ້ນທຶນ (Out):
+                      </span>
+                      <span className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">-{fmt(stats.out)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 rounded-xl px-4 py-2.5">
-                    <span className="text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1.5">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
-                      ຈ່າຍ/ຕົ້ນທຶນ (Out):
-                    </span>
-                    <span className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">-{fmt(stats.out)}</span>
+                ) : (
+                  <div className="space-y-2 mb-5 relative z-10">
+                    <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl px-4 py-2.5">
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                        ຍອດຖອນ/ຮັບເງິນ ({monthFilter === 'all' ? 'ລວມ' : 'ເດືອນນີ້'}):
+                      </span>
+                      <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">+{fmt(stats.in)}</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Actions */}
                 <div className="relative z-10 border-t border-slate-200 dark:border-white/10 pt-4 space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setShowTransModal({ type: 'income', wallet_id: wallet.id })}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-all active:scale-95"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-                      {isMain ? 'ຍອດຍົກມາ' : 'ເຕີມເງິນ'}
-                    </button>
-                    <button
-                      onClick={() => setShowTransModal({ type: 'expense', wallet_id: wallet.id })}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 hover:bg-rose-200 dark:hover:bg-rose-500/25 transition-all active:scale-95"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-                      {isMain ? 'ຖອນ/ຈ່າຍ' : 'ຖອນອອກ'}
-                    </button>
-                  </div>
+                  {!isPartner && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setShowTransModal({ type: 'income', wallet_id: wallet.id })}
+                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-all active:scale-95"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                        {isMain ? 'ຍອດຍົກມາ' : 'ເຕີມເງິນ'}
+                      </button>
+                      <button
+                        onClick={() => setShowTransModal({ type: 'expense', wallet_id: wallet.id })}
+                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 hover:bg-rose-200 dark:hover:bg-rose-500/25 transition-all active:scale-95"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                        {isMain ? 'ຖອນ/ຈ່າຍ' : 'ຖອນອອກ'}
+                      </button>
+                    </div>
+                  )}
                   {/* Statement button */}
                   <button
-                    onClick={() => setShowStatement(wallet)}
+                    onClick={() => { setShowStatement(wallet); setStatementMonth(monthFilter); }}
                     className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-extrabold transition-all active:scale-95 ${
                       isMain
                         ? 'bg-white text-indigo-950 hover:bg-slate-100 shadow-md'
@@ -633,8 +733,11 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
 
       {/* ══ Statement Modal ══ */}
       {showStatement && (() => {
-        const rows = buildStatement(showStatement);
-        const stmtStats = getWalletStats(showStatement, 'all');
+        const allRows = buildStatement(showStatement);
+        const rows = statementMonth === 'all' 
+          ? allRows 
+          : allRows.filter(r => ymOf(r.date.toISOString()) === statementMonth);
+        const stmtStats = getWalletStats(showStatement, statementMonth);
         return (
           <BaseModal
             isOpen
@@ -644,22 +747,33 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
             width="w-full"
             bodyClassName="flex flex-col flex-1 overflow-hidden bg-white dark:bg-slate-900"
             title={
-              <div>
+              <div className="w-full">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                   <span className="text-xl">📋</span>
                   Statement — {showStatement.name}
                 </h3>
-                <div className="flex items-center gap-3 mt-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/20">
-                    ຍອດ: {fmt(stmtStats.bal)} ₭
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/20">
-                    In: +{fmt(stmtStats.in)} ₭
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/20">
-                    Out: -{fmt(stmtStats.out)} ₭
-                  </span>
-                  <span className="text-xs text-slate-400">{rows.length} ລາຍການ</span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-2 w-full">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/20">
+                      ຍອດ{statementMonth !== 'all' ? 'ສະສົມ' : ''}: {fmt(stmtStats.bal)} ₭
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/20">
+                      In: +{fmt(stmtStats.in)} ₭
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/20">
+                      Out: -{fmt(stmtStats.out)} ₭
+                    </span>
+                    <span className="text-xs text-slate-400">{rows.length} ລາຍການ</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="month"
+                      value={statementMonth === 'all' ? '' : statementMonth}
+                      onChange={e => setStatementMonth(e.target.value || 'all')}
+                      className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 outline-none"
+                    />
+                    <button onClick={() => setStatementMonth('all')} className="px-3 py-1.5 text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">ທັງໝົດ</button>
+                  </div>
                 </div>
               </div>
             }
@@ -828,62 +942,69 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
 
       {/* ══ Profit Split Modal ══ */}
       {showProfitSplit && (() => {
-        const distributablePool = totalBalance + totalDividends;
         return (
         <BaseModal isOpen onClose={() => setShowProfitSplit(false)}
           title={<h3 className="text-xl font-bold text-slate-900 dark:text-white">🎯 ລະບົບແບ່ງຜົນຮຸ້ນສ່ວນ</h3>}
-          maxWidth="max-w-3xl" width="w-full" maxHeight="max-h-[90vh]"
-          bodyClassName="p-6 bg-white dark:bg-slate-900 overflow-y-auto"
+          maxWidth="max-w-4xl" width="w-full" maxHeight="max-h-[90vh]"
+          bodyClassName="p-6 bg-slate-50 dark:bg-slate-900 overflow-y-auto"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            {[
-              { label: 'ຍອດເງິນປັນຜົນລວມ (100%)', val: fmt(distributablePool) + ' ₭', cls: 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-300' },
-              { label: 'ເບີກປັນຜົນໄປແລ້ວ', val: fmt(totalDividends) + ' ₭', cls: 'bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300' },
-              { label: 'ຍອດເງິນຄົງເຫຼືອ', val: fmt(totalBalance) + ' ₭', cls: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300' },
-            ].map(c => (
-              <div key={c.label} className={`rounded-xl p-4 border ${c.cls}`}>
-                <p className="text-xs font-bold uppercase tracking-wider opacity-70">{c.label}</p>
-                <p className="text-xl font-black mt-1">{c.val}</p>
+          {/* Header Summary */}
+          <div className="mb-6">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between max-w-sm mx-auto">
+              <div>
+                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">ເງິນສົດໃນບັນຊີ (ສະພາບຄ່ອງ)</p>
+                <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">{fmt(totalBalance)} ₭</p>
               </div>
-            ))}
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+            </div>
           </div>
 
           {wallets.filter(w => w.type === 'partner').length === 0 ? (
             <p className="text-center py-8 text-slate-400 text-sm">ຍັງບໍ່ມີຮຸ້ນສ່ວນ · ກົດ "+ ກະເປົາ" ເພື່ອເພີ່ມ</p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 shadow-sm">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs uppercase">
+                <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs uppercase border-b border-slate-200 dark:border-slate-700">
                   <tr>
-                    {['ຮຸ້ນສ່ວນ', 'ທຶນລົງ', 'ສ່ວນແບ່ງ (%)', 'ຄວນໄດ້', 'ເບີກແລ້ວ', 'ຍັງຄ້າງ'].map(h => (
-                      <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>
-                    ))}
+                    <th className="px-4 py-4 text-left font-bold">ຮຸ້ນສ່ວນ</th>
+                    <th className="px-4 py-4 text-left font-bold">ສ່ວນແບ່ງ (%)</th>
+                    <th className="px-4 py-4 text-left font-bold text-rose-500">ເບີກໄປແລ້ວ</th>
+                    <th className="px-4 py-4 text-left font-black text-blue-600 dark:text-blue-400">ຖອນໄດ້ຈິງ (MAX)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {wallets.filter(w => w.type === 'partner').map(w => {
                     const percent = w.share_percent ?? 50;
-                    const shouldGet = (distributablePool * percent) / 100;
+                    
                     const withdrawn = transactions
                       .filter(t => t.type === 'profit_split' && t.partner_split_id === w.id)
                       .reduce((s, t) => s + t.amount, 0);
-                    const remain = shouldGet - withdrawn;
-                    const capital = transactions
-                      .filter(t => t.wallet_id === w.id && t.type === 'income')
+                      
+                    const totalHistoricalWithdrawn = transactions
+                      .filter(t => t.type === 'profit_split')
                       .reduce((s, t) => s + t.amount, 0);
+                      
+                    const historicalPool = totalBalance + totalHistoricalWithdrawn;
+                    const fairShare = (historicalPool * percent) / 100;
+                    const remain = Math.max(0, Math.min(fairShare - withdrawn, totalBalance));
+                    
                     return (
-                      <tr key={w.id} className="hover:bg-slate-50 dark:hover:bg-white/3 transition-colors">
-                        <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">{w.name}</td>
-                        <td className="px-4 py-3 text-slate-500">{fmt(capital)} ₭</td>
-                        <td className="px-4 py-3">
+                      <tr key={w.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="px-4 py-4 font-bold text-slate-900 dark:text-white">{w.name}</td>
+                        <td className="px-4 py-4">
                           <input type="number" value={percent} min={0} max={100}
-                            onChange={async e => { await supabase.from('wallets').update({ share_percent: Number(e.target.value) }).eq('id', w.id); }}
-                            className="w-16 text-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 text-slate-900 dark:text-white outline-none focus:border-violet-500"
+                            onChange={async e => {
+                              const newPercent = Number(e.target.value);
+                              setWallets(prev => prev.map(wallet => wallet.id === w.id ? { ...wallet, share_percent: newPercent } : wallet));
+                              await supabase.from('wallets').update({ share_percent: newPercent }).eq('id', w.id);
+                            }}
+                            className="w-16 text-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 text-slate-900 dark:text-white outline-none focus:border-violet-500"
                           />
                         </td>
-                        <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">{fmt(shouldGet)} ₭</td>
-                        <td className="px-4 py-3 text-rose-500">{fmt(withdrawn)} ₭</td>
-                        <td className={`px-4 py-3 font-extrabold ${remain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'}`}>{fmt(remain)} ₭</td>
+                        <td className="px-4 py-4 text-rose-500">{fmt(withdrawn)} ₭</td>
+                        <td className={`px-4 py-4 font-black ${remain > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{fmt(remain)} ₭</td>
                       </tr>
                     );
                   })}

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { supabase } from '@/app/lib/supabase';
-import OtherExpenses from './OtherExpenses';
 
 // --- Wallet types (shared with OrderWallet) ---
 interface WalletDoc {
@@ -67,6 +66,19 @@ const BarChartComponent = lazy(async () => {
     chartjs.Filler
   );
   return { default: mod.Bar };
+});
+
+const DoughnutChartComponent = lazy(async () => {
+  const [mod, chartjs] = await Promise.all([
+    import('react-chartjs-2'),
+    import('chart.js'),
+  ]);
+  chartjs.Chart.register(
+    chartjs.ArcElement,
+    chartjs.Tooltip,
+    chartjs.Legend
+  );
+  return { default: mod.Doughnut };
 });
 
 const ChartFallback = () => (
@@ -465,7 +477,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
       revenue += price;
       cost += orderCost;
       expenses += orderExp;
-      if (o.paymentMethod === 'ຈ່າຍແລ້ວ' || o.PaymentMethod === 'ຈ່າຍແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ' || o.status === 'ປິດບິນແລ້ວ') actualCashIn += price;
+      if (o.paymentMethod === 'ຈ່າຍແລ້ວ' || o.PaymentMethod === 'ຈ່າຍແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ' || o.status === 'ປິດບິນແລ້ວ' || o.status === 'ສຳເລັດ') actualCashIn += price;
       else if ((o.deposit || o.DepositAmount || o['ຍອດມັດຈຳ'] || 0) > 0) actualCashIn += o.deposit || o.DepositAmount || o['ຍອດມັດຈຳ'] || 0;
     });
 
@@ -518,7 +530,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
     return Object.entries(map)
       .map(([name, qty]) => ({ name, qty }))
       .sort((a, b) => b.qty - a.qty)
-      .slice(0, 5);
+      .slice(0, 10);
   }, [activeOrders]);
 
   // Chart data: daily if monthFilter set, otherwise monthly
@@ -617,8 +629,9 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
     const healthy     = stocks.filter(s => s.quantity > 5);
     const totalItems  = stocks.reduce((sum, s) => sum + s.quantity, 0);
     const totalValue  = stocks.reduce((sum, s) => sum + s.sellingPrice * s.quantity, 0);
+    const totalCostValue = stocks.reduce((sum, s) => sum + (s.costPrice || 0) * s.quantity, 0);
     const maxQty      = Math.max(...stocks.map(s => s.quantity), 1);
-    return { outOfStock, lowStock, healthy, totalItems, totalValue, maxQty, total: stocks.length };
+    return { outOfStock, lowStock, healthy, totalItems, totalValue, totalCostValue, maxQty, total: stocks.length };
   }, [stocks]);
 
   const recentOrders = useMemo(() => {
@@ -634,9 +647,6 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
   return (
     <div className={`animate-[fadeIn_0.35s_ease-out] space-y-6 pb-32 lg:space-y-8 transition-opacity duration-500 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
       
-      {/* Other Expenses Widget */}
-      <OtherExpenses onSaved={() => setTxRefreshTrigger(prev => prev + 1)} />
-
       {/* Header + filters */}
       <div className={`${card} ${pad} relative overflow-hidden`}>
         <div className="absolute -right-16 -top-16 w-56 h-56 bg-violet-100/60 dark:bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -702,135 +712,186 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
         </div>
       </div>
 
-      {/* 3 stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 lg:gap-8">
-        <div className={`${card} ${pad}`}>
-          <div className="flex items-center justify-between mb-4">
-            <span className={`${chip} bg-blue-50 text-blue-600`}>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                strokeWidth={2}
-                stroke="currentColor"
-                className="w-5 h-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6.75A2.25 2.25 0 0018.75 4.5H5.25A2.25 2.25 0 003 6.75V9"
-                />
-              </svg>
-            </span>
-          </div>
-          <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-            ຍອດຂາຍລວມ
-          </p>
-          <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
-            {formatNumber(stats.revenue)} ₭
-          </p>
-        </div>
-
-        <div className={`${card} ${pad}`}>
-          <div className="flex items-center justify-between mb-4">
-            <span className={`${chip} bg-orange-50 text-orange-600`}>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                strokeWidth={2}
-                stroke="currentColor"
-                className="w-5 h-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"
-                />
-              </svg>
-            </span>
-            <span className="text-[11px] font-black bg-orange-100 text-orange-700 px-2.5 py-1 rounded-lg">
-              {stats.costPct.toFixed(1)}%
-            </span>
-          </div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-            ຕົ້ນທຶນສິນຄ້າ + ຄ່າຂົນສົ່ງ
-          </p>
-          <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-orange-600">
-            {formatNumber(stats.cost)} ₭
-          </p>
-        </div>
-
-        <div className={`${card} ${pad}`}>
-          <div className="flex items-center justify-between mb-4">
-            <span className={`${chip} bg-rose-50 text-rose-600`}>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                strokeWidth={2}
-                stroke="currentColor"
-                className="w-5 h-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"
-                />
-              </svg>
-            </span>
-            <span className="text-[11px] font-black bg-rose-100 text-rose-700 px-2.5 py-1 rounded-lg">
-              {stats.expPct.toFixed(1)}%
-            </span>
-          </div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-            ຄ່າໃຊ້ຈ່າຍອື່ນໆ
-          </p>
-          <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-rose-600">
-            {formatNumber(stats.expenses)} ₭
-          </p>
-        </div>
-      </div>
-
-      {/* 2 profit cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-        <div className="relative overflow-hidden rounded-2xl p-6 sm:p-7 bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-500/20">
-          <div className="absolute -right-10 -top-10 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative flex items-start justify-between mb-6">
+      {/* 5 Summary Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        
+        {/* 1. Total Sales */}
+        <div className={`${card} p-5 lg:p-6 group flex flex-col justify-between`}>
+          <div className="flex items-start justify-between mb-2">
             <div>
-              <p className="text-[11px] font-bold text-blue-100 uppercase tracking-widest">
-                ກຳໄລຄາດໝາຍ
-              </p>
-              <p className="text-[11px] text-blue-200 mt-0.5">
-                ຍອດຂາຍ - ຕົ້ນທຶນ - ຄ່າໃຊ້ຈ່າຍ (ທຸກອໍເດີທີ່ບໍ່ຍົກເລີກ)
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ຍອດຂາຍລວມ</p>
+                <div className="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center">i</div>
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+                {formatNumber(stats.revenue)}
               </p>
             </div>
-            <span className="text-[11px] font-black bg-white text-indigo-700 px-2.5 py-1 rounded-lg shrink-0">
-              {stats.expectedPct.toFixed(1)}%
-            </span>
           </div>
-          <p className="relative text-3xl sm:text-4xl font-extrabold tabular-nums">
-            {formatNumber(stats.expectedProfit)}{' '}
-            <span className="text-base font-bold">₭</span>
-          </p>
+          <div className="mt-4">
+            <svg viewBox="0 0 100 20" className="w-full h-8 overflow-visible" preserveAspectRatio="none">
+              <path d="M0,15 C20,15 30,5 50,10 C70,15 80,0 100,5" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" className="drop-shadow-[0_2px_4px_rgba(139,92,246,0.5)]" />
+            </svg>
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <div className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                  <path d="M12 2.25a.75.75 0 01.75.75v8.25H21a.75.75 0 01.75.75 9 9 0 11-18 0 9 9 0 019-9zM12.75 2.5v8.75h8.75a9.012 9.012 0 00-8.75-8.75z" />
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl p-6 sm:p-7 bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20">
-          <div className="absolute -right-10 -top-10 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative flex items-start justify-between mb-6">
+        {/* 2. Total Cost */}
+        <div className={`${card} p-5 lg:p-6 group flex flex-col justify-between`}>
+          <div className="flex items-start justify-between mb-2">
             <div>
-              <p className="text-[11px] font-bold text-emerald-100 uppercase tracking-widest">
-                ກຳໄລຕົວຈິງສຸດທິ
-              </p>
-              <p className="text-[11px] text-emerald-100 mt-0.5">
-                ເງິນເຂົ້າກະເປົາແທ້ (ຈ່າຍແລ້ວ/ມັດຈຳ) - ຄ່າໃຊ້ຈ່າຍ
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ຕົ້ນທຶນລວມ</p>
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+                {formatNumber(stats.cost)}
               </p>
             </div>
-            <span className="text-[11px] font-black bg-white text-emerald-700 px-2.5 py-1 rounded-lg shrink-0">
-              {stats.netPct.toFixed(1)}%
-            </span>
           </div>
-          <p className="relative text-3xl sm:text-4xl font-extrabold tabular-nums">
-            {formatNumber(stats.netProfit)}{' '}
-            <span className="text-base font-bold">₭</span>
-          </p>
+          <div className="mt-4">
+            <svg viewBox="0 0 100 20" className="w-full h-8 overflow-visible" preserveAspectRatio="none">
+              <path d="M0,10 C20,15 30,5 50,15 C70,25 80,5 100,10" fill="none" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round" className="drop-shadow-[0_2px_4px_rgba(6,182,212,0.5)]" />
+            </svg>
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <span className="text-[10px] font-black bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 px-1.5 py-0.5 rounded shadow-sm border border-cyan-100 dark:border-cyan-500/20">
+                {stats.costPct.toFixed(1)}%
+              </span>
+              <div className="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.25a2.25 2.25 0 00-2.25 2.25v6.75m0-9h3.755c.915 0 1.765.485 2.227 1.25a16.51 16.51 0 012.802 7.5z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 2.5 Stock Cost Value */}
+        <div className={`${card} p-5 lg:p-6 group flex flex-col justify-between`}>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ຕົ້ນທຶນຂອງສາງ</p>
+                <div className="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center" title="ມູນຄ່າຕົ້ນທຶນສິນຄ້າທີ່ຍັງເຫຼືອໃນສາງ (ຈຳນວນ × ຕົ້ນທຶນ)">i</div>
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+                {formatNumber(stockStats.totalCostValue)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <svg viewBox="0 0 100 20" className="w-full h-8 overflow-visible" preserveAspectRatio="none">
+              <path d="M0,15 C20,10 30,20 50,15 C70,10 80,15 100,5" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" className="drop-shadow-[0_2px_4px_rgba(245,158,11,0.5)]" />
+            </svg>
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        {/* 3. Other Expenses */}
+        <div className={`${card} p-5 lg:p-6 group flex flex-col justify-between`}>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ຄ່າໃຊ້ຈ່າຍອື່ນໆ</p>
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+                {formatNumber(stats.expenses)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <svg viewBox="0 0 100 20" className="w-full h-8 overflow-visible" preserveAspectRatio="none">
+              <path d="M0,5 C20,10 30,0 50,10 C70,20 80,5 100,10" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" className="drop-shadow-[0_2px_4px_rgba(16,185,129,0.5)]" />
+            </svg>
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <span className="text-[10px] font-black bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded shadow-sm border border-emerald-100 dark:border-emerald-500/20">
+                {stats.expPct.toFixed(1)}%
+              </span>
+              <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Expected Profit */}
+        <div className={`${card} p-5 lg:p-6 group flex flex-col justify-between`}>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ກຳໄລຄາດໝາຍ</p>
+                <div className="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center" title="ຍອດຂາຍ - ຕົ້ນທຶນ - ຄ່າໃຊ້ຈ່າຍ (ທຸກອໍເດີທີ່ບໍ່ຍົກເລີກ)">i</div>
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+                {formatNumber(stats.expectedProfit)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <svg viewBox="0 0 100 20" className="w-full h-8 overflow-visible" preserveAspectRatio="none">
+              <path d="M0,20 C20,10 30,15 50,5 C70,10 80,0 100,5" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" className="drop-shadow-[0_2px_4px_rgba(59,130,246,0.5)]" />
+            </svg>
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <span className="text-[10px] font-black bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded shadow-sm border border-blue-100 dark:border-blue-500/20">
+                {stats.expectedPct.toFixed(1)}%
+              </span>
+              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Net Profit */}
+        <div className={`${card} p-5 lg:p-6 group flex flex-col justify-between`}>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ກຳໄລຕົວຈິງສຸດທິ</p>
+                <div className="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center" title="ເງິນເຂົ້າກະເປົາແທ້ (ຈ່າຍແລ້ວ/ມັດຈຳ) - ຄ່າໃຊ້ຈ່າຍ">i</div>
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+                {formatNumber(stats.netProfit)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <svg viewBox="0 0 100 20" className="w-full h-8 overflow-visible" preserveAspectRatio="none">
+              <path d="M0,15 C20,10 30,20 50,5 C70,10 80,0 100,10" fill="none" stroke="#c026d3" strokeWidth="2" strokeLinecap="round" className="drop-shadow-[0_2px_4px_rgba(192,38,211,0.5)]" />
+            </svg>
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <span className="text-[10px] font-black bg-fuchsia-50 dark:bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 px-1.5 py-0.5 rounded shadow-sm border border-fuchsia-100 dark:border-fuchsia-500/20">
+                {stats.netPct.toFixed(1)}%
+              </span>
+              <div className="w-8 h-8 rounded-full bg-fuchsia-100 dark:bg-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -962,162 +1023,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
         </div>
       </div>
 
-      {/* ── Stock Status Widget ── */}
-      <div className={`${card} ${pad}`}>
-        <div className="flex items-center justify-between mb-5">
-          <div className={sectionTitle}>
-            <span className={`${chip} bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400`}>
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-              </svg>
-            </span>
-            ສະຖານະສາງສິນຄ້າ
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 px-3.5 py-1.5 rounded-lg">
-              ລວມ <span className="text-violet-600 dark:text-violet-400 ml-1">{stockStats.total}</span> ລາຍການ
-            </span>
-          </div>
-        </div>
 
-        {stocks.length === 0 ? (
-          <div className="py-10 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={1} stroke="currentColor" className="w-7 h-7 text-slate-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-              </svg>
-            </div>
-            <p className="text-sm text-slate-400 dark:text-slate-500 font-medium">ຍັງບໍ່ມີສິນຄ້າໃນສາງ</p>
-          </div>
-        ) : (
-          <>
-            {/* Summary chips */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-              {[
-                {
-                  label: 'ສິນຄ້າທັງໝົດ',
-                  value: stockStats.total + ' ລາຍການ',
-                  sub: stockStats.totalItems.toLocaleString() + ' ຊິ້ນ',
-                  bg: 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
-                  text: 'text-violet-700 dark:text-violet-300',
-                  icon: (
-                    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-                    </svg>
-                  ),
-                },
-                {
-                  label: 'ມູນຄ່າສາງ',
-                  value: stockStats.totalValue.toLocaleString() + ' ₭',
-                  sub: 'ລາຄາຂາຍ × ຈຳນວນ',
-                  bg: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
-                  text: 'text-emerald-700 dark:text-emerald-300',
-                  icon: (
-                    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
-                    </svg>
-                  ),
-                },
-                {
-                  label: 'ໃກ້ຈະໝົດ',
-                  value: stockStats.lowStock.length + ' ລາຍການ',
-                  sub: '≤ 5 ຊິ້ນ',
-                  bg: 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
-                  text: 'text-amber-700 dark:text-amber-300',
-                  icon: (
-                    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                    </svg>
-                  ),
-                },
-                {
-                  label: 'ໝົດສາງ',
-                  value: stockStats.outOfStock.length + ' ລາຍການ',
-                  sub: 'ຈຳນວນ = 0',
-                  bg: 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20',
-                  text: 'text-rose-700 dark:text-rose-300',
-                  icon: (
-                    <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                    </svg>
-                  ),
-                },
-              ].map((s) => (
-                <div key={s.label} className={`rounded-xl p-4 border flex items-start gap-3 ${s.bg}`}>
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-white/60 dark:bg-black/20 ${s.text}`}>
-                    {s.icon}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{s.label}</p>
-                    <p className={`text-base font-extrabold tabular-nums leading-tight ${s.text}`}>{s.value}</p>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{s.sub}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Stock list with progress bars */}
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {[...stocks]
-                .sort((a, b) => a.quantity - b.quantity)
-                .slice(0, 10)
-                .map((item) => {
-                  const pct = Math.min((item.quantity / stockStats.maxQty) * 100, 100);
-                  const isOut  = item.quantity === 0;
-                  const isLow  = item.quantity > 0 && item.quantity <= 5;
-                  const barColor = isOut
-                    ? 'bg-rose-500'
-                    : isLow
-                    ? 'bg-amber-400'
-                    : 'bg-emerald-500';
-                  const qtyColor = isOut
-                    ? 'text-rose-600 dark:text-rose-400'
-                    : isLow
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-emerald-600 dark:text-emerald-400';
-                  return (
-                    <div key={item.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
-                      {/* Thumbnail */}
-                      <div className="w-9 h-9 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 shrink-0 relative">
-                        {item.imageUrl?.startsWith('http') ? (
-                          <img src={item.imageUrl} alt={item.itemName} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">📦</div>
-                        )}
-                      </div>
-                      {/* Name + bar */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{item.itemName}</span>
-                          <span className={`text-sm font-extrabold tabular-nums shrink-0 ${qtyColor}`}>
-                            {item.quantity.toLocaleString()} ຊິ້ນ
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-slate-100 dark:bg-white/8 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                            style={{ width: isOut ? '100%' : `${pct}%`, opacity: isOut ? 0.4 : 1 }}
-                          />
-                        </div>
-                      </div>
-                      {/* Status badge */}
-                      {isOut ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 shrink-0">ໝົດ</span>
-                      ) : isLow ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30 shrink-0 animate-pulse">ໃກ້ໝົດ</span>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              {stocks.length > 10 && (
-                <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2">
-                  ສະແດງ 10 ລາຍການທຳອິດ (ຈາກ {stocks.length} ທັງໝົດ)
-                </p>
-              )}
-            </div>
-          </>
-        )}
-      </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
@@ -1152,34 +1058,57 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
                       {
                         label: 'ກຳໄລ',
                         data: chartData.profit,
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16,185,129,0.12)',
+                        borderColor: '#a855f7', // purple-500
+                        backgroundColor: (context: any) => {
+                          const chart = context.chart;
+                          const { ctx, chartArea } = chart;
+                          if (!chartArea) return 'rgba(168, 85, 247, 0.1)';
+                          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                          gradient.addColorStop(0, 'rgba(168, 85, 247, 0.5)');
+                          gradient.addColorStop(1, 'rgba(168, 85, 247, 0.0)');
+                          return gradient;
+                        },
                         borderWidth: 3,
-                        tension: 0.4,
+                        tension: 0,
                         fill: true,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#10b981',
+                        pointRadius: 4,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#a855f7',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 6,
                       },
                       {
                         label: 'ຍອດຂາຍ',
                         data: chartData.sales,
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'transparent',
-                        borderWidth: 2.5,
-                        tension: 0.4,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#3b82f6',
+                        borderColor: '#3b82f6', // blue-500
+                        backgroundColor: (context: any) => {
+                          const chart = context.chart;
+                          const { ctx, chartArea } = chart;
+                          if (!chartArea) return 'rgba(59, 130, 246, 0.1)';
+                          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                          gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
+                          gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+                          return gradient;
+                        },
+                        borderWidth: 3,
+                        tension: 0,
+                        fill: true,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#3b82f6',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 6,
                       },
                       {
                         label: 'ຕົ້ນທຶນ',
                         data: chartData.cost,
-                        borderColor: '#f43f5e',
+                        borderColor: '#06b6d4', // cyan-500
                         backgroundColor: 'transparent',
-                        borderWidth: 2.5,
+                        borderWidth: 2,
                         borderDash: [5, 5],
                         tension: 0.4,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#f43f5e',
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
                       },
                     ],
                   }}
@@ -1251,55 +1180,77 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
                 />
               </svg>
             </span>
-            ສິນຄ້າຂາຍດີ (Top 5)
+            ສິນຄ້າຂາຍດີ (Top 10)
           </div>
-          <div className="h-[300px] sm:h-[340px]">
+          <div className="h-[300px] sm:h-[340px] flex items-center justify-center">
             {topProducts.length === 0 ? (
               <EmptyChart text="ຍັງບໍ່ມີການຂາຍໃນຊ່ວງນີ້" />
             ) : (
               <Suspense fallback={<ChartFallback />}>
-                <BarChartComponent
-                  data={{
-                    labels: topProducts.map((p) => p.name),
-                    datasets: [
-                      {
-                        data: topProducts.map((p) => p.qty),
-                        backgroundColor: [
-                          '#3b82f6',
-                          '#10b981',
-                          '#f59e0b',
-                          '#8b5cf6',
-                          '#ec4899',
-                        ],
-                        borderRadius: 6,
-                        barPercentage: 0.6,
-                      },
-                    ],
-                  }}
-                  options={{
-                    indexAxis: 'y' as const,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: { display: false },
-                      tooltip: { backgroundColor: '#0f172a', padding: 10 },
-                    },
-                    scales: {
-                      x: {
-                        ticks: { color: '#94a3b8', precision: 0 },
-                        grid: { color: '#e2e8f0' },
-                        beginAtZero: true,
-                      },
-                      y: {
-                        ticks: {
-                          color: '#64748b',
-                          font: { size: 11, weight: 'bold' as const },
+                <div className="relative w-full h-full">
+                  <DoughnutChartComponent
+                    data={{
+                      labels: topProducts.map((p) => p.name),
+                      datasets: [
+                        {
+                          data: topProducts.map((p) => p.qty),
+                          backgroundColor: [
+                            '#8b5cf6', // violet
+                            '#3b82f6', // blue
+                            '#0ea5e9', // sky
+                            '#14b8a6', // teal
+                            '#10b981', // emerald
+                            '#84cc16', // lime
+                            '#eab308', // yellow
+                            '#f97316', // orange
+                            '#ef4444', // red
+                            '#d946ef', // fuchsia
+                          ],
+                          borderWidth: 0,
+                          hoverOffset: 8,
                         },
-                        grid: { display: false },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      cutout: '75%',
+                      layout: {
+                        padding: 10
                       },
-                    },
-                  }}
-                />
+                      plugins: {
+                        legend: { 
+                          position: 'right',
+                          labels: {
+                            color: '#64748b',
+                            font: { size: 12, family: "'Noto Sans Lao', sans-serif", weight: 'bold' as const },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            padding: 20
+                          }
+                        },
+                        tooltip: { 
+                          backgroundColor: '#0f172a',
+                          padding: 12,
+                          titleFont: { size: 14, family: "'Noto Sans Lao', sans-serif" },
+                          bodyFont: { size: 13, family: "'Noto Sans Lao', sans-serif", weight: 'bold' as const },
+                          callbacks: {
+                            label: function(context) {
+                              return ` ${context.label}: ${context.raw} ຊิ้น`;
+                            }
+                          }
+                        },
+                      }
+                    }}
+                  />
+                  {/* Center Text for Doughnut */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pr-[120px]">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">ລວມ</span>
+                    <span className="text-xl font-extrabold text-slate-800 dark:text-slate-100 tabular-nums">
+                      {topProducts.reduce((sum, p) => sum + p.qty, 0)}
+                    </span>
+                  </div>
+                </div>
               </Suspense>
             )}
           </div>

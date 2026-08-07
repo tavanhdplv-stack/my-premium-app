@@ -22,6 +22,7 @@ const card  = 'premium-card glass';
 const input = 'w-full h-10 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none transition focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10';
 const lbl   = 'block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
 const primaryBtn = 'inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/30 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0';
+const secondaryBtn = 'inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold shadow-sm hover:bg-slate-200 dark:hover:bg-slate-700 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:cursor-not-allowed';
 
 // ── Level config ──────────────────────────────────────────────────────────
 const LEVEL_CFG = {
@@ -60,6 +61,7 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
   const [listLoading, setListLoading] = useState(true);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [editingAgentId,  setEditingAgentId]  = useState<string | null>(null);
   const [search,      setSearch]      = useState('');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
@@ -171,40 +173,41 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+    // --- Manual Fetch Function ---
+  const fetchAgentsData = async () => {
+    const { data, error } = await supabase.from('agents').select('*').order('created_at', { ascending: false });
+    if (error) {
+      if (process.env.NODE_ENV !== 'production') console.error('[OrderAgent] fetch error:', error);
+      setListLoading(false);
+      return;
+    }
+    if (data) {
+       const mapped = data.map(d => ({
+          id: d.id,
+          agentName: d.agent_name ?? d.name ?? '',
+          phone: d.phone ?? '',
+          level: d.level ?? 'General',
+          totalSales: d.total_sales ?? d.initial_sales ?? 0,
+          notes: d.notes ?? '',
+          createdAt: d.created_at ? { seconds: new Date(d.created_at).getTime() / 1000 } : undefined,
+       })) as Agent[];
+       setAgents(mapped);
+    }
+    setListLoading(false);
+  };
 
   // Real-time listener
   useEffect(() => {
-    const fetchAgents = async () => {
-      const { data, error } = await supabase.from('agents').select('*').order('created_at', { ascending: false });
-      if (error) {
-        if (process.env.NODE_ENV !== 'production') console.error('[OrderAgent] fetch error:', error);
-        setListLoading(false);
-        return;
-      }
-      if (data) {
-         const mapped = data.map(d => ({
-            id: d.id,
-            agentName: d.agent_name ?? d.name ?? '',
-            phone: d.phone ?? '',
-            level: d.level ?? 'General',
-            totalSales: d.total_sales ?? d.initial_sales ?? 0,
-            notes: d.notes ?? '',
-            createdAt: d.created_at ? { seconds: new Date(d.created_at).getTime() / 1000 } : undefined,
-         })) as Agent[];
-         setAgents(mapped);
-      }
-      setListLoading(false);
-    };
-    fetchAgents();
+    fetchAgentsData();
     
     const channel = supabase.channel('agents')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'agents' }, fetchAgents)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agents' }, fetchAgentsData)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // ── Add agent ────────────────────────────────────────────────────────────
-  const handleAddAgent = async (e: React.FormEvent) => {
+  // ── Submit (Add or Edit) agent ────────────────────────────────────────────────────────────
+  const handleSubmitAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agentName.trim() || !phone.trim()) {
       setMessage({ type: 'error', text: 'ກະລຸນາກອກຊື່ ແລະ ເບີໂທໃຫ້ຄົບ' });
@@ -213,22 +216,36 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
-      const { error } = await supabase.from('agents').insert({
-        agent_name: agentName.trim(),
-        phone: phone.trim(),
-        level,
-        total_sales: initialSales ? Number(initialSales) : 0,
-        notes: notes.trim(),
-      });
-      
-      if (error) {
-        console.error('Insert agent error:', error);
-        throw error;
+      if (editingAgentId) {
+        const { error } = await supabase.from('agents').update({
+          agent_name: agentName.trim(),
+          phone: phone.trim(),
+          level,
+          total_sales: initialSales ? Number(initialSales) : 0,
+          notes: notes.trim(),
+        }).eq('id', editingAgentId);
+        
+        if (error) throw error;
+        setMessage({ type: 'success', text: '✅ ແກ້ໄຂຂໍ້ມູນຕົວແທນສຳເລັດແລ້ວ!' });
+      } else {
+        const { error } = await supabase.from('agents').insert({
+          agent_name: agentName.trim(),
+          phone: phone.trim(),
+          level,
+          total_sales: initialSales ? Number(initialSales) : 0,
+          notes: notes.trim(),
+        });
+        
+        if (error) throw error;
+        setMessage({ type: 'success', text: '✅ ລົງທະບຽນຕົວແທນສຳເລັດແລ້ວ!' });
       }
       
-      setMessage({ type: 'success', text: '✅ ລົງທະບຽນຕົວແທນສຳເລັດແລ້ວ!' });
       setAgentName(''); setPhone(''); setInitialSales(''); setNotes('');
       setLevel('General');
+      setEditingAgentId(null);
+      
+      // Update manually to ensure UI syncs immediately
+      fetchAgentsData();
     } catch (err: any) {
       console.error(err);
       setMessage({ type: 'error', text: err.message || 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່' });
@@ -237,10 +254,31 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
     }
   };
 
+  const handleEditClick = (agent: Agent, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingAgentId(agent.id);
+    setAgentName(agent.agentName);
+    setPhone(agent.phone);
+    setLevel(agent.level);
+    setInitialSales(agent.totalSales.toString());
+    setNotes(agent.notes || '');
+    setMessage({ type: '', text: '' });
+  };
+  
+  const handleCancelEdit = () => {
+    setEditingAgentId(null);
+    setAgentName(''); setPhone(''); setInitialSales(''); setNotes('');
+    setLevel('General');
+    setMessage({ type: '', text: '' });
+  };
+
   // ── Cycle level ──────────────────────────────────────────────────────────
   const handleCycleLevel = async (id: string, current: Agent['level']) => {
     const next = LEVEL_CFG[current].next as Agent['level'];
-    try { await supabase.from('agents').update({ level: next }).eq('id', id); }
+    try { 
+      await supabase.from('agents').update({ level: next }).eq('id', id); 
+      fetchAgentsData();
+    }
     catch (e) { console.error(e); }
   };
 
@@ -248,7 +286,10 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     setConfirmDeleteId(null);
-    try { await supabase.from('agents').delete().eq('id', id); }
+    try { 
+      await supabase.from('agents').delete().eq('id', id); 
+      fetchAgentsData();
+    }
     catch { setMessage({ type: 'error', text: 'ລົບບໍ່ສຳເລັດ ກະລຸນາລອງໃໝ່' }); }
     finally { setDeletingId(null); }
   };
@@ -295,18 +336,18 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
 
         {/* ═══ LEFT — Add Agent Form ═══ */}
         <div className={`${card} p-5 sm:p-6`}>
-          <div className="flex items-center gap-2.5 mb-5">
-            <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-violet-600 dark:text-violet-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
-              </svg>
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-violet-600 dark:text-violet-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+                </svg>
+              </div>
+              <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                {editingAgentId ? 'ແກ້ໄຂຂໍ້ມູນຕົວແທນ' : 'ເພີ່ມຕົວແທນໃໝ່'}
+              </span>
             </div>
-            <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-              ເພີ່ມຕົວແທນໃໝ່
-            </span>
-          </div>
-
-          <form onSubmit={handleAddAgent} className="space-y-4">
+  
+            <form onSubmit={handleSubmitAgent} className="space-y-4">
             <div>
               <label className={lbl}>ຊື່ຕົວແທນ / ນາມແຝງ <span className="text-rose-400">*</span></label>
               <input type="text" value={agentName} onChange={e => setAgentName(e.target.value)}
@@ -360,13 +401,22 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
               </div>
             )}
 
-            <button type="submit" disabled={loading} className={`${primaryBtn} w-full`}>
-              {loading ? (
-                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>ກຳລັງບັນທຶກ...</>
-              ) : (
-                <><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>ລົງທະບຽນຕົວແທນ</>
+            <div className="flex gap-2">
+              {editingAgentId && (
+                <button type="button" onClick={handleCancelEdit} className={`${secondaryBtn} w-1/3`}>
+                  ຍົກເລີກ
+                </button>
               )}
-            </button>
+              <button type="submit" disabled={loading} className={`${primaryBtn} ${editingAgentId ? 'w-2/3' : 'w-full'}`}>
+                {loading ? (
+                  <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>ກຳລັງບັນທຶກ...</>
+                ) : (
+                  editingAgentId 
+                    ? <><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>ບັນທຶກການແກ້ໄຂ</>
+                    : <><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>ລົງທະບຽນຕົວແທນ</>
+                )}
+              </button>
+            </div>
           </form>
         </div>
 
@@ -471,16 +521,25 @@ export default function OrderAgent({ onCreateOrder, onEdit }: { onCreateOrder?: 
                             {(agent.totalSales || 0).toLocaleString()} ₭
                           </span>
                         </td>
-                        {/* Delete */}
-                        <td className="py-3.5 px-2 text-center">
-                          <button onClick={(e) => { e.stopPropagation(); handleDelete(agent.id); }}
-                            disabled={deletingId === agent.id}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center mx-auto bg-slate-100 dark:bg-white/8 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-all"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                            </svg>
-                          </button>
+                        {/* Manage */}
+                        <td className="py-3.5 px-2">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={(e) => handleEditClick(agent, e)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-white/8 hover:bg-violet-100 dark:hover:bg-violet-500/20 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-all"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                              </svg>
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDelete(agent.id); }}
+                              disabled={deletingId === agent.id}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-white/8 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-all"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                              </svg>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
