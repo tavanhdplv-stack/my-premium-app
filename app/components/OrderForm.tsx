@@ -547,7 +547,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         }));
         
         // 4. Call Gemini API directly (Client-side)
-        const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+        const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyBa51oN_781RFMvmUw1j3txuwgZwbwvnF4';
         if (!apiKey) {
            setMessage({ type: 'error', text: 'ບໍ່ພົບ API Key ຂອງระบบ AI' });
            setIsAIScanning(false);
@@ -587,8 +587,13 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
         const result = await model.generateContent([prompt, imagePart]);
         const responseText = result.response.text();
-        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const data = JSON.parse(cleanedText);
+        let data: any = {};
+        try {
+          const cleanedText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+          data = JSON.parse(cleanedText);
+        } catch (e) {
+          console.warn('Failed to parse JSON', responseText);
+        }
         
         if (data.matched_id) {
           const stock = stocks.find(s => s.id === data.matched_id);

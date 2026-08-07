@@ -218,8 +218,14 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       const result = await model.generateContent([prompt, imagePart]);
       const responseText = result.response.text();
       
-      const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const data = JSON.parse(cleanedText);
+      let data: any = {};
+      try {
+        const cleanedText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        data = JSON.parse(cleanedText);
+      } catch (e) {
+        console.warn('Failed to parse JSON, using raw text', responseText);
+        data = { searchQuery: responseText.trim() };
+      }
       
       if (data.searchQuery) {
         setSearchQuery(data.searchQuery);
@@ -246,7 +252,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       console.error(err);
       Swal.fire({
         title: 'ເກີດຂໍ້ຜິດພາດ',
-        text: 'ບໍ່ສາມາດສະແກນຮູບໄດ້ ກະລຸນາລອງໃໝ່',
+        text: `ບໍ່ສາມາດສະແກນຮູບໄດ້: ${err.message || 'Unknown error'}`,
         icon: 'error',
         confirmButtonColor: '#14b8a6'
       });
