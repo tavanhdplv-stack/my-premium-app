@@ -863,10 +863,10 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [shopName,    setShopName]    = useState('');
   const [shopPhone,   setShopPhone]   = useState('');
-  const [visibleCount, setVisibleCount] = useState(20);
+  const [visibleCount, setVisibleCount] = useState(50);
 
   useEffect(() => {
-    setVisibleCount(20);
+    setVisibleCount(50);
   }, [search, statusFilter, dateFilter, customMonth]);
 
 
@@ -1716,7 +1716,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
             {visibleCount < filteredOrders.length && (
               <div className="flex justify-center p-6 border-t border-slate-100 dark:border-white/5">
                 <button
-                  onClick={() => setVisibleCount(prev => prev + 20)}
+                  onClick={() => setVisibleCount(prev => prev + 50)}
                   className="px-8 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-full transition-all flex items-center gap-2"
                 >
                   <ArrowPathIcon className="w-4 h-4" />
