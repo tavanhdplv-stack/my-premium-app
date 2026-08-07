@@ -588,10 +588,10 @@ export default function DashboardPage() {
             <StorageUsage />
             <button
               onClick={() => handleTabChange('settings')}
-              className={`p-2 lg:p-2.5 rounded-[12px] lg:rounded-[14px] flex items-center justify-center transition-all ${activeTab === 'settings' ? 'bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
+              className={`w-11 h-11 sm:w-12 sm:h-12 rounded-[14px] bg-white/60 dark:bg-white/5 backdrop-blur-md border border-slate-200/80 dark:border-white/10 flex items-center justify-center transition-all duration-300 shadow-sm hover:shadow-md ${activeTab === 'settings' ? 'bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-500/30' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'}`}
               title="ຕັ້ງຄ່າ"
             >
-              <Icon name="settings" className="w-5 h-5" />
+              <Icon name="settings" className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
             <InstallPWA />
             <ThemeToggle />
