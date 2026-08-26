@@ -137,6 +137,7 @@ export default function DashboardPage() {
   const [appReady, setAppReady] = useState(false);
   const [globalPendingNotifyCount, setGlobalPendingNotifyCount] = useState(0);
   const [globalPendingOrderCount, setGlobalPendingOrderCount] = useState(0);
+  const [globalSentCount, setGlobalSentCount] = useState(0);
   const [globalPendingFilter, setGlobalPendingFilter] = useState<{ filter: string; ts: number } | undefined>(undefined);
   const [globalSearch, setGlobalSearch] = useState<{ query: string; ts: number } | undefined>(undefined);
   const [globalAnnouncement, setGlobalAnnouncement] = useState<string | null>(null);
@@ -171,6 +172,9 @@ export default function DashboardPage() {
               delayMins = parseInt(settings.notifyDelay, 10);
               if (typeof window !== 'undefined') localStorage.setItem('notifyDelay', String(delayMins));
             }
+            if (settings.notifyMessageTemplate !== undefined) {
+              if (typeof window !== 'undefined') localStorage.setItem('notifyMessageTemplate', settings.notifyMessageTemplate);
+            }
           } else {
             const delayStr = typeof window !== 'undefined' ? localStorage.getItem('notifyDelay') : '0';
             delayMins = parseInt(delayStr || '0', 10);
@@ -194,15 +198,21 @@ export default function DashboardPage() {
 
         if (!notifyError && !cancelled) setGlobalPendingNotifyCount(notifyCount || 0);
 
-        const { data: receiveOrders, error: receiveError } = await supabase
+        const { count: receiveCount, error: receiveError } = await supabase
           .from('orders')
-          .select('id, items')
+          .select('*', { count: 'exact', head: true })
           .eq('status', 'ຮັບອໍເດີແລ້ວ');
 
         if (!receiveError && !cancelled) {
-          const count = (receiveOrders || []).filter(o => o.items?.some((i: any) => !i.cost || Number(i.cost) === 0)).length;
-          setGlobalPendingOrderCount(count);
+          setGlobalPendingOrderCount(receiveCount || 0);
         }
+
+        const { count: sentCount, error: sentError } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ');
+
+        if (!sentError && !cancelled) setGlobalSentCount(sentCount || 0);
 
         const { data: annData } = await supabase.from('notes').select('content').eq('title', '___SHOP_ANNOUNCEMENT___').maybeSingle();
         if (!cancelled) {
@@ -285,15 +295,24 @@ export default function DashboardPage() {
             }
           }
           
-          if (e.detail.oldStatus === 'ຮັບອໍເດີແລ້ວ' && e.detail.newStatus !== 'ຮັບອໍເດີແລ້ວ') {
+          if (e.detail.newStatus === 'ຮັບອໍເດີແລ້ວ' && e.detail.oldStatus !== 'ຮັບອໍເດີແລ້ວ') {
+            setGlobalPendingOrderCount(p => p + 1);
+          } else if (e.detail.oldStatus === 'ຮັບອໍເດີແລ້ວ' && e.detail.newStatus !== 'ຮັບອໍເດີແລ້ວ') {
             setGlobalPendingOrderCount(p => Math.max(0, p - 1));
+          }
+          if (e.detail.newStatus === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' && e.detail.oldStatus !== 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ') {
+            setGlobalSentCount(p => p + 1);
+          } else if (e.detail.oldStatus === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' && e.detail.newStatus !== 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ') {
+            setGlobalSentCount(p => Math.max(0, p - 1));
           }
         }
         if (e.detail.type === 'new_order') {
           if (delayMins === 0 && e.detail.status === 'ສົ່ງບິນແລ້ວ') {
             setGlobalPendingNotifyCount(p => p + 1);
-          } else if (e.detail.status === 'ຮັບອໍເດີແລ້ວ' && !e.detail.hasCost) {
+          } else if (e.detail.status === 'ຮັບອໍເດີແລ້ວ') {
             setGlobalPendingOrderCount(p => p + 1);
+          } else if (e.detail.status === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ') {
+            setGlobalSentCount(p => p + 1);
           }
         }
         if (e.detail.type === 'delete_order') {
@@ -301,6 +320,8 @@ export default function DashboardPage() {
             setGlobalPendingNotifyCount(p => Math.max(0, p - 1));
           } else if (e.detail.status === 'ຮັບອໍເດີແລ້ວ') {
             setGlobalPendingOrderCount(p => Math.max(0, p - 1));
+          } else if (e.detail.status === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ') {
+            setGlobalSentCount(p => Math.max(0, p - 1));
           }
         }
       }
@@ -406,7 +427,7 @@ export default function DashboardPage() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -50, opacity: 0, scale: 0.9 }}
               onClick={() => {
-                setGlobalPendingFilter({ filter: 'ສົ່ງບິນແລ້ວ', ts: Date.now() });
+                setGlobalPendingFilter({ filter: 'pending_notify', ts: Date.now() });
                 handleTabChange('list');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
@@ -448,6 +469,33 @@ export default function DashboardPage() {
               </span>
               <span className="flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-orange-500 text-white text-xs font-bold shadow-sm">
                 {globalPendingOrderCount}
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {globalSentCount > 0 && (
+            <motion.button
+              initial={{ y: -50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -50, opacity: 0, scale: 0.9 }}
+              onClick={() => {
+                setGlobalPendingFilter({ filter: 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', ts: Date.now() });
+                handleTabChange('list');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="flex items-center gap-3 px-5 py-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-emerald-100 dark:border-emerald-500/20 shadow-2xl shadow-emerald-500/20 rounded-full hover:scale-105 active:scale-95 transition-all group cursor-pointer"
+            >
+              <div className="relative flex items-center justify-center">
+                <div className="absolute w-4 h-4 bg-emerald-500/40 rounded-full animate-ping" />
+                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+              </div>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors whitespace-nowrap">
+                ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ
+              </span>
+              <span className="flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-emerald-500 text-white text-xs font-bold shadow-sm">
+                {globalSentCount}
               </span>
             </motion.button>
           )}
