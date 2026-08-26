@@ -62,6 +62,13 @@ body {
   font-family: 'Noto Sans Lao', sans-serif;
 }
 
+/* Prevent iOS auto-zoom on inputs, even in Desktop Mode on mobile */
+@media screen and (max-width: 1024px), (pointer: coarse) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
