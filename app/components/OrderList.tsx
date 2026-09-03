@@ -1216,7 +1216,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
           }
         }
       } else {
-        matchStatus = o.status === statusFilter || (o.items || []).some(i => i.status === statusFilter);
+        matchStatus = o.status === statusFilter || (o.items || []).some(i => i.status === statusFilter || (statusFilter === 'ຮັບອໍເດີແລ້ວ' && (!i.status || i.status === '')));
       }
 
       let matchDate = true;

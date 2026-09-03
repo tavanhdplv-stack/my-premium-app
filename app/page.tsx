@@ -200,10 +200,8 @@ export default function DashboardPage() {
 
         const { data: pendingItemOrders, error: pendingItemError } = await supabase
           .from('orders')
-          .select('items')
-          .neq('status', 'ຍົກເລີກອໍເດີ')
-          .neq('status', 'ໄດ້ຮັບເງິນແລ້ວ')
-          .neq('status', 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ');
+          .select('items, status')
+          .neq('status', 'ຍົກເລີກອໍເດີ');
 
         if (!pendingItemError && !cancelled && pendingItemOrders) {
           let pendingItemsCount = 0;
