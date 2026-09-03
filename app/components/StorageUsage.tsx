@@ -45,7 +45,7 @@ export default function StorageUsage() {
 
   if (loading) {
     return (
-      <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/60 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-[14px] shadow-sm animate-pulse">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-white/60 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-[14px] shadow-sm animate-pulse">
         <div className="w-4 h-4 bg-slate-200 dark:bg-slate-700 rounded-md"></div>
         <div className="w-6 h-3 bg-slate-200 dark:bg-slate-700 rounded-md"></div>
         <div className="w-[1px] h-3 bg-slate-200 dark:bg-slate-700"></div>
@@ -57,7 +57,7 @@ export default function StorageUsage() {
 
   return (
     <div 
-      className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-[14px] shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 cursor-help group"
+      className="flex items-center gap-2.5 px-3 py-1.5 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-[14px] shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 cursor-help group"
       title="พื้นที่คงเหลือ: ฐานข้อมูล 500MB, รูปภาพ 1GB"
     >
       <div className="flex items-center gap-1.5" title={`ฐานข้อมูลถูกใช้ไป ${dbUsage}%`}>

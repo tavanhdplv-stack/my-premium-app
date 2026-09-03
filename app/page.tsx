@@ -543,13 +543,16 @@ export default function DashboardPage() {
             </div>
 
             {/* Mobile-only Right Buttons */}
-            <div className="flex sm:hidden items-center gap-2">
+            <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+              <div className="scale-90 origin-right">
+                <StorageUsage />
+              </div>
               <ThemeToggle />
               <button
                 onClick={() => handleTabChange('settings')}
-                className="w-8 h-8 flex items-center justify-center rounded-[10px] bg-white/60 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-600 dark:text-slate-300 shadow-sm"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-[14px] bg-white/60 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-600 dark:text-slate-300 shadow-sm hover:shadow-md transition-all flex items-center justify-center"
               >
-                <Icon name="settings" className="w-4 h-4" />
+                <Icon name="settings" className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
           </div>
