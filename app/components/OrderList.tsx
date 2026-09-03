@@ -1833,7 +1833,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.2 }}
                       onClick={(e) => toggleHighlight(order.id, e)}
-                      className={`${highlightClass} transition-all duration-300 group cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1`}
+                      className={`${highlightClass} transition-all duration-300 group cursor-pointer drop-shadow-sm hover:drop-shadow-md hover:-translate-y-1`}
                     >
                       {/* # */}
                       <td className="px-1.5 py-1.5 sm:px-4 sm:py-4 text-[0.8125rem] md:text-lg font-bold text-slate-400 tabular-nums w-8 sm:w-10">{idx + 1}</td>
