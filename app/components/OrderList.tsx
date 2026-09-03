@@ -968,17 +968,24 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
       const terminalStatuses = ['ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', 'ສົ່ງບິນແລ້ວ', 'ແຈ້ງລູກຄ້າແລ້ວ', 'ໄດ້ຮັບເງິນແລ້ວ'];
       if (newItems.length > 1 && terminalStatuses.includes(newStatus)) {
         const result = await Swal.fire({
-          title: 'ປ່ຽນທຸກລາຍການ?',
-          text: `ຕ້ອງການປ່ຽນສະຖານະທຸກລາຍການໃນອໍເດີນີ້ເປັນ "${newStatus}" ພ້ອມກັນເລີຍບໍ່?`,
+          title: 'ປ່ຽນທັງໝົດເລີຍບໍ່?',
+          html: `ຕ້ອງການປ່ຽນທຸກລາຍການເປັນ<br/><b style="color: #a78bfa; font-size: 1.2em; display: inline-block; margin-top: 10px;">"${newStatus}"</b><br/>ພ້ອມກັນເລີຍບໍ່?`,
           icon: 'question',
           showCancelButton: true,
-          confirmButtonText: 'ແນ່ນອນ, ປ່ຽນທັງໝົດ',
-          cancelButtonText: 'ປ່ຽນແຄ່ລາຍການດຽວ',
+          reverseButtons: true,
+          confirmButtonText: '✅ ປ່ຽນທັງໝົດ',
+          cancelButtonText: 'ແຄ່ອັນດຽວ',
           confirmButtonColor: '#8b5cf6',
-          cancelButtonColor: '#64748b',
+          cancelButtonColor: '#475569',
           background: '#1e293b',
-          color: '#f1f5f9',
-          customClass: { popup: 'rounded-2xl' },
+          color: '#f8fafc',
+          customClass: { 
+            popup: 'rounded-[24px] shadow-2xl border border-slate-700/50',
+            title: 'text-xl font-bold mt-2',
+            htmlContainer: 'text-[15px] text-slate-300',
+            confirmButton: 'rounded-[12px] font-bold px-5 py-2.5 ml-2',
+            cancelButton: 'rounded-[12px] font-medium px-5 py-2.5 mr-2'
+          },
         });
         
         if (result.isConfirmed) {
