@@ -124,9 +124,7 @@ const SERVICE_ITEMS = [
 ];
 
 function fmtNum(n: number) {
-  if (n >= 1_000_000) return Number((n / 1_000_000).toFixed(1)).toString() + 'M';
-  if (n >= 1_000) return Number((n / 1_000).toFixed(1)).toString() + 'K';
-  return Math.round(n).toLocaleString('en-US');
+  return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendingOrder, sentCount }: HomeProps) {
@@ -753,7 +751,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
           
           <div className="relative z-10 flex flex-col mt-2">
             <span className="text-[28px] sm:text-[34px] font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
-              ₭ {loading ? '...' : Math.round(walletBalance).toLocaleString('en-US')}
+              ₭ {loading ? '...' : walletBalance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
             </span>
           </div>
           
