@@ -1795,9 +1795,9 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                       <td className="px-1.5 py-1.5 sm:px-4 sm:py-4 text-[0.8125rem] md:text-lg font-bold text-slate-400 tabular-nums w-8 sm:w-10">{idx + 1}</td>
 
                       {/* Customer & Phone & Shipping & Date */}
-                      <td className="pl-1.5 pr-1.5 py-1.5 sm:px-4 sm:py-4 min-w-[6.875rem] max-w-[8.75rem] sm:max-w-none whitespace-normal sm:whitespace-nowrap sm:min-w-[12.5rem] align-top border-r border-slate-200/80 dark:border-slate-700/50">
+                      <td className="pl-1 pr-1 py-1.5 sm:px-4 sm:py-4 w-[5.5rem] max-w-[5.5rem] sm:max-w-none whitespace-normal sm:whitespace-nowrap sm:min-w-[12.5rem] align-top border-r border-slate-200/80 dark:border-slate-700/50">
                         <div className="flex flex-col gap-0.5 sm:gap-1.5">
-                          <p className="text-xs sm:text-base font-bold text-slate-800 dark:text-slate-100 leading-tight line-clamp-2">{displayCustomerName || '—'}</p>
+                          <p className="text-[0.6875rem] sm:text-base font-bold text-slate-800 dark:text-slate-100 leading-tight line-clamp-2">{displayCustomerName || '—'}</p>
                           
                           {order.phone && (
                             <span className="text-[0.625rem] sm:text-sm text-slate-500 dark:text-slate-400 truncate max-w-full" title={order.phone}>{order.phone}</span>
@@ -1900,7 +1900,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                       </td>
 
                       {/* Items & Cost Merged */}
-                      <td className="pl-2 pr-0 py-2 sm:px-4 sm:py-4 align-top">
+                      <td className="pl-1.5 pr-0 py-2 sm:px-4 sm:py-4 align-top">
                         <div className="flex flex-col gap-2.5 sm:gap-3">
                           {(order.items || []).map((item, i) => {
                             const imgUrl = item.image_url || (item as any).imageUrl;
