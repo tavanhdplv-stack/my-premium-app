@@ -968,23 +968,35 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
       const terminalStatuses = ['ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', 'ສົ່ງບິນແລ້ວ', 'ແຈ້ງລູກຄ້າແລ້ວ', 'ໄດ້ຮັບເງິນແລ້ວ'];
       if (newItems.length > 1 && terminalStatuses.includes(newStatus)) {
         const result = await Swal.fire({
-          title: 'ປ່ຽນທັງໝົດເລີຍບໍ່?',
-          html: `ຕ້ອງການປ່ຽນທຸກລາຍການເປັນ<br/><b style="color: #a78bfa; font-size: 1.2em; display: inline-block; margin-top: 10px;">"${newStatus}"</b><br/>ພ້ອມກັນເລີຍບໍ່?`,
-          icon: 'question',
           showCancelButton: true,
           reverseButtons: true,
           confirmButtonText: '✅ ປ່ຽນທັງໝົດ',
           cancelButtonText: 'ແຄ່ອັນດຽວ',
-          confirmButtonColor: '#8b5cf6',
-          cancelButtonColor: '#475569',
-          background: '#1e293b',
-          color: '#f8fafc',
+          confirmButtonColor: '#8b5cf6', // violet-500
+          cancelButtonColor: '#334155', // slate-700
+          background: '#0f172a', // slate-900
+          html: `
+            <div style="display: flex; flex-direction: column; align-items: center; padding: 10px 0;">
+              <div style="background: rgba(139, 92, 246, 0.1); padding: 18px; border-radius: 50%; margin-bottom: 24px; box-shadow: 0 0 30px rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.2);">
+                <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+              </div>
+              <h2 style="font-size: 24px; font-weight: 800; margin: 0 0 12px 0; color: #f8fafc; letter-spacing: -0.5px;">ອັບເດດພ້ອມກັນ?</h2>
+              <p style="color: #94a3b8; font-size: 15px; margin: 0; line-height: 1.5;">
+                ຕ້ອງການປ່ຽນສະຖານະຂອງ <b>ທຸກລາຍການ</b><br/>ໃນອໍເດີນີ້ໃຫ້ກາຍເປັນ
+              </p>
+              <div style="background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; padding: 10px 24px; border-radius: 100px; margin-top: 20px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4); letter-spacing: 0.5px;">
+                ${newStatus}
+              </div>
+            </div>
+          `,
           customClass: { 
-            popup: 'rounded-[24px] shadow-2xl border border-slate-700/50',
-            title: 'text-xl font-bold mt-2',
-            htmlContainer: 'text-[15px] text-slate-300',
-            confirmButton: 'rounded-[12px] font-bold px-5 py-2.5 ml-2',
-            cancelButton: 'rounded-[12px] font-medium px-5 py-2.5 mr-2'
+            popup: 'rounded-[32px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-700/50 p-6',
+            htmlContainer: '!m-0 !p-0',
+            confirmButton: 'rounded-2xl font-bold px-8 py-3.5 ml-2 text-[15px] shadow-lg shadow-violet-500/25 transition-all hover:scale-105',
+            cancelButton: 'rounded-2xl font-semibold px-8 py-3.5 mr-2 text-[15px] text-slate-300 transition-all hover:bg-slate-600'
           },
         });
         
