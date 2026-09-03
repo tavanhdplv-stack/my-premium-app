@@ -727,19 +727,19 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
         </div>
       </div>
 
-      {/* 5 Summary Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+      {/* Summary Stat Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-6">
         
         {/* 1. Total Sales */}
-        <div className={`${card} p-5 lg:p-6 group flex flex-col justify-between`}>
-          <div className="flex items-start justify-between mb-2">
+        <div className={`${card} p-3 sm:p-5 lg:p-6 group flex flex-col justify-between col-span-2 sm:col-span-1`}>
+          <div className="flex items-start justify-between mb-1 sm:mb-2">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ຍອດຂາຍລວມ</p>
-                <div className="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center">i</div>
+              <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                <p className="text-[11px] sm:text-[11px] sm:text-[13px] font-bold text-slate-500 dark:text-slate-400">ຍອດຂາຍລວມ</p>
+                <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[9px] sm:text-[10px] flex items-center justify-center">i</div>
               </div>
-              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
-                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+              <p className="text-xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white leading-tight">
+                <span className="text-sm sm:text-[11px] sm:text-base mr-1 text-slate-400 font-bold">₭</span>
                 {formatNumber(stats.revenue)}
               </p>
             </div>
@@ -763,10 +763,10 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
           <div className="flex items-start justify-between mb-2">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ຕົ້ນທຶນລວມ</p>
+                <p className="text-[11px] sm:text-[13px] font-bold text-slate-500 dark:text-slate-400">ຕົ້ນທຶນລວມ</p>
               </div>
-              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
-                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+              <p className="text-[17px] sm:text-3xl leading-tight font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-[11px] sm:text-base mr-1 text-slate-400 font-bold">₭</span>
                 {formatNumber(stats.cost)}
               </p>
             </div>
@@ -793,11 +793,11 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
           <div className="flex items-start justify-between mb-2">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ຕົ້ນທຶນຂອງສາງ</p>
+                <p className="text-[11px] sm:text-[13px] font-bold text-slate-500 dark:text-slate-400">ຕົ້ນທຶນຂອງສາງ</p>
                 <div className="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center" title="ມູນຄ່າຕົ້ນທຶນສິນຄ້າທີ່ຍັງເຫຼືອໃນສາງ (ຈຳນວນ × ຕົ້ນທຶນ)">i</div>
               </div>
-              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
-                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+              <p className="text-[17px] sm:text-3xl leading-tight font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-[11px] sm:text-base mr-1 text-slate-400 font-bold">₭</span>
                 {formatNumber(stockStats.totalCostValue)}
               </p>
             </div>
@@ -822,10 +822,10 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
           <div className="flex items-start justify-between mb-2">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ຄ່າໃຊ້ຈ່າຍອື່ນໆ</p>
+                <p className="text-[11px] sm:text-[13px] font-bold text-slate-500 dark:text-slate-400">ຄ່າໃຊ້ຈ່າຍອື່ນໆ</p>
               </div>
-              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
-                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+              <p className="text-[17px] sm:text-3xl leading-tight font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-[11px] sm:text-base mr-1 text-slate-400 font-bold">₭</span>
                 {formatNumber(stats.expenses)}
               </p>
             </div>
@@ -852,11 +852,11 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
           <div className="flex items-start justify-between mb-2">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ກຳໄລຄາດໝາຍ</p>
+                <p className="text-[11px] sm:text-[13px] font-bold text-slate-500 dark:text-slate-400">ກຳໄລຄາດໝາຍ</p>
                 <div className="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center" title="ຍອດຂາຍ - ຕົ້ນທຶນ - ຄ່າໃຊ້ຈ່າຍ (ທຸກອໍເດີທີ່ບໍ່ຍົກເລີກ)">i</div>
               </div>
-              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
-                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+              <p className="text-[17px] sm:text-3xl leading-tight font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-[11px] sm:text-base mr-1 text-slate-400 font-bold">₭</span>
                 {formatNumber(stats.expectedProfit)}
               </p>
             </div>
@@ -883,11 +883,11 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
           <div className="flex items-start justify-between mb-2">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-[13px] font-bold text-slate-500 dark:text-slate-400">ກຳໄລຕົວຈິງສຸດທິ</p>
+                <p className="text-[11px] sm:text-[13px] font-bold text-slate-500 dark:text-slate-400">ກຳໄລຕົວຈິງສຸດທິ</p>
                 <div className="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center" title="ເງິນເຂົ້າກະເປົາແທ້ (ຈ່າຍແລ້ວ/ມັດຈຳ) - ຄ່າໃຊ້ຈ່າຍ">i</div>
               </div>
-              <p className="text-2xl sm:text-3xl font-extrabold tabular-nums text-slate-900 dark:text-white">
-                <span className="text-base mr-1 text-slate-400 font-bold">₭</span>
+              <p className="text-[17px] sm:text-3xl leading-tight font-extrabold tabular-nums text-slate-900 dark:text-white">
+                <span className="text-[11px] sm:text-base mr-1 text-slate-400 font-bold">₭</span>
                 {formatNumber(stats.netProfit)}
               </p>
             </div>
