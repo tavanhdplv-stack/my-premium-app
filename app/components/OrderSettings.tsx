@@ -18,7 +18,7 @@ import {
   XCircle,
   Save,
   Image as ImageIcon,
-  UploadCloud,
+  UploadCloud, Settings,
 } from 'lucide-react';
 import { uploadImageDirect } from '@/app/lib/uploadImage';
 import { useTheme } from '@/app/components/ThemeProvider';
@@ -357,37 +357,47 @@ export default function OrderSettings() {
     <div className="space-y-6 pb-6 max-w-3xl">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shrink-0 shadow-sm">
+            <Settings className="w-4 h-4" />
+          </div>
           ຕັ້ງຄ່າລະບົບ
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-          ປັບແຕ່ງຂໍ້ມູນຮ້ານ · ເງື່ອນໄຂ · ການສະແດງຜົນ — sync ທຸກເຄື່ອງ Firestore
+        <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium pl-[42px]">
+          ຈັດການຂໍ້ມູນຮ້ານ ແລະ ເງື່ອນໄຂການສັ່ງຊື້ ໃຫ້ເໝາະສົມກັບທ່ານ
         </p>
       </div>
 
       
       {/* ── Tabs Navigation ── */}
-      <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 mb-4 border-b border-slate-200 dark:border-white/10">
-        {[
-          { id: 'shop', label: 'ຮ້ານຄ້າ', icon: <Store className="w-4 h-4" /> },
-          { id: 'conditions', label: 'ເງື່ອນໄຂ', icon: <Clock className="w-4 h-4" /> },
-          { id: 'notifications', label: 'ແຈ້ງເຕືອນ', icon: <Bell className="w-4 h-4" /> },
-          { id: 'banners', label: 'ປ້າຍໂຄສະນາ', icon: <ImageIcon className="w-4 h-4" /> },
-          { id: 'display', label: 'ສະແດງຜົນ', icon: <Eye className="w-4 h-4" /> },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-[13px] whitespace-nowrap transition-all ${
-              activeTab === tab.id
-                ? 'bg-violet-600 text-white shadow-md shadow-violet-500/20'
-                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+      <div className="relative mt-2">
+        <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 mb-4 border-b border-slate-200 dark:border-white/10 pr-10">
+          {[
+            { id: 'shop', label: 'ຮ້ານຄ້າ', icon: <Store className="w-4 h-4" /> },
+            { id: 'conditions', label: 'ເງື່ອນໄຂ', icon: <Clock className="w-4 h-4" /> },
+            { id: 'notifications', label: 'ແຈ້ງເຕືອນ', icon: <Bell className="w-4 h-4" /> },
+            { id: 'banners', label: 'ປ້າຍໂຄສະນາ', icon: <ImageIcon className="w-4 h-4" /> },
+            { id: 'display', label: 'ສະແດງຜົນ', icon: <Eye className="w-4 h-4" /> },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-[13px] whitespace-nowrap transition-all ${
+                activeTab === tab.id
+                  ? 'bg-violet-600 text-white shadow-md shadow-violet-500/20'
+                  : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="absolute right-0 top-0 bottom-4 w-12 bg-gradient-to-l from-[#fafafa] dark:from-[#0f172a] to-transparent pointer-events-none flex items-center justify-end pr-0.5 sm:hidden">
+          <svg viewBox="0 0 24 24" fill="none" strokeWidth={3} stroke="currentColor" className="w-4 h-4 text-slate-400 dark:text-slate-500 opacity-70">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+          </svg>
+        </div>
       </div>
 
       <div className="space-y-6">
