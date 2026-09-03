@@ -1789,7 +1789,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-separate border-spacing-y-[10px] whitespace-nowrap">
+            <table className="w-full text-left border-separate border-spacing-y-[6px] whitespace-nowrap">
               <thead>
                 <tr>
                   {['#', 'ລູກຄ້າ / ຂົນສົ່ງ', hideCosts ? 'ລາຍການສິນຄ້າ' : 'ລາຍການສິນຄ້າ / ຕົ້ນທຶນ', hideCosts ? 'ຍອດຂາຍ ₭' : 'ຍອດຂາຍ / ກຳໄລ ₭', 'ຈັດການ'].map(h => (
