@@ -1789,9 +1789,9 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-separate border-spacing-y-4 whitespace-nowrap">
+            <table className="w-full text-left border-separate border-spacing-y-[10px] whitespace-nowrap">
               <thead>
-                <tr className={`${themeConfig.th} px-2`}>
+                <tr>
                   {['#', 'ລູກຄ້າ / ຂົນສົ່ງ', hideCosts ? 'ລາຍການສິນຄ້າ' : 'ລາຍການສິນຄ້າ / ຕົ້ນທຶນ', hideCosts ? 'ຍອດຂາຍ ₭' : 'ຍອດຂາຍ / ກຳໄລ ₭', 'ຈັດການ'].map(h => (
                     <th key={h} className="px-1.5 py-2 sm:px-4 sm:py-4 text-[0.5625rem] md:text-sm font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap last:text-right">
                       {h}
