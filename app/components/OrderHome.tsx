@@ -124,9 +124,9 @@ const SERVICE_ITEMS = [
 ];
 
 function fmtNum(n: number) {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K';
-  return n.toLocaleString();
+  if (n >= 1_000_000) return Number((n / 1_000_000).toFixed(1)).toString() + 'M';
+  if (n >= 1_000) return Number((n / 1_000).toFixed(1)).toString() + 'K';
+  return Math.round(n).toLocaleString('en-US');
 }
 
 export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendingOrder, sentCount }: HomeProps) {
@@ -752,8 +752,8 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
           </div>
           
           <div className="relative z-10 flex flex-col mt-2">
-            <span className="text-[40px] sm:text-[46px] font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
-              ₭ {loading ? '...' : walletBalance.toLocaleString()}
+            <span className="text-[28px] sm:text-[34px] font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              ₭ {loading ? '...' : Math.round(walletBalance).toLocaleString('en-US')}
             </span>
           </div>
           
