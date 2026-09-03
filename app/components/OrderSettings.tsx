@@ -146,7 +146,8 @@ export default function OrderSettings() {
   const [darkDefault, setDarkDefault] = useState(false);
   const [notifyDelay, setNotifyDelay] = useState('0'); // local setting
   const [notifyMessageTemplate, setNotifyMessageTemplate] = useState('ສະບາຍດີ {customer_name}, ສິນຄ້າທີ່ສັ່ງມາມາຮອດແລ້ວເດີ້! ກະລຸນາເຂົ້າມາຮັບສິນຄ້າດ້ວຍເດີ້ 📦');
-  const [banners, setBanners] = useState<string[]>([]); // global setting array
+  const [banners, setBanners] = useState<string[]>([]);
+  const [showBanners, setShowBanners] = useState(true); // global setting array
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -200,7 +201,13 @@ export default function OrderSettings() {
         if (bannerData && bannerData.content) {
           try {
             const loadedBanners = JSON.parse(bannerData.content);
-            if (Array.isArray(loadedBanners)) setBanners(loadedBanners);
+            if (Array.isArray(loadedBanners)) {
+              setBanners(loadedBanners);
+              setShowBanners(true);
+            } else if (loadedBanners && loadedBanners.urls) {
+              setBanners(loadedBanners.urls);
+              setShowBanners(loadedBanners.show !== false);
+            }
           } catch (err) {}
         }
       } catch (e) {
@@ -295,9 +302,9 @@ export default function OrderSettings() {
     try {
       const { data: existingBannerNote } = await supabase.from('notes').select('id').eq('title', '___BANNERS___').maybeSingle();
       if (existingBannerNote) {
-        await supabase.from('notes').update({ content: JSON.stringify(banners) }).eq('id', existingBannerNote.id);
+        await supabase.from('notes').update({ content: JSON.stringify({ urls: banners, show: showBanners }) }).eq('id', existingBannerNote.id);
       } else {
-        await supabase.from('notes').insert([{ title: '___BANNERS___', content: JSON.stringify(banners) }]);
+        await supabase.from('notes').insert([{ title: '___BANNERS___', content: JSON.stringify({ urls: banners, show: showBanners }) }]);
       }
       showToast('success', 'ບັນທຶກປ້າຍໂຄສະນາສຳເລັດແລ້ວ!');
     } catch (err: any) {
@@ -663,7 +670,13 @@ export default function OrderSettings() {
               </button>
             </div>
             
-            {banners.length > 0 && (
+            <Toggle
+                    label="ສະແດງປ້າຍໂຄສະນາ (Show Banners)"
+                    desc="ເປີດ-ປິດການສະແດງປ້າຍໂຄສະນາໃນໜ້າຫຼັກ"
+                    checked={showBanners}
+                    onChange={() => setShowBanners(!showBanners)}
+                  />
+                  {banners.length > 0 && (
               <div className="space-y-3 mb-4">
                 {banners.map((url, idx) => (
                   <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 relative group aspect-[2/1] max-w-sm">

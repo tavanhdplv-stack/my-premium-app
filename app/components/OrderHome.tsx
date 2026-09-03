@@ -140,6 +140,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
   const [pendingDeposit, setPendingDeposit] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [globalBanners, setGlobalBanners] = useState<string[]>([]);
+  const [showBanners, setShowBanners] = useState(true);
   const [loading, setLoading] = useState(true);
   const [isAIScanningOrder, setIsAIScanningOrder] = useState(false);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -318,7 +319,13 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
         if (bannerData && bannerData.content) {
           try {
             const loadedBanners = JSON.parse(bannerData.content);
-            if (Array.isArray(loadedBanners)) setGlobalBanners(loadedBanners);
+            if (Array.isArray(loadedBanners)) {
+              setGlobalBanners(loadedBanners);
+              setShowBanners(true);
+            } else if (loadedBanners && loadedBanners.urls) {
+              setGlobalBanners(loadedBanners.urls);
+              setShowBanners(loadedBanners.show !== false);
+            }
           } catch (err) {}
         }
 
@@ -517,6 +524,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       </motion.div>
 
       {/* ── Banner Slider ── */}
+      {showBanners && (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="relative aspect-[16/9] sm:aspect-[2/1] md:aspect-[21/9] lg:aspect-[3/1] max-h-[250px] md:max-h-[320px] w-full rounded-[24px] overflow-hidden shadow-lg border border-slate-800">
         <AnimatePresence mode="wait">
           <motion.div
@@ -563,6 +571,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
           ))}
         </div>
       </motion.div>
+      )}
 
       {/* ── Premium Service Grid (Anousith Plus Style) ── */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}>
