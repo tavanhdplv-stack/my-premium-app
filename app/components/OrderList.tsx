@@ -1799,7 +1799,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
+              <tbody className="divide-y-0">
                 {filteredOrders.slice(0, visibleCount).map((order, idx) => {
                   const total_sales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
                   const isUpdating = updatingId === order.id;
@@ -1833,7 +1833,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.2 }}
                       onClick={(e) => toggleHighlight(order.id, e)}
-                      className={`${highlightClass} transition-colors group cursor-pointer`}
+                      className={`${highlightClass} transition-colors group cursor-pointer border-b-[8px] border-slate-100 dark:border-slate-800/80 last:border-b-0`}
                     >
                       {/* # */}
                       <td className="px-1.5 py-1.5 sm:px-4 sm:py-4 text-[0.8125rem] md:text-lg font-bold text-slate-400 tabular-nums w-8 sm:w-10">{idx + 1}</td>
