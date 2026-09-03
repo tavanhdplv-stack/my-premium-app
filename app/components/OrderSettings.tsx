@@ -21,13 +21,13 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { uploadImageDirect } from '@/app/lib/uploadImage';
-
+import { useTheme } from '@/app/components/ThemeProvider';
 // ── Design tokens ─────────────────────────────────────────────────────────
 const card =
   'bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm rounded-2xl p-5 sm:p-6 transition-all';
 
 const inputCls =
-  'w-full h-10 bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none transition focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10';
+  'w-full h-10 bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 text-base text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none transition focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10';
 
 const lbl =
   'block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
@@ -44,11 +44,15 @@ function SettingSection({
   label,
   color,
   children,
+  onSave,
+  saving,
 }: {
   icon: React.ReactNode;
   label: string;
   color: string;
   children: React.ReactNode;
+  onSave?: () => void;
+  saving?: boolean;
 }) {
   return (
     <div className={card}>
@@ -63,6 +67,28 @@ function SettingSection({
         {label}
       </div>
       <div className="space-y-4">{children}</div>
+      {onSave && (
+        <div className="mt-5 pt-4 border-t border-slate-100 dark:border-white/8 flex justify-end">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className={`${primaryBtn} h-9 px-4 text-xs rounded-lg shadow-sm`}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                ກຳລັງບັນທຶກ...
+              </>
+            ) : (
+              <>
+                <Save className="w-3.5 h-3.5 mr-1.5" />
+                ບັນທຶກ
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -107,6 +133,7 @@ function Toggle({
 }
 
 export default function OrderSettings() {
+  const { appZoom, setAppZoom } = useTheme();
   // ── State ─────────────────────────────────────────────────────────────
   const [shopName, setShopName] = useState('PreOrder');
   const [shopPhone, setShopPhone] = useState('');
@@ -117,11 +144,14 @@ export default function OrderSettings() {
   const [showProfit, setShowProfit] = useState(true);
   const [darkDefault, setDarkDefault] = useState(false);
   const [notifyDelay, setNotifyDelay] = useState('0'); // local setting
+  const [notifyMessageTemplate, setNotifyMessageTemplate] = useState('ສະບາຍດີ {customer_name}, ສິນຄ້າທີ່ສັ່ງມາມາຮອດແລ້ວເດີ້! ກະລຸນາເຂົ້າມາຮັບສິນຄ້າດ້ວຍເດີ້ 📦');
   const [banners, setBanners] = useState<string[]>([]); // global setting array
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [savingSection, setSavingSection] = useState<string | null>(null);
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | '';
     text: string;
@@ -152,12 +182,15 @@ export default function OrderSettings() {
           try {
             const settings = JSON.parse(noteData.content);
             if (settings.notifyDelay !== undefined) setNotifyDelay(String(settings.notifyDelay));
+            if (settings.notifyMessageTemplate !== undefined) setNotifyMessageTemplate(settings.notifyMessageTemplate);
           } catch (err) {}
         } else {
           // Fallback to localStorage if no global setting yet
           if (typeof window !== 'undefined') {
             const storedDelay = localStorage.getItem('notifyDelay');
             if (storedDelay) setNotifyDelay(storedDelay);
+            const storedTemplate = localStorage.getItem('notifyMessageTemplate');
+            if (storedTemplate) setNotifyMessageTemplate(storedTemplate);
           }
         }
 
@@ -185,78 +218,108 @@ export default function OrderSettings() {
     };
   }, []);
 
-  // ── Save to Firestore ─────────────────────────────────────────────────
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  // ── Save Helpers ─────────────────────────────────────────────────
+  const showToast = (type: 'success' | 'error' | '', text: string) => {
+    setMessage({ type, text });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setMessage({ type: '', text: '' }), 3500);
+  };
+
+  const handleSaveShopInfo = async () => {
+    setSavingSection('shop');
     setMessage({ type: '', text: '' });
     try {
-      // 1. Try to update system table (might fail if table doesn't exist yet)
-      const { error: sysError } = await supabase.from('system').update({
+      await supabase.from('system').update({
         shop_name: shopName,
         shop_phone: shopPhone,
         exchange_rate: parseFloat(exchangeRate) || 0,
+        updated_at: new Date().toISOString(),
+      }).eq('id', 'settings');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('shopName', shopName);
+        localStorage.setItem('shopPhone', shopPhone);
+      }
+      showToast('success', 'ບັນທຶກຂໍ້ມູນຮ້ານຄ້າສຳເລັດແລ້ວ!');
+    } catch (err: any) {
+      showToast('error', `ເກີດຂໍ້ຜິດພາດ: ${err?.message || 'ກະລຸນາລອງໃໝ່'}`);
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const handleSaveConditions = async () => {
+    setSavingSection('conditions');
+    setMessage({ type: '', text: '' });
+    try {
+      await supabase.from('system').update({
         shipping_time: shippingTime,
         default_deposit: parseFloat(defaultDeposit) || 0,
         available_sizes: availableSizes,
+        updated_at: new Date().toISOString(),
+      }).eq('id', 'settings');
+      showToast('success', 'ບັນທຶກເງື່ອນໄຂສຳເລັດແລ້ວ!');
+    } catch (err: any) {
+      showToast('error', `ເກີດຂໍ້ຜິດພາດ: ${err?.message || 'ກະລຸນາລອງໃໝ່'}`);
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    setSavingSection('notifications');
+    setMessage({ type: '', text: '' });
+    try {
+      const globalSettings = { notifyDelay: parseInt(notifyDelay || '0', 10), notifyMessageTemplate: notifyMessageTemplate };
+      const { data: existingNote } = await supabase.from('notes').select('id').eq('title', '___SYSTEM_SETTINGS___').maybeSingle();
+      if (existingNote) {
+        await supabase.from('notes').update({ content: JSON.stringify(globalSettings) }).eq('id', existingNote.id);
+      } else {
+        await supabase.from('notes').insert([{ title: '___SYSTEM_SETTINGS___', content: JSON.stringify(globalSettings) }]);
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('notifyDelay', notifyDelay);
+        localStorage.setItem('notifyMessageTemplate', notifyMessageTemplate);
+      }
+      showToast('success', 'ບັນທຶກການແຈ້ງເຕືອນສຳເລັດແລ້ວ!');
+    } catch (err: any) {
+      showToast('error', `ເກີດຂໍ້ຜິດພາດ: ${err?.message || 'ກະລຸນາລອງໃໝ່'}`);
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const handleSaveBanners = async () => {
+    setSavingSection('banners');
+    setMessage({ type: '', text: '' });
+    try {
+      const { data: existingBannerNote } = await supabase.from('notes').select('id').eq('title', '___BANNERS___').maybeSingle();
+      if (existingBannerNote) {
+        await supabase.from('notes').update({ content: JSON.stringify(banners) }).eq('id', existingBannerNote.id);
+      } else {
+        await supabase.from('notes').insert([{ title: '___BANNERS___', content: JSON.stringify(banners) }]);
+      }
+      showToast('success', 'ບັນທຶກປ້າຍໂຄສະນາສຳເລັດແລ້ວ!');
+    } catch (err: any) {
+      showToast('error', `ເກີດຂໍ້ຜິດພາດ: ${err?.message || 'ກະລຸນາລອງໃໝ່'}`);
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const handleSaveDisplay = async () => {
+    setSavingSection('display');
+    setMessage({ type: '', text: '' });
+    try {
+      await supabase.from('system').update({
         show_profit: showProfit,
         dark_default: darkDefault,
         updated_at: new Date().toISOString(),
       }).eq('id', 'settings');
-      
-      if (sysError && sysError.code !== 'PGRST205') {
-        console.error('[OrderSettings] system update error:', sysError);
-      }
-      
-      // 2. Save global notify settings to notes
-      const globalSettings = { notifyDelay: parseInt(notifyDelay || '0', 10) };
-      const { data: existingNote } = await supabase.from('notes').select('id').eq('title', '___SYSTEM_SETTINGS___').maybeSingle();
-      if (existingNote) {
-        const { error: updateNoteErr } = await supabase.from('notes').update({ content: JSON.stringify(globalSettings) }).eq('id', existingNote.id);
-        if (updateNoteErr) throw updateNoteErr;
-      } else {
-        const { error: insertNoteErr } = await supabase.from('notes').insert([{ title: '___SYSTEM_SETTINGS___', content: JSON.stringify(globalSettings) }]);
-        if (insertNoteErr) throw insertNoteErr;
-      }
-
-      // 3. Save global banners to notes
-      const { data: existingBannerNote } = await supabase.from('notes').select('id').eq('title', '___BANNERS___').maybeSingle();
-      if (existingBannerNote) {
-        const { error: updateBannerErr } = await supabase.from('notes').update({ content: JSON.stringify(banners) }).eq('id', existingBannerNote.id);
-        if (updateBannerErr) throw updateBannerErr;
-      } else {
-        const { error: insertBannerErr } = await supabase.from('notes').insert([{ title: '___BANNERS___', content: JSON.stringify(banners) }]);
-        if (insertBannerErr) throw insertBannerErr;
-      }
-
-      // 4. Save shopName/shopPhone to localStorage for copy-text use
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('shopName', shopName);
-          localStorage.setItem('shopPhone', shopPhone);
-          localStorage.setItem('notifyDelay', notifyDelay);
-        } catch {
-          // ignore
-        }
-      }
-
-      setMessage({
-        type: 'success',
-        text: 'ບັນທຶກການຕັ້ງຄ່າລະບົບສຳເລັດແລ້ວ!',
-      });
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-      toastTimer.current = setTimeout(
-        () => setMessage({ type: '', text: '' }),
-        3500
-      );
+      showToast('success', 'ບັນທຶກການສະແດງຜົນສຳເລັດແລ້ວ!');
     } catch (err: any) {
-      console.error('[OrderSettings] save error:', err);
-      setMessage({
-        type: 'error',
-        text: `ເກີດຂໍ້ຜິດພາດ: ${err?.message || 'ກະລຸນາລອງໃໝ່'}`,
-      });
+      showToast('error', `ເກີດຂໍ້ຜິດພາດ: ${err?.message || 'ກະລຸນາລອງໃໝ່'}`);
     } finally {
-      setLoading(false);
+      setSavingSection(null);
     }
   };
 
@@ -301,12 +364,14 @@ export default function OrderSettings() {
         </p>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-6">
+      <div className="space-y-6">
         {/* ── Section 1: Shop Info ── */}
         <SettingSection
           label="ຂໍ້ມູນຮ້ານຄ້າ"
           color="bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
           icon={<Store className="w-5 h-5" />}
+          onSave={handleSaveShopInfo}
+          saving={savingSection === 'shop'}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -363,6 +428,8 @@ export default function OrderSettings() {
           label="ເງື່ອນໄຂສັ່ງຊື້"
           color="bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400"
           icon={<Clock className="w-5 h-5" />}
+          onSave={handleSaveConditions}
+          saving={savingSection === 'conditions'}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -425,6 +492,8 @@ export default function OrderSettings() {
           label="ການແຈ້ງເຕືອນ (ມີຜົນກັບທຸກເຄື່ອງ)"
           color="bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400"
           icon={<Bell className="w-5 h-5" />}
+          onSave={handleSaveNotifications}
+          saving={savingSection === 'notifications'}
         >
           <div>
             <label className={lbl}>ເວລາໜ່ວງການແຈ້ງເຕືອນ (ພາຍຫຼັງປ່ຽນເປັນ "ສົ່ງບິນແລ້ວ")</label>
@@ -472,6 +541,19 @@ export default function OrderSettings() {
             <p className="text-xs text-slate-400">
               ກຳນົດວ່າຈະໃຫ້ປ້າຍແຈ້ງເຕືອນສີແດງສະແດງຕອນໃດ ພາຍຫຼັງກົດສົ່ງບິນແລ້ວ. <br/>(ການຕັ້ງຄ່ານີ້ຈະມີຜົນກັບທຸກເຄື່ອງທີ່ເຂົ້າໃຊ້ງານ)
             </p>
+
+            <div className="mt-5">
+              <label className={lbl}>ຂໍ້ຄວາມແຈ້ງເຕືອນລູກຄ້າອັດຕະໂນມັດ (WhatsApp)</label>
+              <textarea
+                value={notifyMessageTemplate}
+                onChange={(e) => setNotifyMessageTemplate(e.target.value)}
+                placeholder="ສະບາຍດີ {customer_name}, ສິນຄ້າທີ່ສັ່ງມາມາຮອດແລ້ວເດີ້!..."
+                className={`${inputCls} min-h-[80px] resize-y py-3 leading-relaxed`}
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                ສາມາດໃຊ້ <code>{`{customer_name}`}</code> ເພື່ອດຶງຊື່ລູກຄ້າອັດຕະໂນມັດມາແທນທີ່ໄດ້.
+              </p>
+            </div>
           </div>
         </SettingSection>
 
@@ -480,6 +562,8 @@ export default function OrderSettings() {
           label="ປ້າຍໂຄສະນາ (Banner Ads)"
           color="bg-sky-50 dark:bg-sky-500/15 text-sky-600 dark:text-sky-400"
           icon={<ImageIcon className="w-5 h-5" />}
+          onSave={handleSaveBanners}
+          saving={savingSection === 'banners'}
         >
           <div>
             <label className={lbl}>URL ຮູບພາບໂຄສະນາ (ສະແດງໜ້າຫຼັກ, ສູງສຸດ 5 ປ້າຍ)</label>
@@ -566,6 +650,8 @@ export default function OrderSettings() {
           label="ການສະແດງຜົນ & UI"
           color="bg-purple-50 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400"
           icon={<Eye className="w-5 h-5" />}
+          onSave={handleSaveDisplay}
+          saving={savingSection === 'display'}
         >
           <Toggle
             checked={showProfit}
@@ -579,6 +665,35 @@ export default function OrderSettings() {
             label="ໃຊ້ Dark Mode ເປັນຄ່າຕັ້ງຕົ້ນ"
             desc="ເປີດໃຊ້ Dark Mode ໂດຍອັດຕະໂນມັດສຳລັບຜູ້ໃຊ້ໃໝ່"
           />
+          <div className="flex flex-col gap-2 p-4 rounded-xl bg-slate-50/60 dark:bg-white/[0.03] border border-slate-100 dark:border-white/8 transition-colors">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  ຂະໜາດໜ້າຈໍ (Zoom)
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  ປັບການຊູມຫຍໍ້ເຂົ້າຫຼືຂະຫຍາຍອອກຂອງແອັບ (ເລີ່ມຕົ້ນ 50%)
+                </p>
+              </div>
+              <span className="text-sm font-bold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-500/20 px-2 py-1 rounded-md">
+                {appZoom}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="30"
+              max="150"
+              step="5"
+              value={appZoom}
+              onChange={(e) => setAppZoom(Number(e.target.value))}
+              className="w-full mt-2 accent-violet-600"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 font-medium px-1">
+              <span>30%</span>
+              <span>100%</span>
+              <span>150%</span>
+            </div>
+          </div>
         </SettingSection>
 
         {/* ── System Info card ── */}
@@ -630,26 +745,7 @@ export default function OrderSettings() {
             {message.text}
           </div>
         )}
-
-        {/* Save button */}
-        <button
-          type="submit"
-          disabled={loading}
-          className={`${primaryBtn} w-full`}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              ກຳລັງບັນທຶກ...
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              ບັນທຶກການຕັ້ງຄ່າລະບົບ
-            </>
-          )}
-        </button>
-      </form>
+      </div>
     </div>
   );
 }

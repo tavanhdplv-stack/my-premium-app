@@ -62,9 +62,55 @@ body {
   font-family: 'Noto Sans Lao', sans-serif;
 }
 
-/* Prevent iOS auto-zoom on inputs globally */
-input, textarea, select {
-  font-size: 16px !important;
+/* ─── Prevent mobile browser auto-zoom on input focus ──────────────────────
+   Root cause: iOS Safari AND Android Chrome zoom in when any input's
+   computed font-size < 16px at the moment of focus.
+
+   Strategy (defence-in-depth):
+   1. CSS rule below forces ≥16px on ALL input variants (highest specificity
+      wins via !important — overrides Tailwind text-sm/text-xs).
+   2. touch-action:manipulation removes the 300ms tap delay and disables the
+      double-tap-zoom gesture on the element itself.
+   3. -webkit-text-size-adjust stops iOS from rescaling text in landscape.
+   4. Additional :focus rule for older WebKit on narrow viewports.
+─────────────────────────────────────────────────────────────────────────── */
+input,
+input[type="text"],
+input[type="number"],
+input[type="tel"],
+input[type="email"],
+input[type="search"],
+input[type="password"],
+input[type="url"],
+input[type="date"],
+input[type="month"],
+input[type="week"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="color"],
+textarea,
+select {
+  /* Guarantee ≥16px so the browser never auto-zooms on focus */
+  font-size: max(16px, 1em) !important;
+  /* Remove 300ms tap delay & disable double-tap zoom on the element */
+  touch-action: manipulation;
+}
+
+/* Prevent iOS from rescaling text in landscape */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Disable double-tap zoom globally (Chrome 56+) */
+  touch-action: manipulation;
+}
+
+/* Belt-and-suspenders: lock font-size on focus for older mobile WebKit */
+@media (max-width: 767px) {
+  input:focus,
+  textarea:focus,
+  select:focus {
+    font-size: 16px !important;
+  }
 }
 
 ::-webkit-scrollbar {

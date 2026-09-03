@@ -15,6 +15,7 @@ import {
   PencilIcon,
   TrashIcon,
   EyeIcon,
+  EyeSlashIcon,
   DocumentTextIcon,
   TruckIcon,
   UserIcon,
@@ -29,6 +30,8 @@ import {
   CheckIcon,
   ExclamationTriangleIcon,
   ClockIcon,
+  EllipsisVerticalIcon,
+  BellIcon,
 } from '@heroicons/react/24/outline';
 import {
   ArrowTrendingUpIcon,
@@ -41,12 +44,12 @@ import { ImageGalleryModal, GalleryImage } from './ImageGalleryModal';
 // ═══════════════════════════════════════════════════════════════════════
 export const STATUS_META = [
   { value: 'ຮັບອໍເດີແລ້ວ',            chip: 'bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',         dot: 'bg-blue-500'    },
-  { value: 'ສົ່ງບິນແລ້ວ',              chip: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300',          dot: 'bg-cyan-500'    },
-  { value: 'ກວດສອບແລ້ວ',               chip: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300', dot: 'bg-emerald-500' },
-  { value: 'ໂອນມັດຈຳແລ້ວ',            chip: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',   dot: 'bg-yellow-500'  },
   { value: 'ສັ່ງເຄື່ອງແລ້ວ',           chip: 'bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300',   dot: 'bg-orange-500'  },
-  { value: 'ເຄື່ອງມາຮອດແລ້ວ',         chip: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300',   dot: 'bg-indigo-500'  },
   { value: 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', chip: 'bg-purple-50 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300',   dot: 'bg-purple-500'  },
+  { value: 'ແຈ້ງລູກຄ້າແລ້ວ',          chip: 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/20 dark:text-fuchsia-300', dot: 'bg-fuchsia-500'  },
+  { value: 'ສົ່ງບິນແລ້ວ',              chip: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300',          dot: 'bg-cyan-500'    },
+  { value: 'ໂອນມັດຈຳແລ້ວ',            chip: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',   dot: 'bg-yellow-500'  },
+  { value: 'ເຄື່ອງມາຮອດແລ້ວ',         chip: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300',   dot: 'bg-indigo-500'  },
   { value: 'ໄດ້ຮັບເງິນແລ້ວ',           chip: 'bg-lime-50 text-lime-700 dark:bg-lime-500/20 dark:text-lime-300',           dot: 'bg-lime-500'    },
   { value: 'ຍົກເລີກອໍເດີ',             chip: 'bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300',           dot: 'bg-rose-500'    },
 ];
@@ -72,7 +75,7 @@ const card =
 const pad = 'p-5 sm:p-7';
 
 const inputCls =
-  'h-11 w-full bg-white/70 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/70 dark:border-white/10 rounded-[18px] px-4 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400/70 outline-none transition-all duration-200 focus:bg-white dark:focus:bg-slate-800/90 focus:border-teal-400 dark:focus:border-teal-500 focus:shadow-[0_0_0_4px_rgba(20,184,166,0.12)]';
+  'h-11 w-full bg-white/70 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/70 dark:border-white/10 rounded-[18px] px-4 text-base text-slate-800 dark:text-slate-100 placeholder:text-slate-400/70 outline-none transition-all duration-200 focus:bg-white dark:focus:bg-slate-800/90 focus:border-teal-400 dark:focus:border-teal-500 focus:shadow-[0_0_0_4px_rgba(20,184,166,0.12)]';
 
 const btnGhost =
   'h-10 px-4 flex items-center gap-2 rounded-[20px] border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50/80 dark:hover:bg-white/10 transition-all hover:shadow-md active:scale-[0.97]';
@@ -80,7 +83,7 @@ const btnGhost =
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES (คงเดิม)
 // ═══════════════════════════════════════════════════════════════════════
-interface OrderItem { id: string; name: string; qty: number; cost: number; price: number; status?: string; image_url?: string; _cost_updated_at?: string; _cost_by?: string; }
+interface OrderItem { id: string; name: string; qty: number; cost: number; price: number; status?: string; image_url?: string; _cost_updated_at?: string; _cost_by?: string; tracking_code?: string; }
 interface Order {
   id: string;
   customer_name: string;
@@ -132,14 +135,14 @@ function formatDate(ts: any, short = false) {
   const d = tsToDate(ts);
   if (!d) return '—';
   return short
-    ? d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' })
-    : d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' });
+    ? d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })
+    : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
 function formatTime(ts: any) {
   const d = tsToDate(ts);
   if (!d) return '';
-  return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 function getYM(ts: any) {
@@ -154,10 +157,13 @@ function getInitials(name: string) {
   return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : name.substring(0, 2).toUpperCase();
 }
 
-function getWhatsAppUrl(phone: string) {
+function getWhatsAppUrl(phone: string, text?: string) {
   const digits = phone.replace(/[^0-9]/g, '');
-  if (digits.startsWith('0')) return `https://wa.me/856${digits.slice(1)}`;
-  return `https://wa.me/${digits}`;
+  const baseUrl = digits.startsWith('0') ? `https://wa.me/856${digits.slice(1)}` : `https://wa.me/${digits}`;
+  if (text) {
+    return `${baseUrl}?text=${encodeURIComponent(text)}`;
+  }
+  return baseUrl;
 }
 
 function hoursAgo(ts: any): number {
@@ -384,9 +390,12 @@ function BillModal({ order, shopName, shopPhone, onClose }: { order: Order; shop
 // ═══════════════════════════════════════════════════════════════════════
 // SHIPPING MODAL (ปรับดีไซน์)
 // ═══════════════════════════════════════════════════════════════════════
-function ShippingModal({ order, onClose }: { order: Order; onClose: () => void }) {
+function ShippingModal({ order, onClose, onUpdateItems }: { order: Order; onClose: () => void; onUpdateItems?: (items: any[]) => Promise<void> }) {
   const [copied, setCopied] = useState(false);
-  const total_sales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
+  const [items, setItems] = useState(order.items || []);
+  const [savingIdx, setSavingIdx] = useState<number | null>(null);
+  const [savedIdx, setSavedIdx] = useState<number | null>(null);
+  const total_sales = items.reduce((s, i) => s + i.price * i.qty, 0);
   const remaining = total_sales - (order.deposit || 0);
 
   useEffect(() => {
@@ -408,10 +417,20 @@ function ShippingModal({ order, onClose }: { order: Order; onClose: () => void }
     `*** COD: ${fmtNum(remaining > 0 ? remaining : total_sales)} ₭ ***`,
   ];
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(textLines.join('\n'));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const itemTextLines = items.map((it, idx) => `${idx + 1}. ${(it as any).tracking_code || '-'} (x${it.qty})`);
+
+  const handleSaveItem = async (idx: number) => {
+    if (!onUpdateItems) return;
+    setSavingIdx(idx);
+    try {
+      await onUpdateItems(items);
+      setSavedIdx(idx);
+      setTimeout(() => setSavedIdx(null), 2000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingIdx(null);
+    }
   };
 
   return (
@@ -424,25 +443,100 @@ function ShippingModal({ order, onClose }: { order: Order; onClose: () => void }
           ລາຍລະອຽດການຈັດສົ່ງ
         </span>
       }
-      maxWidth="max-w-[340px]"
+      maxWidth="max-w-[700px]"
       width="w-full"
-      bodyClassName="p-4 bg-slate-50/30 dark:bg-slate-900/30"
-      footer={
-        <button
-          onClick={handleCopy}
-          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-[20px] font-bold text-sm transition-all ${
-            copied
-              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-              : 'bg-slate-50 hover:bg-slate-100 text-teal-600 border border-slate-200 dark:bg-white/5 dark:border-white/10 dark:text-teal-400'
-          }`}
-        >
-          {copied ? <CheckIcon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />}
-          {copied ? 'ຄັດລອກສຳເລັດ' : 'ຄັດລອກຂໍ້ມູນຂົນສົ່ງ'}
-        </button>
-      }
+      bodyClassName="p-5 bg-slate-50/50 dark:bg-slate-900/50"
     >
-      <div className="font-mono text-[11px] sm:text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap select-all">
-        {textLines.join('\n')}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Left: Address Info */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-200/60 dark:border-slate-700/60">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+              ຂໍ້ມູນຜູ້ຮັບ & ທີ່ຢູ່
+            </h4>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(textLines.join('\n'));
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="text-xs flex items-center gap-1 font-bold text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors"
+            >
+              {copied ? <CheckIcon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />}
+              {copied ? 'ຄັດລອກແລ້ວ' : 'ຄັດລອກ'}
+            </button>
+          </div>
+          {/* Order ID Badge */}
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-400 font-medium">Order ID:</span>
+            <span className="font-mono text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-600 select-all">{order.id}</span>
+          </div>
+          <div className="font-mono text-[12px] sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap select-all bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
+            {textLines.join('\n')}
+          </div>
+        </div>
+
+        {/* Right: Items */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-200/60 dark:border-slate-700/60">
+          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+            ລາຍການສິນຄ້າ
+          </h4>
+          <div className="space-y-2">
+            {items.map((item, i) => {
+              const imgUrl = item.image_url || (item as any).imageUrl;
+              return (
+                <div key={i} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                  {imgUrl ? (
+                    <img src={imgUrl} alt="" className="w-10 h-10 rounded-lg object-cover bg-white shrink-0 border border-slate-200 dark:border-slate-700" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center">
+                      <span className="text-slate-400 text-[10px]">No img</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <input
+                        type="text"
+                        placeholder="ປ້ອນລະຫັດສິນຄ້າ..."
+                        value={(item as any).tracking_code || ''}
+                        onChange={(e) => {
+                          const newItems = [...items];
+                          newItems[i] = { ...newItems[i], tracking_code: e.target.value };
+                          setItems(newItems);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveItem(i);
+                        }}
+                        className="w-full text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+                      />
+                      <button
+                        onClick={() => handleSaveItem(i)}
+                        disabled={savingIdx === i}
+                        title="ບັນທຶກລະຫັດສິນຄ້າ"
+                        className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-all shadow-sm ${
+                          savedIdx === i
+                            ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20'
+                        }`}
+                      >
+                        {savingIdx === i ? (
+                          <div className="w-4 h-4 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                        ) : savedIdx === i ? (
+                          <CheckIcon className="w-4 h-4" />
+                        ) : (
+                          <CheckIcon className="w-4 h-4 stroke-2" />
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">ຈຳນວນ: <span className="font-bold text-indigo-500">x{item.qty}</span></p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </BaseModal>
   );
@@ -532,8 +626,8 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
     filtered.forEach(o => {
       const d = tsToDate(o.created_at);
       if (!d) return;
-      const dateStr = d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
-      const person = o.ordered_by || o.items?.find((i: any) => i._cost_by)?._cost_by || 'ບໍ່ລະບຸ';
+      const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+      const person = o.items?.find((i: any) => i._cost_by)?._cost_by || o.ordered_by || 'ບໍ່ລະບຸ';
       const key = `${dateStr}_${person}`;
       if (!map[key]) map[key] = { dateObj: new Date(d.getFullYear(), d.getMonth(), d.getDate()), date: dateStr, person, cost: 0, profit: 0, count: 0 };
       map[key].cost += o.total_cost || 0;
@@ -545,12 +639,42 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
 
   const totals = useMemo(() => byDayAndPerson.reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit, count: acc.count + d.count }), { cost: 0, profit: 0, count: 0 }), [byDayAndPerson]);
 
-  const today = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
-  const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
-  
-  // Aggregate today and yesterday totals across all persons
-  const todayData = byDayAndPerson.filter(d => d.date === today).reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit }), { cost: 0, profit: 0 });
-  const yesterdayData = byDayAndPerson.filter(d => d.date === yesterday).reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit }), { cost: 0, profit: 0 });
+  const todayData = useMemo(() => {
+    const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+    return byDayAndPerson.filter(d => d.date === today).reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit }), { cost: 0, profit: 0 });
+  }, [byDayAndPerson]);
+
+  const yesterdayData = useMemo(() => {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const yesterday = y.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+    return byDayAndPerson.filter(d => d.date === yesterday).reduce((acc, d) => ({ cost: acc.cost + d.cost, profit: acc.profit + d.profit }), { cost: 0, profit: 0 });
+  }, [byDayAndPerson]);
+
+  const [activeTab, setActiveTab] = useState<'daily' | 'resets'>('daily');
+  const [resetLogs, setResetLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'resets') {
+      const fetchLogs = async () => {
+        setLoadingLogs(true);
+        const { data } = await supabase.from('settings').select('*').like('id', 'history_log_%');
+        if (data) {
+          const logs = data.map(d => {
+            try {
+              return { ...JSON.parse(d.value), id: d.id };
+            } catch {
+              return null;
+            }
+          }).filter(Boolean);
+          logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          setResetLogs(logs);
+        }
+        setLoadingLogs(false);
+      };
+      fetchLogs();
+    }
+  }, [activeTab]);
 
   return (
     <BaseModal
@@ -558,8 +682,24 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
       onClose={onClose}
       title={
         <div>
-          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">ເບິ່ງປະຫວັດ</h3>
-          {lastReset && <p className="text-xs text-slate-400 font-normal mt-0.5">Reset ລ່າສຸດ: {lastReset.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>}
+          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-3">
+            ເບິ່ງປະຫວັດ
+            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 ml-2">
+              <button 
+                onClick={() => setActiveTab('daily')} 
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-colors ${activeTab === 'daily' ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                ລາຍວັນ
+              </button>
+              <button 
+                onClick={() => setActiveTab('resets')} 
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-colors ${activeTab === 'resets' ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                ການລ້າງຍອດ
+              </button>
+            </div>
+          </h3>
+          {lastReset && <p className="text-xs text-slate-400 font-normal mt-0.5">Reset ລ່າສຸດ: {lastReset.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>}
         </div>
       }
       headerRight={
@@ -567,13 +707,15 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
           type="month"
           value={monthFilter}
           onChange={e => setMonthFilter(e.target.value)}
-          className="h-9 bg-white/70 dark:bg-slate-800/60 border border-slate-200/70 dark:border-white/10 rounded-[18px] px-3 text-xs font-bold text-slate-600 dark:text-slate-300 outline-none focus:border-teal-400 focus:shadow-[0_0_0_3px_rgba(20,184,166,0.12)]"
+          className="h-9 bg-white/70 dark:bg-slate-800/60 border border-slate-200/70 dark:border-white/10 rounded-[18px] px-3 text-base font-bold text-slate-600 dark:text-slate-300 outline-none focus:border-teal-400 focus:shadow-[0_0_0_3px_rgba(20,184,166,0.12)]"
         />
       }
       maxWidth="max-w-xl"
       width="w-full"
-      bodyClassName="p-5 space-y-5"
+      bodyClassName="p-5 flex flex-col gap-5 h-[70vh] max-h-[600px]"
     >
+      {activeTab === 'daily' ? (
+        <>
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-3">
             {[
@@ -629,7 +771,29 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
               </table>
             </div>
           )}
-        </BaseModal>
+        </>
+      ) : (
+        <div className="overflow-y-auto flex-1">
+          {loadingLogs ? (
+            <p className="text-center text-sm text-slate-400 py-8">ກຳລັງໂຫລດ...</p>
+          ) : resetLogs.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 py-8">ບໍ່ມີປະຫວັດການລ້າງຍອດ</p>
+          ) : (
+            <div className="space-y-3">
+              {resetLogs.map((log: any, idx: number) => (
+                <div key={log.id || idx} className="rounded-[14px] border border-slate-100 dark:border-white/10 p-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500">{new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold">{log.by || 'ບໍ່ລະບຸ'}</span>
+                  </div>
+                  <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">{fmtNum(log.profit || 0)} ₭ <span className="text-xs font-normal text-slate-400">ກຳໄລ</span></p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </BaseModal>
   );
 }
 
@@ -639,17 +803,35 @@ function HistoryModal({ orders, lastReset, onClose }: { orders: Order[]; lastRes
 function AlertBadge({ order, now, onQuickCheck }: { order: Order; now: number; onQuickCheck: () => void }) {
   const updatedAt = tsToDate(order.status_updated_at) || tsToDate(order.created_at);
 
-  if (order.status === 'ສົ່ງບິນແລ້ວ') {
-    return (
-      <div className="flex items-center mt-1">
-        <button
-          onClick={onQuickCheck}
-          className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-500/30 hover:bg-rose-100 dark:hover:bg-rose-500/30 hover:scale-105 active:scale-95 transition-all animate-pulse cursor-pointer shadow-sm"
-        >
-          <ExclamationTriangleIcon className="w-3 h-3" /> ແຈ້ງລູກຄ້າມາຮັບເຄື່ອງ!
-        </button>
-      </div>
-    );
+  if (order.status === 'ສົ່ງບິນແລ້ວ' && updatedAt) {
+    const delayStr = typeof window !== 'undefined' ? localStorage.getItem('notifyDelay') : '0';
+    const delayMins = parseInt(delayStr || '0', 10);
+    const mins = (now - updatedAt.getTime()) / 60000;
+    const isOverdue = mins >= delayMins;
+
+    if (isOverdue) {
+      return (
+        <div className="flex items-center mt-1">
+          <button
+            onClick={onQuickCheck}
+            className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-500/30 hover:bg-rose-100 dark:hover:bg-rose-500/30 hover:scale-105 active:scale-95 transition-all animate-pulse cursor-pointer shadow-sm"
+          >
+            <ExclamationTriangleIcon className="w-3 h-3" /> ແຈ້ງລູກຄ້າມາຮັບເຄື່ອງ!
+          </button>
+        </div>
+      );
+    } else {
+      return (
+        <div className="flex items-center mt-1">
+          <button
+            onClick={onQuickCheck}
+            className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-sm"
+          >
+            <BellIcon className="w-3 h-3" /> ແຈ້ງລູກຄ້າມາຮັບເຄື່ອງ
+          </button>
+        </div>
+      );
+    }
   }
 
   if (order.status === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' && updatedAt) {
@@ -718,7 +900,7 @@ export function InlineCostInput({ orderId, value, onSave }: { orderId: string; v
         onChange={handleChange}
         onBlur={handleBlur}
         onKeyDown={e => { if (e.key === 'Enter') handleBlur(); if (e.key === 'Escape') { setEditing(false); setLocal(formatInput(value)); } }}
-        className="w-28 h-8 text-xs text-right px-3 bg-white dark:bg-slate-800 border-2 border-teal-400 rounded-[14px] outline-none tabular-nums font-bold text-slate-800 dark:text-white shadow-[0_0_0_4px_rgba(20,184,166,0.12)]"
+        className="w-24 h-7 text-[12px] text-right px-2 bg-white dark:bg-slate-800 border-2 border-teal-400 rounded-[10px] outline-none tabular-nums font-bold text-slate-800 dark:text-white shadow-[0_0_0_3px_rgba(20,184,166,0.12)]"
       />
     );
   }
@@ -727,9 +909,9 @@ export function InlineCostInput({ orderId, value, onSave }: { orderId: string; v
     <button
       onClick={() => setEditing(true)}
       title="ກົດເພື່ອແກ້ໄຂ"
-      className="group flex items-center justify-center gap-1.5 min-w-[80px] px-3 py-1.5 rounded-full border border-rose-200/80 dark:border-rose-900/50 bg-white/70 dark:bg-slate-800/50 text-xs sm:text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums hover:border-rose-300 dark:hover:border-rose-700 hover:shadow-sm transition-all"
+      className="group flex items-center justify-center gap-1 min-w-[68px] px-2 py-1 rounded-full border border-rose-200/80 dark:border-rose-900/50 bg-white/70 dark:bg-slate-800/50 text-[10px] sm:text-xs font-bold text-rose-600 dark:text-rose-400 tabular-nums hover:border-rose-300 dark:hover:border-rose-700 hover:shadow-sm transition-all"
     >
-      {value === 0 ? <span className="text-slate-300 dark:text-slate-600 font-normal text-xs">ໃສ່ຕົ້ນທຶນ</span> : fmtNum(value)}
+      {value === 0 ? <span className="text-slate-300 dark:text-slate-600 font-normal text-[10px]">ໃສ່ຕົ້ນທຶນ</span> : fmtNum(value)}
     </button>
   );
 }
@@ -755,14 +937,23 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
   const [theme,        setTheme]        = useState<string>('default');
 
   useEffect(() => {
-    if (initialFilter?.filter) setStatusFilter(initialFilter.filter);
+    if (initialFilter?.filter) {
+      setStatusFilter(initialFilter.filter);
+    } else {
+      setStatusFilter('all');
+    }
   }, [initialFilter]);
 
   useEffect(() => {
-    if (initialSearch?.query) setSearch(initialSearch.query);
+    if (initialSearch?.query) {
+      setSearch(initialSearch.query);
+    } else {
+      setSearch('');
+    }
   }, [initialSearch]);
 
   // ── UI state ──────────────────────────────────────────────────────────
+  const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
   const isInitialLoad = useRef(true);
 
   const updateItemStatus = async (orderId: string, itemIdx: number, newStatus: string) => {
@@ -864,6 +1055,16 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
   const [shopName,    setShopName]    = useState('');
   const [shopPhone,   setShopPhone]   = useState('');
   const [visibleCount, setVisibleCount] = useState(50);
+  const [hideCosts, setHideCosts] = useState(false);
+  const [highlightedOrders, setHighlightedOrders] = useState<Record<string, boolean>>({});
+  const [copiedNameId, setCopiedNameId] = useState<string | null>(null);
+
+  const handleCopyName = (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(name);
+    setCopiedNameId(id);
+    setTimeout(() => setCopiedNameId(null), 2000);
+  };
 
   useEffect(() => {
     setVisibleCount(50);
@@ -877,8 +1078,35 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
       setTheme(savedTheme);
       setShopName(localStorage.getItem('shopName') || 'PreOrder');
       setShopPhone(localStorage.getItem('shopPhone') || '');
+      try {
+        const storedHighlights = localStorage.getItem('highlightedOrders');
+        if (storedHighlights) {
+          setHighlightedOrders(JSON.parse(storedHighlights));
+        }
+      } catch (e) {
+        console.error('Failed to load highlighted orders', e);
+      }
     }
   }, []);
+
+  const toggleHighlight = (orderId: string, e?: React.MouseEvent) => {
+    if (e) {
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('input') || target.closest('a') || target.closest('select')) {
+        return;
+      }
+    }
+    setHighlightedOrders(prev => {
+      const next = { ...prev };
+      if (next[orderId]) {
+        delete next[orderId];
+      } else {
+        next[orderId] = true;
+      }
+      localStorage.setItem('highlightedOrders', JSON.stringify(next));
+      return next;
+    });
+  };
 
   const saveTheme = (t: string) => {
     setTheme(t);
@@ -972,11 +1200,24 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
         o.phone?.includes(q) ||
         o.id.toLowerCase().includes(q) ||
         o.transport?.toLowerCase().includes(q) ||
-        (o.items || []).some(i => i.name?.toLowerCase().includes(q));
+        (o.items || []).some(i => i.name?.toLowerCase().includes(q) || (i as any).tracking_code?.toLowerCase().includes(q));
 
-      const matchStatus = statusFilter === 'all' || 
-                          o.status === statusFilter || 
-                          (o.items || []).some(i => i.status === statusFilter);
+      let matchStatus = false;
+      if (statusFilter === 'all') {
+        matchStatus = true;
+      } else if (statusFilter === 'pending_notify') {
+        if (o.status === 'ສົ່ງບິນແລ້ວ') {
+          const delayStr = typeof window !== 'undefined' ? localStorage.getItem('notifyDelay') : '0';
+          const delayMins = parseInt(delayStr || '0', 10);
+          const updatedAt = tsToDate(o.status_updated_at) || tsToDate(o.created_at);
+          if (updatedAt) {
+            const mins = (Date.now() - updatedAt.getTime()) / 60000;
+            matchStatus = mins >= delayMins;
+          }
+        }
+      } else {
+        matchStatus = o.status === statusFilter || (o.items || []).some(i => i.status === statusFilter);
+      }
 
       let matchDate = true;
       if (dateFilter === 'this')   matchDate = getYM(o.created_at) === thisYM;
@@ -1184,11 +1425,23 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
       // Add 1 second to the max time to ensure it clears everything
       const nowStr = new Date(maxTime + 1000).toISOString();
 
-      await supabase.from('settings').upsert({
-        id: 'costCounter',
-        last_reset: nowStr,
-        last_reset_by: personName,
-      });
+      await supabase.from('settings').upsert([
+        {
+          id: 'costCounter',
+          last_reset: nowStr,
+          last_reset_by: personName,
+        },
+        {
+          id: `history_log_${Date.now()}`,
+          value: JSON.stringify({
+            cost: summaryStats.cost,
+            profit: profitSinceReset,
+            count: summaryStats.count,
+            by: personName,
+            date: nowStr
+          })
+        }
+      ]);
 
       setLastReset(new Date(nowStr));
       setLastResetBy(personName);
@@ -1221,6 +1474,8 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
       <AnimatePresence>
         {toast && <Toast key="toast-notification" msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       </AnimatePresence>
+
+
 
       {/* Modals & Portals */}
       {typeof document !== 'undefined' && createPortal(
@@ -1258,7 +1513,15 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
             />
           )}
           {billModal && <BillModal key="bill-modal" order={billModal} shopName={shopName} shopPhone={shopPhone} onClose={() => setBillModal(null)} />}
-          {shippingModal && <ShippingModal key="shipping-modal" order={shippingModal} onClose={() => setShippingModal(null)} />}
+          {shippingModal && <ShippingModal key="shipping-modal" order={shippingModal} onClose={() => setShippingModal(null)} onUpdateItems={async (items) => {
+            try {
+              await supabase.from('orders').update({ items }).eq('id', shippingModal.id);
+              setOrders(prev => prev.map(o => o.id === shippingModal.id ? { ...o, items } : o));
+              setShippingModal(prev => prev ? { ...prev, items } : null);
+            } catch (err) {
+              console.error('Failed to update tracking code:', err);
+            }
+          }} />}
           <ImageGalleryModal
             key="gallery-modal"
             images={galleryImages}
@@ -1272,100 +1535,120 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
       </>, document.body)}
 
       {/* ── STATS SECTION ── */}
-      <div className="mb-6 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight">ພາບລວມລາຍການ (Overview)</h2>
+      <div className="mb-5 sm:mb-6 flex flex-col gap-3 sm:gap-4 pt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-[18px] sm:text-[20px] font-extrabold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              ພາບລວມລາຍການ <span className="text-slate-400 font-medium text-[14px] ml-1">(Overview)</span>
+            </h2>
             {lastResetBy && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">
                 <UserIcon className="w-3 h-3" /> {lastResetBy}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowReset(true)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[12px] text-xs font-bold bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition-colors">
-              <ArrowPathIcon className="w-3.5 h-3.5" /> ຜູ້ສັ່ງ & ລ້າງ 0
+            <button onClick={() => setShowReset(true)} className="flex-1 sm:flex-none justify-center inline-flex items-center gap-1.5 px-3 py-2 rounded-[14px] text-[12px] font-bold bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition-colors">
+              <ArrowPathIcon className="w-4 h-4" /> ຜູ້ສັ່ງ & ລ້າງ 0
             </button>
-            <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[12px] text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors">
-              <ClockIcon className="w-3.5 h-3.5" /> ປະຫວັດ
+            <button onClick={() => setShowHistory(true)} className="flex-1 sm:flex-none justify-center inline-flex items-center gap-1.5 px-3 py-2 rounded-[14px] text-[12px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors">
+              <ClockIcon className="w-4 h-4" /> ປະຫວັດ
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3">
           {/* Card 1: Total Orders */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ອໍເດີທັງໝົດ</span>
-              <DocumentTextIcon className="w-4 h-4 text-slate-400" />
+          <div className="bg-white dark:bg-slate-800/90 rounded-[12px] p-2.5 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700/50 flex flex-col gap-1 sm:gap-2 justify-center">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 sm:p-1.5 rounded bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400">
+                <DocumentTextIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ອໍເດີທັງໝົດ</span>
             </div>
-            <p className="text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none">{fmtNum(orders.length)}</p>
+            <p className="text-[15px] sm:text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none ml-0.5">{fmtNum(orders.length)}</p>
           </div>
+          
           {/* Card 2: Completed */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ສຳເລັດແລ້ວ</span>
-              <CheckIcon className="w-4 h-4 text-teal-500" />
+          <div className="bg-white dark:bg-slate-800/90 rounded-[12px] p-2.5 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700/50 flex flex-col gap-1 sm:gap-2 justify-center">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 sm:p-1.5 rounded bg-teal-50 dark:bg-teal-500/10 text-teal-500">
+                <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ສຳເລັດແລ້ວ</span>
             </div>
-            <p className="text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none">{fmtNum(orders.filter(o => o.status === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ').length)}</p>
+            <p className="text-[15px] sm:text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none ml-0.5">{fmtNum(orders.filter(o => o.status === 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' || o.status === 'ໄດ້ຮັບເງິນແລ້ວ').length)}</p>
           </div>
+          
           {/* Card 3: Pending */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ກຳລັງດຳເນີນການ</span>
-              <ClockIcon className="w-4 h-4 text-orange-400" />
+          <div className="bg-white dark:bg-slate-800/90 rounded-[12px] p-2.5 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700/50 flex flex-col gap-1 sm:gap-2 justify-center">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 sm:p-1.5 rounded bg-orange-50 dark:bg-orange-500/10 text-orange-500">
+                <ClockIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ກຳລັງດຳເນີນການ</span>
             </div>
-            <p className="text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none">{fmtNum(orders.filter(o => o.status !== 'ຍົກເລີກອໍເດີ' && o.status !== 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' && o.status !== 'ໄດ້ຮັບເງິນແລ້ວ').length)}</p>
+            <p className="text-[15px] sm:text-2xl font-black text-slate-800 dark:text-white tabular-nums leading-none ml-0.5">{fmtNum(orders.filter(o => o.status !== 'ຍົກເລີກອໍເດີ' && o.status !== 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ' && o.status !== 'ໄດ້ຮັບເງິນແລ້ວ').length)}</p>
           </div>
+          
           {/* Card 4: Revenue */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ຍອດຂາຍ</span>
-              <BanknotesIcon className="w-4 h-4 text-indigo-500" />
+          <div className="bg-white dark:bg-slate-800/90 rounded-[12px] p-2.5 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700/50 flex flex-col gap-1 sm:gap-2 justify-center">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 sm:p-1.5 rounded bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500">
+                <BanknotesIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ຍອດຂາຍ</span>
             </div>
-            <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums leading-none">
-              {fmtNum(orders.reduce((s, o) => s + (o.total_sales || o.price || 0), 0))} <span className="text-sm font-bold text-indigo-400 ml-0.5">₭</span>
+            <p className="text-[15px] sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums leading-none ml-0.5">
+              {fmtNum(orders.reduce((s, o) => s + (o.total_sales || o.price || 0), 0))} <span className="text-[10px] sm:text-sm font-bold text-indigo-400">₭</span>
             </p>
           </div>
+          
           {/* Card 5: Cost */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ຕົ້ນທຶນ</span>
-              <CurrencyDollarIcon className="w-4 h-4 text-rose-500" />
+          <div className="bg-white dark:bg-slate-800/90 rounded-[12px] p-2.5 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700/50 flex flex-col gap-1 sm:gap-2 justify-center">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 sm:p-1.5 rounded bg-rose-50 dark:bg-rose-500/10 text-rose-500">
+                <CurrencyDollarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ຕົ້ນທຶນ</span>
             </div>
-            <p className="text-2xl font-black text-rose-600 dark:text-rose-500 tabular-nums leading-none">
-              {fmtNum(summaryStats.cost)} <span className="text-sm font-bold text-rose-400 ml-0.5">₭</span>
+            <p className="text-[15px] sm:text-2xl font-black text-rose-600 dark:text-rose-500 tabular-nums leading-none ml-0.5">
+              {fmtNum(summaryStats.cost)} <span className="text-[10px] sm:text-sm font-bold text-rose-400">₭</span>
             </p>
           </div>
+          
           {/* Card 6: Profit */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100 dark:border-slate-700/50 flex flex-col justify-between h-full">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ກຳໄລ</span>
-              <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-500" />
+          <div className="bg-white dark:bg-slate-800/90 rounded-[12px] p-2.5 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700/50 flex flex-col gap-1 sm:gap-2 justify-center">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 sm:p-1.5 rounded bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500">
+                <ArrowTrendingUpIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ກຳໄລ</span>
             </div>
-            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-500 tabular-nums leading-none">
-              {fmtNum(summaryStats.profit)} <span className="text-sm font-bold text-emerald-400 ml-0.5">₭</span>
+            <p className="text-[15px] sm:text-2xl font-black text-emerald-600 dark:text-emerald-500 tabular-nums leading-none ml-0.5">
+              {fmtNum(summaryStats.profit)} <span className="text-[10px] sm:text-sm font-bold text-emerald-400">₭</span>
             </p>
           </div>
         </div>
       </div>
 
       {/* ── TOOLBAR ── */}
-      <div className="sticky top-0 z-40 bg-[var(--background)]/90 backdrop-blur-xl pb-4 pt-2 -mt-2">
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-800 p-2 sm:p-3 rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-200 dark:border-slate-700/50">
+      <div className="sticky top-0 sm:top-4 z-40 bg-[var(--background)]/95 backdrop-blur-xl pb-3 pt-1 -mt-1 sm:pt-2 sm:-mt-2 mb-2 sm:mb-4">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2 bg-white dark:bg-slate-800 p-2 sm:p-3 rounded-[16px] sm:rounded-[20px] shadow-sm border border-slate-200 dark:border-slate-700/50">
           
           {/* Search */}
           <div className="relative w-full lg:max-w-md group flex-1">
-            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="ຄົ້ນຫາ ຊື່, ເບີ, ID, ສິນຄ້າ..."
-              className="h-10 sm:h-11 w-full bg-slate-50/50 dark:bg-slate-900/50 pl-11 pr-8 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none border border-transparent focus:border-indigo-500/30 focus:bg-white dark:focus:bg-slate-800 transition-all"
+              style={{ fontSize: '16px', touchAction: 'manipulation' }}
+              className="h-10 sm:h-12 w-full bg-slate-50/50 dark:bg-slate-900/50 pl-10 sm:pl-11 pr-8 rounded-[12px] sm:rounded-xl font-medium text-[13px] sm:text-[14px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none border border-transparent focus:border-indigo-500/30 focus:bg-white dark:focus:bg-slate-800 transition-all"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                 <XMarkIcon className="w-4 h-4" />
               </button>
             )}
@@ -1374,27 +1657,27 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
           <div className="hidden lg:block w-px h-6 bg-slate-200 dark:bg-slate-700" />
 
           {/* Filters & Actions */}
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full lg:w-auto">
             
             {/* Status */}
             <button
               onClick={() => setFilterStatusModal(true)}
-              className="inline-flex items-center justify-between min-w-[120px] h-10 sm:h-11 px-3 sm:px-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-400 focus:outline-none focus:border-indigo-400 transition-colors cursor-pointer"
+              className="inline-flex items-center justify-between min-w-[100px] sm:min-w-[120px] h-9 sm:h-11 px-2.5 sm:px-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-[10px] sm:rounded-xl text-[11px] sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-400 focus:outline-none focus:border-indigo-400 transition-colors cursor-pointer"
             >
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${statusFilter === 'all' ? 'bg-slate-400' : STATUS_META.find(s => s.value === statusFilter)?.dot || 'bg-teal-500'}`} />
-                {statusFilter === 'all' ? 'ທຸກສະຖານະ' : statusFilter}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${statusFilter === 'all' ? 'bg-slate-400' : statusFilter === 'pending_notify' ? 'bg-rose-500' : STATUS_META.find(s => s.value === statusFilter)?.dot || 'bg-teal-500'}`} />
+                {statusFilter === 'all' ? 'ທຸກສະຖານະ' : statusFilter === 'pending_notify' ? 'ລໍຖ້າແຈ້ງ' : statusFilter.length > 10 ? statusFilter.substring(0,10)+'...' : statusFilter}
               </div>
-              <ChevronDownIcon className="w-3.5 h-3.5 text-slate-400 ml-2" />
+              <ChevronDownIcon className="w-3.5 h-3.5 text-slate-400 ml-1.5" />
             </button>
 
             {/* Date Pills */}
-            <div className="flex items-center bg-slate-50 dark:bg-slate-900/50 p-1 rounded-[14px] border border-slate-200/80 dark:border-slate-700/50">
+            <div className="flex items-center bg-slate-50 dark:bg-slate-900/50 p-1 rounded-[10px] sm:rounded-[14px] border border-slate-200/80 dark:border-slate-700/50">
               {([['all', 'ທັງໝົດ'], ['this', 'ເດືອນນີ້'], ['prev', 'ເດືອນກ່ອນ']] as const).map(([val, lbl]) => (
                 <button
                   key={val}
                   onClick={() => setDateFilter(val)}
-                  className={`px-3 py-1.5 sm:py-2 rounded-[10px] text-[11px] sm:text-xs font-bold transition-all ${
+                  className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-[6px] sm:rounded-[10px] text-[10px] sm:text-xs font-bold transition-all ${
                     dateFilter === val
                       ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -1410,37 +1693,35 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                 type="month"
                 value={customMonth}
                 onChange={e => setCustomMonth(e.target.value)}
-                className="h-10 sm:h-11 px-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200"
+                className="h-9 sm:h-12 px-2 sm:px-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-[10px] sm:rounded-xl text-[12px] sm:text-[16px] font-semibold text-slate-700 dark:text-slate-200"
               />
             )}
 
-            {/* Theme Dropdown (Optional but keep it since it existed) */}
+            {/* Theme Dropdown */}
             <div className="relative hidden sm:block">
               <select
                 value={theme}
                 onChange={e => saveTheme(e.target.value)}
-                className="h-10 sm:h-11 pl-3 pr-8 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl text-xs sm:text-sm font-semibold appearance-none outline-none focus:border-indigo-400 text-slate-700 dark:text-slate-200 cursor-pointer"
+                className="h-9 sm:h-11 pl-3 pr-8 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-[10px] sm:rounded-xl text-sm sm:text-base font-semibold appearance-none outline-none focus:border-indigo-400 text-slate-700 dark:text-slate-200 cursor-pointer"
               >
                 {Object.entries(THEMES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
               <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             </div>
 
-            {/* Refresh */}
-            <button onClick={() => window.location.reload()} className="h-10 sm:h-11 w-10 sm:w-11 flex items-center justify-center bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/50 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Refresh">
-              <ArrowPathIcon className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600 dark:text-slate-400" />
+            {/* Toggle Hide Costs */}
+            <button 
+              onClick={() => setHideCosts(prev => !prev)} 
+              className={`h-9 sm:h-11 w-9 sm:w-11 flex items-center justify-center border rounded-[10px] sm:rounded-xl transition-colors ${
+                hideCosts 
+                  ? 'bg-teal-50 border-teal-200 text-teal-600 dark:bg-teal-500/20 dark:border-teal-500/30 dark:text-teal-400' 
+                  : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:bg-slate-900/50 dark:border-slate-700/50 dark:text-slate-400 dark:hover:bg-slate-800'
+              }`} 
+              title={hideCosts ? "ສະແດງຕົ້ນທຶນ/ກຳໄລ" : "ເຊື່ອງຕົ້ນທຶນ/ກຳໄລ"}
+            >
+              {hideCosts ? <EyeSlashIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <EyeIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
 
-            {/* Add Order Button */}
-            {onAdd && (
-              <button
-                onClick={onAdd}
-                className="h-10 sm:h-11 px-4 sm:px-5 ml-auto lg:ml-1 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs sm:text-sm font-bold rounded-xl flex items-center gap-2 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_15px_rgba(0,0,0,0.15)] hover:-translate-y-0.5"
-              >
-                <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span>ສ້າງອໍເດີໃໝ່</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -1467,8 +1748,8 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
             <table className="text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className={`border-b border-slate-200/80 dark:border-white/8 ${themeConfig.th}`}>
-                  {['#', 'ວັນທີ / ID', 'ລູກຄ້າ & ເບີ', 'ທີ່ຢູ່ / ຂົນສົ່ງ', 'ສິນຄ້າ', 'ຕົ້ນທຶນ ₭', 'ຍອດຂາຍ ₭', 'ກຳໄລ ₭', 'ສະຖານະ', 'ຈັດການ'].map(h => (
-                    <th key={h} className="px-4 py-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap last:text-right">
+                  {['#', 'ລູກຄ້າ / ຂົນສົ່ງ', hideCosts ? 'ລາຍການສິນຄ້າ' : 'ລາຍການສິນຄ້າ / ຕົ້ນທຶນ', hideCosts ? 'ຍອດຂາຍ ₭' : 'ຍອດຂາຍ / ກຳໄລ ₭', 'ຈັດການ'].map(h => (
+                    <th key={h} className="px-1.5 py-2 sm:px-4 sm:py-4 text-[9px] md:text-sm font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap last:text-right">
                       {h}
                     </th>
                   ))}
@@ -1481,10 +1762,12 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                   const remaining  = total_sales - (order.deposit || 0);
                   const waUrl = getWhatsAppUrl(order.phone || '');
 
+                  const displayCustomerName = (order.customer_name || '').replace(/^[^:]*:\s*/, '');
+
                   const shippingCopyText = [
                     `🏪 ${shopName}`, `📞 ${shopPhone}`,
                     '━━━━━━━━━━━',
-                    `👤 ຜູ້ຮັບ: ${order.customer_name}`,
+                    `👤 ຜູ້ຮັບ: ${displayCustomerName}`,
                     `📱 ເບີ: ${order.phone}`,
                     `🏠 ບ.${order.village} ມ.${order.district} ແຂ.${order.province}`,
                     `🚚 ${order.transport}`,
@@ -1492,220 +1775,309 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                     `💰 COD: ${fmtNum(remaining > 0 ? remaining : total_sales)} ₭`,
                   ].filter(Boolean).join('\n');
 
+                  const isHighlighted = highlightedOrders[order.id];
+                  const highlightClass = isHighlighted ? 'bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-900/20 dark:hover:bg-amber-900/30' : themeConfig.row;
+
+                  const lowerName = (order.customer_name || '').toLowerCase();
+                  const isFb = lowerName.includes('ເຟສ') || lowerName.includes('fb') || lowerName.includes('facebook');
+                  const isTt = lowerName.includes('ຕຕ') || lowerName.includes('tiktok') || lowerName.includes('tt');
+
                   return (
                     <motion.tr
                       key={order.id}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.2 }}
-                      className={`${themeConfig.row} transition-colors group`}
+                      onClick={(e) => toggleHighlight(order.id, e)}
+                      className={`${highlightClass} transition-colors group cursor-pointer`}
                     >
                       {/* # */}
-                      <td className="px-4 py-4 text-sm text-slate-400 tabular-nums w-10">{idx + 1}</td>
+                      <td className="px-1.5 py-1.5 sm:px-4 sm:py-4 text-[13px] md:text-lg font-bold text-slate-400 tabular-nums w-8 sm:w-10">{idx + 1}</td>
 
-                      {/* Date / ID */}
-                      <td className="px-4 py-4">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 truncate max-w-[100px]">{order.id.slice(-10)}</span>
-                          <span className="text-xs text-slate-400">{formatDate(order.created_at)}</span>
-                          {(() => {
-                            const costBy = order.ordered_by || order.items?.find((i: any) => i._cost_by)?._cost_by;
-                            if (!costBy) return null;
-                            return (
-                              <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 w-fit border border-amber-200/60 dark:border-amber-500/30">
-                                <UserIcon className="w-3 h-3" /> {costBy}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </td>
-
-                      {/* Customer & Phone */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-start">
-                          <div>
-                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">{order.customer_name || '—'}</p>
-                            {order.phone && (
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="text-xs text-slate-500 dark:text-slate-400">{order.phone}</span>
-                                <a
-                                  href={waUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="w-5 h-5 flex items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 transition-colors"
-                                  title="WhatsApp"
-                                >
-                                  <PhoneIcon className="w-3 h-3" />
-                                </a>
-                              </div>
+                      {/* Customer & Phone & Shipping & Date */}
+                      <td className="pl-1.5 pr-0 py-1.5 sm:px-4 sm:py-4 min-w-[110px] max-w-[140px] sm:max-w-none whitespace-normal sm:whitespace-nowrap sm:min-w-[200px] align-top">
+                        <div className="flex flex-col gap-0.5 sm:gap-1.5">
+                          <p className="text-[12px] sm:text-base font-bold text-slate-800 dark:text-slate-100 leading-tight line-clamp-2">{displayCustomerName || '—'}</p>
+                          
+                          {order.phone && (
+                            <span className="text-[10px] sm:text-sm text-slate-500 dark:text-slate-400 truncate max-w-full" title={order.phone}>{order.phone}</span>
+                          )}
+                          
+                          <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
+                            {isFb && (
+                              <button
+                                onClick={(e) => handleCopyName(e, order.id, displayCustomerName)}
+                                className="shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full bg-[#1877F2] text-white shadow-sm hover:opacity-80 transition-opacity"
+                                title={copiedNameId === order.id ? "ຄັດລອກແລ້ວ" : "ຄັດລອກຊື່ (Facebook)"}
+                              >
+                                {copiedNameId === order.id ? (
+                                  <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4">
+                                    <path d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S260.43 0 225.36 0c-73.22 0-121.08 44.38-121.08 124.72v70.62H22.89V288h81.39v224h100.17V288z"/>
+                                  </svg>
+                                )}
+                              </button>
                             )}
+                            {isTt && (
+                              <button
+                                onClick={(e) => handleCopyName(e, order.id, displayCustomerName)}
+                                className="shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full bg-black text-white shadow-sm hover:opacity-80 transition-opacity"
+                                title={copiedNameId === order.id ? "ຄັດລອກແລ້ວ" : "ຄັດລອກຊື່ (TikTok)"}
+                              >
+                                {copiedNameId === order.id ? (
+                                  <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4">
+                                    <path d="M448,209.91a210.06,210.06,0,0,1-122.77-39.25V349.38A162.55,162.55,0,1,1,185,188.31V278.2a74.62,74.62,0,1,0,52.23,71.18V0l88,0a121.18,121.18,0,0,0,1.86,22.17h0A122.18,122.18,0,0,0,381,102.39a121.43,121.43,0,0,0,67,20.14Z"/>
+                                  </svg>
+                                )}
+                              </button>
+                            )}
+                            {order.phone && (
+                              <a
+                                href={waUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full bg-[#25D366] text-white hover:bg-[#20bd5a] shadow-sm transition-colors"
+                                title="WhatsApp"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4">
+                                  <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z" />
+                                </svg>
+                              </a>
+                            )}
+                            
+                            <button
+                              onClick={() => setShippingModal(order)}
+                              className="shrink-0 flex items-center justify-center w-6 h-6 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-[6px] sm:rounded-[12px] bg-slate-100/70 hover:bg-slate-200/80 dark:bg-white/5 dark:hover:bg-white/10 transition-colors text-slate-700 dark:text-slate-200 font-bold text-[10px] sm:text-[12px] border border-slate-200/60 dark:border-white/10"
+                              title="ຂໍ້ມູນຂົນສົ່ງ"
+                            >
+                              <TruckIcon className="w-3.5 h-3.5 sm:w-3.5 sm:h-3.5" />
+                              <span className="hidden sm:inline sm:ml-1.5">ຂໍ້ມູນຂົນສົ່ງ</span>
+                              <ChevronDownIcon className="hidden sm:inline w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-400 sm:ml-1" />
+                            </button>
+                          </div>
+
+                          {/* Date & staff badges below icons */}
+                          <div className="flex flex-col gap-0.5 mt-0.5">
+                            <span className="text-[9px] sm:text-[11px] text-slate-400 font-medium leading-none">{formatDate(order.created_at)}</span>
+                            {(() => {
+                              const orderReceiver = order.ordered_by;
+                              const itemOrderers = Array.from(new Set(
+                                (order.items || []).map((i: any) => i._cost_by).filter(Boolean)
+                              ));
+                              return (
+                                <>
+                                  {orderReceiver && (
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-sky-50 dark:bg-sky-500/20 text-sky-700 dark:text-sky-400 w-fit border border-sky-200/60 dark:border-sky-500/30" title="ຜູ້ຮັບອໍເດີ">
+                                      <UserIcon className="w-2 h-2" /> {orderReceiver.length > 8 ? orderReceiver.substring(0,8)+'...' : orderReceiver}
+                                    </span>
+                                  )}
+                                  {itemOrderers.map(orderer => (
+                                    <span key={orderer} className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 w-fit border border-amber-200/60 dark:border-amber-500/30" title="ຜູ້ສັ່ງເຄື່ອງ">
+                                      <UserIcon className="w-2 h-2" /> {orderer.length > 8 ? orderer.substring(0,8)+'...' : orderer}
+                                    </span>
+                                  ))}
+                                </>
+                              );
+                            })()}
+                            <div className="mt-0.5 scale-90 sm:scale-100 origin-left">
+                              <AlertBadge order={order} now={now} onQuickCheck={() => {
+                                const savedTemplate = typeof window !== 'undefined' ? localStorage.getItem('notifyMessageTemplate') : null;
+                                const defaultTemplate = `ສະບາຍດີ {customer_name}, ສິນຄ້າທີ່ສັ່ງມາມາຮອດແລ້ວເດີ້! ກະລຸນາເຂົ້າມາຮັບສິນຄ້າດ້ວຍເດີ້ 📦`;
+                                const template = savedTemplate || defaultTemplate;
+                                const msg = template.replace(/{customer_name}/g, order.customer_name || 'ລູກຄ້າ');
+                                
+                                const url = getWhatsAppUrl(order.phone || '', msg);
+                                window.open(url, '_blank');
+                                updateStatus(order.id, 'ແຈ້ງລູກຄ້າແລ້ວ');
+                              }} />
+                            </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Shipping / Address */}
-                      <td className="px-4 py-4">
-                        <button
-                          onClick={() => setShippingModal(order)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[16px] bg-slate-100/70 hover:bg-slate-200/80 dark:bg-white/5 dark:hover:bg-white/10 transition-colors text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200/60 dark:border-white/10"
-                        >
-                          <TruckIcon className="w-3.5 h-3.5" />
-                          ຂໍ້ມູນຂົນສົ່ງ
-                          <ChevronDownIcon className="w-3 h-3 text-slate-400" />
-                        </button>
-                      </td>
-
-                      {/* Items */}
-                      <td className="px-4 py-4">
-                        <div className="space-y-1.5">
+                      {/* Items & Cost Merged */}
+                      <td className="px-0 py-2 sm:px-4 sm:py-4 align-top">
+                        <div className="flex flex-col gap-2.5 sm:gap-3">
                           {(order.items || []).map((item, i) => {
                             const imgUrl = item.image_url || (item as any).imageUrl;
                             return (
-                            <div key={i} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                              {imgUrl ? (
-                                <img
-                                  src={imgUrl}
-                                  alt=""
-                                  className="w-6 h-6 rounded-[8px] border border-slate-200/60 dark:border-white/10 object-cover cursor-pointer hover:ring-2 hover:ring-teal-500 transition-all shrink-0 bg-white"
-                                  onClick={() => {
-                                    const images: GalleryImage[] = [];
-                                    let clickedIndex = 0;
-                                    let imgCount = 0;
-                                    order.items.forEach((it) => {
-                                      const itImg = it.image_url || (it as any).imageUrl;
-                                      if (itImg) {
-                                        images.push({ url: itImg, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
-                                        if (itImg === imgUrl) {
-                                          clickedIndex = imgCount;
-                                        }
-                                        imgCount++;
-                                      }
-                                    });
-                                    setGalleryImages(images);
-                                    setGalleryIndex(clickedIndex);
-                                  }}
-                                  title="ຄລິກເພື່ອເບິ່ງຮູບເຕັມ"
-                                />
-                              ) : (
-                                <span className="text-slate-400 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-1"></span>
-                              )}
-                              <span className="truncate flex-1 min-w-0 max-w-[280px] xl:max-w-[400px] leading-tight py-0.5" title={item.name}>
-                                {item.name}
-                              </span>
-                              <span className={`font-bold shrink-0 ${
-                                (() => {
-                                  const meta = STATUS_META.find(s => s.value === item.status);
-                                  if (!meta) return 'text-teal-600 dark:text-teal-400';
-                                  return meta.chip.includes('rose') ? 'text-rose-600 dark:text-rose-400' :
-                                         meta.chip.includes('purple') ? 'text-purple-600 dark:text-purple-400' :
-                                         meta.chip.includes('indigo') ? 'text-indigo-600 dark:text-indigo-400' :
-                                         meta.chip.includes('orange') ? 'text-orange-600 dark:text-orange-400' :
-                                         meta.chip.includes('yellow') ? 'text-yellow-600 dark:text-yellow-400' :
-                                         meta.chip.includes('cyan') ? 'text-cyan-600 dark:text-cyan-400' :
-                                         meta.chip.includes('emerald') ? 'text-emerald-600 dark:text-emerald-400' :
-                                         meta.chip.includes('lime') ? 'text-lime-600 dark:text-lime-400' :
-                                         'text-teal-600 dark:text-teal-400';
-                                })()
-                              }`}>x{item.qty}</span>
-                              <div className="ml-auto shrink-0 group">
-                                <StatusBadge 
-                                  status={item.status || 'ຮັບອໍເດີແລ້ວ'} 
-                                  onClick={() => setItemStatusModal({ orderId: order.id, itemIndex: i })} 
-                                />
+                              <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 w-full">
+                                {/* Item Details (Left) */}
+                                <div className="flex items-start gap-1.5 sm:gap-2.5 flex-1 min-w-0 max-w-[280px] sm:max-w-[320px] xl:max-w-[380px]">
+                                  {imgUrl ? (
+                                    <img
+                                      src={imgUrl}
+                                      alt=""
+                                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-[8px] border border-slate-200/60 dark:border-white/10 object-cover cursor-pointer hover:ring-2 hover:ring-teal-500 transition-all shrink-0 bg-white mt-0.5"
+                                      onClick={() => {
+                                        const images: GalleryImage[] = [];
+                                        let clickedIndex = 0;
+                                        let imgCount = 0;
+                                        order.items.forEach((it) => {
+                                          const itImg = it.image_url || (it as any).imageUrl;
+                                          if (itImg) {
+                                            images.push({ url: itImg, title: it.name, subtitle: `ຈຳນວນ: ${it.qty}` });
+                                            if (itImg === imgUrl) {
+                                              clickedIndex = imgCount;
+                                            }
+                                            imgCount++;
+                                          }
+                                        });
+                                        setGalleryImages(images);
+                                        setGalleryIndex(clickedIndex);
+                                      }}
+                                      title="ຄລິກເພື່ອເບິ່ງຮູບເຕັມ"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 shrink-0 flex items-center justify-center mt-0.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                    {/* The name can now wrap naturally since it's aligned perfectly with the cost in a flex container! */}
+                                    <span className="text-[11px] sm:text-[13px] leading-snug text-slate-700 dark:text-slate-200 font-medium whitespace-normal break-words">
+                                      {item.name}
+                                    </span>
+                                    
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className={`text-[10px] sm:text-xs font-bold ${
+                                        (() => {
+                                          const meta = STATUS_META.find(s => s.value === item.status);
+                                          if (!meta) return 'text-teal-600 dark:text-teal-400';
+                                          return meta.chip.includes('rose') ? 'text-rose-600 dark:text-rose-400' :
+                                                 meta.chip.includes('purple') ? 'text-purple-600 dark:text-purple-400' :
+                                                 meta.chip.includes('indigo') ? 'text-indigo-600 dark:text-indigo-400' :
+                                                 meta.chip.includes('orange') ? 'text-orange-600 dark:text-orange-400' :
+                                                 meta.chip.includes('yellow') ? 'text-yellow-600 dark:text-yellow-400' :
+                                                 meta.chip.includes('cyan') ? 'text-cyan-600 dark:text-cyan-400' :
+                                                 meta.chip.includes('emerald') ? 'text-emerald-600 dark:text-emerald-400' :
+                                                 meta.chip.includes('lime') ? 'text-lime-600 dark:text-lime-400' :
+                                                 'text-teal-600 dark:text-teal-400';
+                                        })()
+                                      }`}>x{item.qty}</span>
+                                      <div className="scale-90 sm:scale-100 origin-left shrink-0">
+                                        <StatusBadge 
+                                          status={item.status || 'ຮັບອໍເດີແລ້ວ'} 
+                                          onClick={() => setItemStatusModal({ orderId: order.id, itemIndex: i })} 
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Cost (Right) */}
+                                {!hideCosts && (
+                                  <div className="pl-[42px] sm:pl-0 sm:w-auto shrink-0 flex items-center">
+                                    <InlineCostInput 
+                                      orderId={order.id} 
+                                      value={item.cost || 0} 
+                                      onSave={(id, cost) => saveItemCost(id, i, cost)} 
+                                    />
+                                  </div>
+                                )}
                               </div>
-                            </div>
                             );
                           })}
-                        </div>
-                      </td>
-
-                      {/* Cost (inline edit) */}
-                      <td className="px-4 py-4 align-top pt-4">
-                        <div className="space-y-1.5 flex flex-col justify-center">
-                          {(order.items || []).map((item, i) => (
-                            <div key={i} className="flex items-center h-7 mt-[0.5px]">
-                              <InlineCostInput 
-                                orderId={order.id} 
-                                value={item.cost || 0} 
-                                onSave={(id, cost) => saveItemCost(id, i, cost)} 
-                              />
-                            </div>
-                          ))}
+                          
+                          {/* Shipping Fee inline at the bottom of the items cell */}
                           {(order.shipping_fee || 0) > 0 && (
-                            <p className="text-[11px] text-slate-400 tabular-nums">+{fmtNum(order.shipping_fee)} ₭ ຂົນສົ່ງ</p>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Sales */}
-                      <td className="px-4 py-4">
-                        <div className="flex flex-col items-center gap-1.5">
-                          <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
-                            {fmtNum(total_sales)}
-                          </p>
-                          {(order.deposit || 0) > 0 && (
-                            <div className="flex flex-col gap-1 w-full max-w-[110px]">
-                              <div className="flex items-center justify-between text-[10px] bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full border border-amber-200/60 dark:border-amber-500/30">
-                                <span className="font-medium opacity-80">ມັດຈຳ:</span>
-                                <span className="font-bold tabular-nums">{fmtNum(order.deposit)}</span>
-                              </div>
-                              {remaining > 0 ? (
-                                <div className="flex items-center justify-between text-[10px] bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded-full border border-rose-200/60 dark:border-rose-500/30">
-                                  <span className="font-medium opacity-80">ເຫຼືອ:</span>
-                                  <span className="font-bold tabular-nums">{fmtNum(remaining)}</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-center text-[10px] bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-500/30 font-bold">
-                                  ຈ່າຍຄົບແລ້ວ
-                                </div>
-                              )}
+                            <div className="flex justify-end w-full max-w-[280px] sm:max-w-none pr-2">
+                              <p className="text-[10px] sm:text-xs text-slate-400 font-medium tabular-nums">+{fmtNum(order.shipping_fee)} ₭ ຂົນສົ່ງ</p>
                             </div>
                           )}
                         </div>
                       </td>
 
-                      {/* Profit */}
-                      <td className="px-4 py-4">
-                        <p className={`text-sm font-extrabold tabular-nums ${(order.total_profit || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                          {fmtNum(order.total_profit || 0)} ₭
-                        </p>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-4">
-                        <StatusBadge status={order.status} loading={isUpdating} onClick={() => setStatusModal(order.id)} />
-                        {order.status_updated_at != null && (
-                          <p className="text-[10px] text-slate-400 mt-1 tabular-nums">{formatDate(order.status_updated_at as any, true)} {formatTime(order.status_updated_at as any)}</p>
-                        )}
-                        <AlertBadge order={order} now={now} onQuickCheck={() => updateStatus(order.id, 'ກວດສອບແລ້ວ')} />
+                      {/* Sales & Profit Merged */}
+                      <td className="px-2 py-1.5 sm:px-4 sm:py-4">
+                        <div className="flex flex-col items-center gap-2 sm:gap-3">
+                          {/* Sales */}
+                          <div className="flex flex-col items-center gap-1 sm:gap-1.5 w-full">
+                            <span className="text-[9px] text-slate-400 font-medium hidden sm:block">ຍອດຂາຍ</span>
+                            <p className="text-[12px] sm:text-base font-black text-slate-900 dark:text-white tabular-nums">
+                              {fmtNum(total_sales)}
+                            </p>
+                            {(order.deposit || 0) > 0 && (
+                              <div className="flex flex-col gap-1 w-full max-w-[80px] sm:max-w-[110px]">
+                                <div className="flex items-center justify-between text-[9px] sm:text-[10px] bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 px-1.5 sm:px-2 py-0.5 rounded-full border border-amber-200/60 dark:border-amber-500/30">
+                                  <span className="font-medium opacity-80">ມັດຈຳ:</span>
+                                  <span className="font-bold tabular-nums">{fmtNum(order.deposit)}</span>
+                                </div>
+                                {remaining > 0 ? (
+                                  <div className="flex items-center justify-between text-[9px] sm:text-xs bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 px-1.5 sm:px-2 py-0.5 rounded-full border border-rose-200/60 dark:border-rose-500/30">
+                                    <span className="font-medium opacity-80">ເຫຼືອ:</span>
+                                    <span className="font-bold tabular-nums">{fmtNum(remaining)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center text-[9px] sm:text-xs bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-1.5 sm:px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-500/30 font-bold">
+                                    ຈ່າຍຄົບແລ້ວ
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Profit */}
+                          {!hideCosts && (
+                            <div className="flex flex-col items-center gap-0.5 w-full border-t border-slate-100 dark:border-white/5 pt-2 sm:pt-2.5">
+                              <span className="text-[9px] text-slate-400 font-medium">ກຳໄລ</span>
+                              <p className={`text-[12px] sm:text-base font-extrabold tabular-nums ${(order.total_profit || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                {fmtNum(order.total_profit || 0)} ₭
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {onEdit && (
-                            <button
-                              onClick={() => onEdit(order.id)}
-                              title="ແກ້ໄຂ"
-                              className="w-8 h-8 flex items-center justify-center rounded-[14px] bg-slate-100/70 dark:bg-white/8 hover:bg-amber-100/70 dark:hover:bg-amber-500/20 text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 transition-all hover:scale-110 active:scale-95"
+                      <td className="px-2 py-1.5 sm:px-4 sm:py-4 text-right">
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActionMenuOpenId(actionMenuOpenId === order.id ? null : order.id);
+                            }}
+                            className="w-8 h-8 flex items-center justify-center rounded-[14px] bg-slate-100/70 dark:bg-white/8 hover:bg-indigo-100/70 dark:hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all hover:scale-110 active:scale-95"
+                          >
+                            <EllipsisVerticalIcon className="w-5 h-5" />
+                          </button>
+                          
+                          {actionMenuOpenId === order.id && (
+                            <BaseModal
+                              isOpen={true}
+                              onClose={() => setActionMenuOpenId(null)}
+                              title="ຈັດການອໍເດີ"
+                              maxWidth="max-w-[320px]"
+                              width="w-full"
+                              bodyClassName="p-4 flex flex-col gap-2.5"
                             >
-                              <PencilIcon className="w-3.5 h-3.5" />
-                            </button>
+                              {onEdit && (
+                                <button
+                                  onClick={() => { setActionMenuOpenId(null); onEdit(order.id); }}
+                                  className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-[16px] text-[15px] font-bold text-slate-700 dark:text-slate-200 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 hover:text-amber-700 dark:hover:text-amber-400 transition-colors border border-amber-100/50 dark:border-amber-500/20 shadow-sm"
+                                >
+                                  <PencilIcon className="w-5 h-5" /> ແກ້ໄຂອໍເດີ
+                                </button>
+                              )}
+                              <button
+                                onClick={() => { setActionMenuOpenId(null); setBillModal(order); }}
+                                className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-[16px] text-[15px] font-bold text-slate-700 dark:text-slate-200 bg-teal-50 dark:bg-teal-500/10 hover:bg-teal-100 dark:hover:bg-teal-500/20 hover:text-teal-700 dark:hover:text-teal-400 transition-colors border border-teal-100/50 dark:border-teal-500/20 shadow-sm"
+                              >
+                                <EyeIcon className="w-5 h-5" /> ເບິ່ງບິນ
+                              </button>
+                              <button
+                                onClick={() => { setActionMenuOpenId(null); deleteOrder(order.id); }}
+                                className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-[16px] text-[15px] font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors border border-rose-100/50 dark:border-rose-500/20 shadow-sm"
+                              >
+                                <TrashIcon className="w-5 h-5" /> ລຶບອໍເດີ
+                              </button>
+                            </BaseModal>
                           )}
-                          <button
-                            onClick={() => setBillModal(order)}
-                            title="ເບິ່ງບິນ"
-                            className="w-8 h-8 flex items-center justify-center rounded-[14px] bg-slate-100/70 dark:bg-white/8 hover:bg-teal-100/70 dark:hover:bg-teal-500/20 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 transition-all hover:scale-110 active:scale-95"
-                          >
-                            <EyeIcon className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => deleteOrder(order.id)}
-                            title="ລຶບ"
-                            className="w-8 h-8 flex items-center justify-center rounded-[14px] bg-slate-100/70 dark:bg-white/8 hover:bg-rose-100/70 dark:hover:bg-rose-500/20 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-all hover:scale-110 active:scale-95"
-                          >
-                            <TrashIcon className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       </td>
                     </motion.tr>

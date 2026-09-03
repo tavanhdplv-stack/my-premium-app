@@ -60,10 +60,10 @@ interface Expense {
 // form shares the exact same height, radius, border and focus treatment.
 // =====================================================================
 const card = 'bg-white dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm dark:shadow-none';
-const pad = 'p-5 sm:p-6 lg:p-7';
+const pad = 'p-3 sm:p-5 lg:p-7';
 const label = 'flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5';
 const field =
-  'w-full h-11 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-colors duration-150 focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:focus:ring-violet-500/20';
+  'w-full h-10 sm:h-12 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 sm:px-4 text-[14px] sm:text-[16px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-colors duration-150 focus:bg-white dark:focus:bg-slate-800 focus:border-violet-400 dark:focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:focus:ring-violet-500/20';
 const sectionTitle = 'flex items-center gap-2.5 text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide';
 const chip = 'w-9 h-9 rounded-xl flex items-center justify-center shrink-0';
 const primaryBtn =
@@ -107,7 +107,7 @@ function MoneyInput({
     <input
       type="text"
       inputMode="decimal"
-      value={formatNumber(value)}
+      value={value === 0 ? '' : formatNumber(value)}
       onChange={(e) => {
         const raw = parseNumericInput(e.target.value);
         if (raw !== null) onChange(raw);
@@ -396,16 +396,13 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
     lines.forEach(line => {
       if (!ignoreRegex.test(line) && line.trim().length > 3) {
-        let qty = 1;
-        const qtyMatch = line.match(/(?:x|X)\s*(\d+)|\s*(\d+)\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ|ໃບ)/);
-        if (qtyMatch) qty = Number(qtyMatch[1] || qtyMatch[2]);
+        let qty = 1; // User will add quantity manually
 
         let price = 0;
         const priceMatch = line.match(/(\d{2,3}(?:,\d{3})+|\d{4,})/);
         if (priceMatch) price = Number(priceMatch[1].replace(/,/g, ''));
 
-        let name = line.replace(/(?:x|X)\s*\d+|\s*\d+\s*(?:x|X|ໜ່ວຍ|ໂຕ|ອັນ|ໃບ)/g, '')
-                       .replace(/\d{2,3}(?:,\d{3})+|\d{4,}/g, '')
+        let name = line.replace(/\d{2,3}(?:,\d{3})+|\d{4,}/g, '')
                        .replace(/ກີບ|kip|ລວມ|₭/gi, '')
                        .trim();
         name = name.replace(/^[-*:\s\d.]+|[-*:\s]+$/g, '');
@@ -558,7 +555,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.6-pro' });
 
         const prompt = `
         You are an expert AI product identifier for a retail store.
@@ -593,8 +590,8 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           result = await model.generateContent([prompt, imagePart]);
         } catch (aiError: any) {
           if (aiError.message?.includes('503') || aiError.message?.includes('high demand')) {
-            console.warn('Main AI model overloaded, falling back to lite model...');
-            const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
+            console.warn('Main AI model overloaded, falling back to flash model...');
+            const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
             result = await fallbackModel.generateContent([prompt, imagePart]);
           } else {
             throw aiError;
@@ -823,7 +820,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             value={announceText}
             onChange={(e) => setAnnounceText(e.target.value)}
             placeholder="ຕົວຢ່າງ: ມື້ນີ້ປິດຮັບອໍເດີແລ້ວເດີ້..."
-            className="w-full min-h-[120px] p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none transition-all shadow-inner"
+            className="w-full min-h-[120px] p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none transition-all shadow-inner"
           />
           <div className="flex justify-end gap-3 pt-2">
             <button
@@ -862,22 +859,19 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-28 lg:pb-16 flex flex-col gap-5 lg:gap-6">
+      <div className="max-w-6xl mx-auto px-2 sm:px-6 lg:px-8 pt-4 sm:pt-8 pb-28 lg:pb-16 flex flex-col gap-3 sm:gap-5 lg:gap-6">
         {/* Page header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-2">
+        <div className="flex flex-row items-center justify-between mb-0 sm:mb-2 px-1 sm:px-0">
           <div className="flex items-center gap-3">
-            <button onClick={resetForm} className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-            </button>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               {editId ? 'ແກ້ໄຂອໍເດີ' : 'ສ້າງບິນໃໝ່'}
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={resetForm} title="ຣີເຊັດຟອມ" className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+            <button onClick={resetForm} title="ຣີເຊັດຟອມ" className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
             </button>
-            <button onClick={handleSetAnnouncement} title="ຕັ້ງຄ່າປະກາດແຈ້ງເຕືອນ" className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors group">
+            <button onClick={handleSetAnnouncement} title="ຕັ້ງຄ່າປະກາດແຈ້ງເຕືອນ" className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors group">
               <div className="absolute -top-1 -right-1 w-3 h-3 flex items-center justify-center">
                 <div className="absolute w-full h-full bg-rose-500 rounded-full animate-ping opacity-75" />
                 <div className="w-2 h-2 bg-rose-500 rounded-full" />
@@ -888,27 +882,29 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
         </div>
 
         {/* AI Parser Card */}
-        <section className={`${card} p-3 sm:p-4 flex flex-col md:flex-row items-center gap-4 relative overflow-hidden`}>
+        <section className={`${card} p-3 sm:p-4 flex flex-col md:flex-row items-center gap-3 sm:gap-4 relative overflow-hidden`}>
           <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-400"></div>
-          <div className="flex items-center gap-4 shrink-0 pl-2 w-full md:w-auto">
-            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M12.012 2c-5.506 0-9.98 4.475-9.98 9.982 0 1.944.545 3.84 1.55 5.518L2 22l4.646-1.55a9.929 9.929 0 005.366 1.551h.004c5.505 0 9.98-4.476 9.98-9.983 0-5.507-4.475-9.982-9.98-9.982z"/></svg>
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0 pl-2 w-full md:w-auto">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 sm:w-7 sm:h-7"><path d="M12.012 2c-5.506 0-9.98 4.475-9.98 9.982 0 1.944.545 3.84 1.55 5.518L2 22l4.646-1.55a9.929 9.929 0 005.366 1.551h.004c5.505 0 9.98-4.476 9.98-9.983 0-5.507-4.475-9.982-9.98-9.982z"/></svg>
             </div>
             <div>
               <p className="text-sm font-bold text-slate-800 dark:text-slate-200">ນຳເຂົ້າອັດຕະໂນມັດ</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">ວາງຂໍ້ຄວາມຈາກລູກຄ້າ</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">ວາງຂໍ້ຄວາມຈາກລູກຄ້າ</p>
             </div>
           </div>
-          <textarea
-            value={rawText}
-            onChange={(e) => setRawText(e.target.value)}
-            placeholder="ວາງຂໍ້ຄວາມທີ່ນີ້..."
-            className="flex-1 min-h-[120px] bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors w-full resize-y"
-          />
-          <button onClick={handleParseData} className="h-12 px-6 rounded-xl bg-[#0f172a] hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-sm font-bold transition-all duration-150 shrink-0 w-full md:w-auto flex items-center justify-center gap-2">
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09l2.846.813-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
-            ດຶງຂໍ້ມູນ
-          </button>
+          <div className="flex flex-row w-full gap-2 md:gap-4">
+            <textarea
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              placeholder="ວາງຂໍ້ຄວາມທີ່ນີ້..."
+              className="flex-1 min-h-[60px] sm:min-h-[120px] bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 sm:px-4 sm:py-3 text-[14px] sm:text-base text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors w-full resize-y"
+            />
+            <button onClick={handleParseData} className="h-auto min-h-[60px] sm:min-h-[120px] px-3 sm:px-6 rounded-xl bg-[#0f172a] hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-sm font-bold transition-all duration-150 shrink-0 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-5 h-5 sm:w-4 sm:h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09l2.846.813-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
+              <span className="text-[10px] sm:text-sm">ດຶງຂໍ້ມູນ</span>
+            </button>
+          </div>
         </section>
 
         {/* Customer Info Card */}
@@ -925,9 +921,9 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
           </div>
 
           {/* Row 1: Agent + Orderer + Customer Name + Phone */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-3 sm:mb-4">
             <div>
-              <label className={label}><Handshake className="w-3.5 h-3.5" /> ຕົວແທນ (Agent)</label>
+              <label className={label}><Handshake className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ຕົວແທນ</label>
               <div className="relative z-20">
                 <CustomSelect 
                   value={agentId}
@@ -950,42 +946,42 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
             </div>
 
             <div>
-              <label className={label}><User className="w-3.5 h-3.5" /> ຜູ້ສັ່ງ (ໃຜຄີຍ)</label>
-              <input type="text" value={orderedBy} onChange={e => setOrderedBy(e.target.value)} placeholder="ຊື່ຜູ້ຄີຍອໍເດີ" className={`${field} bg-indigo-50/60 dark:bg-indigo-500/10`} />
+              <label className={label}><User className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ຜູ້ສັ່ງ</label>
+              <input type="text" value={orderedBy} onChange={e => setOrderedBy(e.target.value)} placeholder="ໃຜຄີຍອໍເດີ" className={`${field} bg-indigo-50/60 dark:bg-indigo-500/10`} />
             </div>
 
             <div>
-              <label className={label}><Package className="w-3.5 h-3.5" /> ຊື່ລູກຄ້າ (ຜູ້ຮັບ)</label>
-              <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="ຊື່ຜູ້ຮັບສິນຄ້າ" className={field} />
+              <label className={label}><Package className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ຊື່ລູກຄ້າ</label>
+              <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="ຜູ້ຮັບ" className={field} />
             </div>
 
             <div>
-              <label className={label}><Phone className="w-3.5 h-3.5" /> ເບີໂທຕິດຕໍ່</label>
+              <label className={label}><Phone className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ເບີໂທ</label>
               <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="020-XXXXXXXX" className={field} />
             </div>
           </div>
 
           {/* Row 2: Transport + Village + District + Province */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div>
-              <label className={label}><Truck className="w-3.5 h-3.5" /> ຂົນສົ່ງ</label>
+              <label className={label}><Truck className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ຂົນສົ່ງ</label>
               <div className="relative">
                 <SelectField value={transport} onChange={setTransport} options={TRANSPORTS} className="text-violet-600 dark:text-violet-400 font-bold bg-violet-50/60 dark:bg-violet-500/10" />
               </div>
             </div>
 
             <div>
-              <label className={label}><Home className="w-3.5 h-3.5" /> ບ້ານ</label>
+              <label className={label}><Home className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ບ້ານ</label>
               <input type="text" value={village} onChange={e => setVillage(e.target.value)} placeholder="ຊື່ບ້ານ" className={field} />
             </div>
 
             <div>
-              <label className={label}><Building2 className="w-3.5 h-3.5" /> ເມືອງ</label>
+              <label className={label}><Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ເມືອງ</label>
               <input type="text" value={district} onChange={e => setDistrict(e.target.value)} placeholder="ຊື່ເມືອງ" className={field} />
             </div>
 
             <div>
-              <label className={label}><MapPin className="w-3.5 h-3.5" /> ແຂວງ</label>
+              <label className={label}><MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ແຂວງ</label>
               <SelectField value={province} onChange={setProvince} options={PROVINCES} className="" />
             </div>
           </div>
@@ -993,7 +989,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
 
         {/* Order Items Card */}
         <section className={`${card} ${pad}`}>
-          <div className="flex items-center justify-between gap-3 mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-5">
             <div className="flex items-center gap-2 text-sm font-extrabold text-slate-800 dark:text-slate-200">
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-indigo-500"><path d="M21 7.24a2.25 2.25 0 00-1.12-1.95l-6.75-3.9a2.25 2.25 0 00-2.26 0l-6.75 3.9A2.25 2.25 0 003 7.24v9.52a2.25 2.25 0 001.12 1.95l6.75 3.9a2.25 2.25 0 002.26 0l6.75-3.9A2.25 2.25 0 0021 16.76V7.24zm-9 11.26L5.25 14.6V9.4l6.75 3.9v5.2zm1.5-6.06L6.75 8.54l6.75-3.9 6.75 3.9-6.75 3.9zm.75 6.06v-5.2l6.75-3.9v5.2l-6.75 3.9z"/></svg>
               ລາຍການສິນຄ້າ
@@ -1001,27 +997,18 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                 {items.length} ລາຍການ
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <label className={`cursor-pointer h-9 px-3.5 rounded-lg text-xs font-bold transition-all duration-150 flex items-center gap-1.5 shrink-0 ${isAIScanning ? 'bg-amber-100 text-amber-600 opacity-70' : 'bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 active:scale-95'}`}>
-                {isAIScanning ? (
-                  <div className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" /></svg>
-                )}
-                {isAIScanning ? 'ກຳລັງສະແກນ...' : '🤖 AI Scan'}
-                <input type="file" accept="image/*" className="hidden" onChange={handleAIScan} disabled={isAIScanning} />
-              </label>
-              <label className="cursor-pointer h-9 px-3.5 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5.04-6.71l-2.75 3.54-1.96-2.36L6.5 17h11l-3.54-4.71z"/></svg>
+            <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 mt-2 sm:mt-0">
+              <label className="cursor-pointer h-8 sm:h-9 px-2 sm:px-3.5 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[11px] sm:text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1 sm:gap-1.5 shrink-0">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4"><path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5.04-6.71l-2.75 3.54-1.96-2.36L6.5 17h11l-3.54-4.71z"/></svg>
                 ອັບໂຫຼດຫຼາຍຮູບ
                 <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkImageUpload} />
               </label>
-              <button onClick={() => setShowStockModal(true)} className="h-9 px-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+              <button onClick={() => setShowStockModal(true)} className="h-8 sm:h-9 px-2 sm:px-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] sm:text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1 sm:gap-1.5 shrink-0">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
                 ເພີ່ມຈາກສະຕັອກ
               </button>
-              <button onClick={addItem} className="h-9 px-3.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1.5 shrink-0">
-                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              <button onClick={addItem} className="h-8 sm:h-9 px-2 sm:px-3.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[11px] sm:text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 active:scale-95 transition-all duration-150 flex items-center gap-1 sm:gap-1.5 shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 ເພີ່ມລາຍການ
               </button>
             </div>
@@ -1042,30 +1029,33 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                     </button>
                   )}
                   
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-5 lg:gap-6">
                     {/* Image Uploader & Name */}
-                    <div className="lg:col-span-5 flex items-start gap-4 pr-6 lg:pr-0">
-                      <div className="w-20 h-20 shrink-0 relative rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-violet-50/50 dark:hover:bg-violet-900/30 hover:border-violet-300 dark:hover:border-violet-500 transition-all duration-200 overflow-hidden group/img">
-                        {item.imageUrl ? (
-                          <>
-                            <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
-                            <button onClick={() => updateItem(item.id, 'imageUrl', '')} className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity" title="ລຶບຮູບ">
-                              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          </>
-                        ) : uploadingItemId === item.id ? (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <div className="w-5 h-5 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
-                          </div>
-                        ) : (
-                          <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer text-slate-400 group-hover/img:text-violet-600 transition-colors" title="ເພີ່ມຮູບ">
-                            <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 mb-1"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
-                            <span className="text-[10px] font-bold">ເພີ່ມຮູບ</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleItemImageUpload(item.id, e)} disabled={uploadingItemId !== null} />
-                          </label>
-                        )}
+                    <div className="lg:col-span-5 flex items-start gap-3 sm:gap-4 pr-6 lg:pr-0">
+                      <div className="flex flex-col shrink-0">
+                        <label className={label}>ຮູບພາບ</label>
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 relative rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-violet-50/50 dark:hover:bg-violet-900/30 hover:border-violet-300 dark:hover:border-violet-500 transition-all duration-200 overflow-hidden group/img">
+                          {item.imageUrl ? (
+                            <>
+                              <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                              <button onClick={() => updateItem(item.id, 'imageUrl', '')} className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity" title="ລຶບຮູບ">
+                                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </>
+                          ) : uploadingItemId === item.id ? (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="w-5 h-5 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+                            </div>
+                          ) : (
+                            <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer text-slate-400 group-hover/img:text-violet-600 transition-colors" title="ເພີ່ມຮູບ">
+                              <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6 mb-1"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
+                              <span className="text-[9px] sm:text-[10px] font-bold">ເພີ່ມຮູບ</span>
+                              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleItemImageUpload(item.id, e)} disabled={uploadingItemId !== null} />
+                            </label>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1 mt-1 min-w-0 relative">
+                      <div className="flex-1 min-w-0 relative">
                         <label className={label}>ຊື່ສິນຄ້າ</label>
                         <input
                           type="text"
@@ -1113,10 +1103,10 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                     </div>
 
                     {/* Financials Grid */}
-                    <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-4 items-start">
+                    <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-start">
                       <div>
                         <label className={label}>ຈຳນວນ</label>
-                        <input type="number" min="1" value={item.qty} onChange={(e) => updateItem(item.id, 'qty', Number(e.target.value))} className={`${field} text-center tabular-nums font-bold w-full`} />
+                        <input type="number" min="1" value={item.qty === 0 ? '' : item.qty} onChange={(e) => updateItem(item.id, 'qty', Number(e.target.value))} placeholder="0" className={`${field} text-center tabular-nums font-bold w-full`} />
                       </div>
                       <div>
                         <label className={`${label} text-rose-500 dark:text-rose-400`}>ຕົ້ນທຶນ</label>
@@ -1126,11 +1116,14 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
                         <label className={label}>ລາຄາຂາຍ</label>
                         <MoneyInput value={item.price} onChange={(v) => updateItem(item.id, 'price', Number(v))} placeholder="0" className="font-semibold w-full" />
                       </div>
-                      <div className="flex flex-col h-[70px] justify-end pb-1.5 sm:items-end">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">ກຳໄລ</span>
-                        <span className={`text-base font-extrabold tabular-nums tracking-tight ${itemProfit > 0 ? 'text-emerald-600' : itemProfit < 0 ? 'text-rose-500' : 'text-slate-400'}`}>
-                          {itemProfit > 0 && '+'}{formatNumber(itemProfit)}
-                        </span>
+                      <div className="flex flex-col">
+                        <label className={label}>ກຳໄລ</label>
+                        <div className={`h-10 sm:h-12 rounded-xl px-3 sm:px-4 flex items-center justify-between w-full border ${itemProfit > 0 ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20' : itemProfit < 0 ? 'bg-rose-50 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700/80'}`}>
+                          <span className={`text-[14px] sm:text-[16px] font-extrabold tabular-nums tracking-tight ${itemProfit > 0 ? 'text-emerald-600 dark:text-emerald-400' : itemProfit < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}>
+                            {itemProfit > 0 && '+'}{formatNumber(itemProfit)}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">₭</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1294,7 +1287,7 @@ export default function OrderForm({ editId, preSelectedAgentId, onSuccess }: { e
               value={stockSearch}
               onChange={e => setStockSearch(e.target.value)}
               placeholder="ຄົ້ນຫາຊື່ສິນຄ້າ..."
-              className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 text-sm font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none transition-colors focus:border-teal-400"
+              className="w-full h-11 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 text-[16px] font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none transition-colors focus:border-teal-400"
             />
           </div>
         }

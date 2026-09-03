@@ -63,7 +63,7 @@ const itemRowVariants: any = {
 // ── Design tokens ──────────────────────────────────────────────────────
 const card = 'relative overflow-hidden bg-white/90 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/40 dark:border-white/8 rounded-[28px] shadow-[0_10px_35px_rgba(0,0,0,0.06)] hover:shadow-[0_18px_55px_rgba(0,0,0,0.10)] transition-shadow duration-500';
 
-const inputCls = 'w-full h-11 bg-white/70 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/70 dark:border-white/10 rounded-[18px] px-4 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400/70 outline-none transition-all duration-200 focus:bg-white dark:focus:bg-slate-800/90 focus:border-teal-400 dark:focus:border-teal-500 focus:shadow-[0_0_0_4px_rgba(20,184,166,0.12)]';
+const inputCls = 'w-full h-11 bg-white/70 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/70 dark:border-white/10 rounded-[18px] px-4 text-[16px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400/70 outline-none transition-all duration-200 focus:bg-white dark:focus:bg-slate-800/90 focus:border-teal-400 dark:focus:border-teal-500 focus:shadow-[0_0_0_4px_rgba(20,184,166,0.12)]';
 
 const labelCls = 'block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.08em] mb-1.5';
 
@@ -293,7 +293,7 @@ export default function OrderStock() {
                             wallet_id: compWallet.id,
                             type: 'expense',
                             amount: totalCost,
-                            notes: `ຊື້ສິນຄ້າເຂົ້າສາງ: ${itemName.trim()} (${quantity} ອັນ)`,
+                            notes: `#STOCK# ຊື້ສິນຄ້າເຂົ້າສາງ: ${itemName.trim()} (${quantity} ອັນ)`,
                             date: new Date().toISOString()
                         });
                     }
@@ -361,7 +361,7 @@ export default function OrderStock() {
                         wallet_id: compWallet.id,
                         type: 'expense',
                         amount: totalCost,
-                        notes: `ຕື່ມສິນຄ້າເຂົ້າສາງ: ${item.itemName.trim()} (+${delta} ອັນ)`,
+                        notes: `#STOCK# ຕື່ມສິນຄ້າເຂົ້າສາງ: ${item.itemName.trim()} (+${delta} ອັນ)`,
                         date: new Date().toISOString()
                     });
                 }
@@ -1041,7 +1041,7 @@ export default function OrderStock() {
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 placeholder="ຄົ້ນຫາສິນຄ້າ..."
-                                className="h-10 pl-10 pr-4 bg-white/70 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/70 dark:border-white/8 rounded-[18px] text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400/70 outline-none transition-all duration-200 focus:bg-white dark:focus:bg-slate-800/90 focus:border-teal-400 dark:focus:border-teal-500 focus:shadow-[0_0_0_4px_rgba(20,184,166,0.10)] w-full sm:w-52"
+                                className="h-10 pl-10 pr-4 bg-white/70 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/70 dark:border-white/8 rounded-[18px] text-[16px] text-slate-700 dark:text-slate-200 placeholder:text-slate-400/70 outline-none transition-all duration-200 focus:bg-white dark:focus:bg-slate-800/90 focus:border-teal-400 dark:focus:border-teal-500 focus:shadow-[0_0_0_4px_rgba(20,184,166,0.10)] w-full sm:w-52"
                             />
                             {search && (
                                 <button
@@ -1059,11 +1059,13 @@ export default function OrderStock() {
                         variants={staggerContainer}
                         initial="initial"
                         animate="animate"
-                        className="grid grid-cols-3 gap-3 mb-6"
+                        className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6"
                     >
                         <StatCard icon={ShoppingBagIcon} label="ທັງໝົດ" value={`${stocks.length} ລາຍການ`} color="teal" />
                         <StatCard icon={CubeIcon} label="ຈຳນວນລວມ" value={`${stockStats.totalItems.toLocaleString()} ຊິ້ນ`} color="emerald" />
-                        <StatCard icon={CurrencyDollarIcon} label="ມູນຄ່າສາງ" value={`${stockStats.totalValue.toLocaleString()} ກີບ`} color="indigo" />
+                        <div className="col-span-2 sm:col-span-1">
+                            <StatCard icon={CurrencyDollarIcon} label="ມູນຄ່າສາງ" value={`${stockStats.totalValue.toLocaleString()} ກີບ`} color="indigo" />
+                        </div>
                     </motion.div>
 
                     {/* Table */}
@@ -1083,7 +1085,7 @@ export default function OrderStock() {
                                 <ShoppingBagIcon className="w-10 h-10 text-slate-400" />
                             </div>
                             <p className="text-base font-bold text-slate-600 dark:text-slate-300">
-                                {search ? 'ບໍ່ພົບສິນຄ້າທີ່ຄົ້ນຫາ' : 'ຍັງບໍ່ມີສິນຄ້າໃນສາງ'}
+                                {search ? 'ບໍ່ພົບສິນຄ້າที่คົ້ນຫາ' : 'ຍັງບໍ່ມີສິນຄ້າໃນສາງ'}
                             </p>
                             <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
                                 {!search && 'ເພີ່ມສິນຄ້າດ້ວຍຟອມດ້ານຊ້າຍ'}
@@ -1096,18 +1098,18 @@ export default function OrderStock() {
                             animate="animate"
                             className="overflow-x-auto -mx-1"
                         >
-                            <table className="w-full text-left border-collapse">
+                            <table className="w-full text-left border-collapse min-w-[750px] whitespace-nowrap">
                                 <thead>
                                     <tr className="border-b border-slate-100 dark:border-white/6 text-[11px] font-bold text-slate-400 uppercase tracking-[0.06em]">
-                                        <th className="pb-4 px-2">ຮູບ</th>
+                                        <th className="pb-4 px-2 w-16">ຮູບ</th>
                                         <th className="pb-4 px-2">ຊື່ສິນຄ້າ</th>
-                                        <th className="pb-4 px-2 text-center">ຈຳນວນ</th>
-                                        <th className="pb-4 px-2 text-center">ສະຖານະ</th>
+                                        <th className="pb-4 px-2 text-center w-28">ຈຳນວນ</th>
+                                        <th className="pb-4 px-2 text-center w-28">ສະຖານະ</th>
                                         <th className="pb-4 px-2">ລາຄາຂາຍ</th>
                                         <th className="pb-4 px-2 hidden md:table-cell">ທຶນ</th>
                                         <th className="pb-4 px-2">ກຳໄລ</th>
                                         <th className="pb-4 px-2 hidden lg:table-cell">ໝາຍເຫດ</th>
-                                        <th className="pb-4 px-2 text-center">ຈັດການ</th>
+                                        <th className="pb-4 px-2 text-center w-24">ຈັດການ</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50 dark:divide-white/4">
@@ -1133,7 +1135,7 @@ export default function OrderStock() {
                                                     <td className="py-3 px-2">
                                                         <motion.div
                                                             whileHover={{ scale: 1.05 }}
-                                                            className="w-14 h-14 rounded-[18px] overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-white/8 relative shrink-0 cursor-pointer shadow-sm hover:shadow-md transition-all"
+                                                            className="w-12 h-12 sm:w-14 sm:h-14 rounded-[14px] sm:rounded-[18px] overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-white/8 relative shrink-0 cursor-pointer shadow-sm hover:shadow-md transition-all"
                                                             onClick={() => item.imageUrl?.startsWith('http') && setPreviewModalUrl(item.imageUrl)}
                                                         >
                                                             {item.imageUrl?.startsWith('http') ? (
@@ -1149,7 +1151,7 @@ export default function OrderStock() {
                                                                     }}
                                                                 />
                                                             ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-slate-400 text-2xl">
+                                                                <div className="w-full h-full flex items-center justify-center text-slate-400 text-xl sm:text-2xl">
                                                                     📦
                                                                 </div>
                                                             )}
@@ -1158,7 +1160,7 @@ export default function OrderStock() {
 
                                                     {/* Name */}
                                                     <td className="py-3 px-2">
-                                                        <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">
+                                                        <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-tight whitespace-normal sm:whitespace-nowrap line-clamp-2 sm:line-clamp-none max-w-[140px] sm:max-w-[200px]" title={item.itemName}>
                                                             {item.itemName}
                                                         </p>
                                                     </td>

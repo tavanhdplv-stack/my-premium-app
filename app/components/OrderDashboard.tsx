@@ -13,7 +13,7 @@ interface WalletDoc {
 interface TransactionDoc {
   id: string;
   walletId: string;
-  type: 'income' | 'expense' | 'profit_split';
+  type: 'income' | 'expense' | 'profit_split' | 'withdraw';
   amount: number;
   note: string;
   date: string;
@@ -152,12 +152,12 @@ const STATUS_META: {
   icon: 'inbox' | 'download' | 'check' | 'alert' | 'box' | 'truck' | 'send' | 'complete' | 'cancel';
 }[] = [
   { value: 'ຮັບອໍເດີແລ້ວ', label: 'รับออเดอร์แล้ว (ຮັບອໍເດີ)', chip: 'bg-blue-50 text-blue-600', icon: 'inbox' },
-  { value: 'ສົ່ງບິນແລ້ວ', label: 'ส่งบินแล้ว (ສົ່ງບິນ)', chip: 'bg-cyan-50 text-cyan-600', icon: 'download' },
-  { value: 'ກວດສອບແລ້ວ', label: 'ตรวจสอบแล้ว (ກວດສອບ)', chip: 'bg-emerald-50 text-emerald-600', icon: 'check' },
-  { value: 'ໂອນມັດຈຳແລ້ວ', label: 'โอนมัดจำแล้ว (ໂອນມັດຈຳ)', chip: 'bg-yellow-50 text-yellow-600', icon: 'alert' },
   { value: 'ສັ່ງເຄື່ອງແລ້ວ', label: 'สั่งของแล้ว (ສັ່ງເຄື່ອງ)', chip: 'bg-orange-50 text-orange-600', icon: 'box' },
-  { value: 'ເຄື່ອງມາຮອດແລ້ວ', label: 'ของมาถึงแล้ว (ເຄື່ອງມາຮອດ)', chip: 'bg-indigo-50 text-indigo-600', icon: 'truck' },
   { value: 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', label: 'ส่งให้ลูกค้าแล้ว (ສົ່ງເຄື່ອງ)', chip: 'bg-purple-50 text-purple-600', icon: 'send' },
+  { value: 'ແຈ້ງລູກຄ້າແລ້ວ', label: 'แจ้งลูกค้าแล้ว (ແຈ້ງລູກຄ້າແລ້ວ)', chip: 'bg-fuchsia-50 text-fuchsia-600', icon: 'send' },
+  { value: 'ສົ່ງບິນແລ້ວ', label: 'ส่งบินแล้ว (ສົ່ງບິນ)', chip: 'bg-cyan-50 text-cyan-600', icon: 'download' },
+  { value: 'ໂອນມັດຈຳແລ້ວ', label: 'โอนมัดจำแล้ว (ໂອນມັດຈຳ)', chip: 'bg-yellow-50 text-yellow-600', icon: 'alert' },
+  { value: 'ເຄື່ອງມາຮອດແລ້ວ', label: 'ของมาถึงแล้ว (ເຄື່ອງມາຮອດ)', chip: 'bg-indigo-50 text-indigo-600', icon: 'truck' },
   { value: 'ໄດ້ຮັບເງິນແລ້ວ', label: 'ได้รับเงินแล้ว (ໄດ້ຮັບເງິນ)', chip: 'bg-lime-50 text-lime-600', icon: 'complete' },
 ];
 
@@ -483,8 +483,23 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
 
     // 2. Manual expenses from OtherExpenses
     walletTransactions.forEach(t => {
-      const isWithdrawal = t.type === 'profit_split' || t.note?.includes('[ປັນຜົນຮຸ້ນສ່ວນ') || t.note?.includes('ຖອນ') || t.Note?.includes('ຖອນ');
-      if ((t.type === 'expense' || t.Type === 'Expense') && !t.note?.startsWith('Order #') && !isWithdrawal) {
+      const noteRaw = t.note || t.Note || '';
+      const noteLower = noteRaw.toLowerCase();
+      const isWithdrawal = t.type === 'profit_split' || 
+        noteLower.includes('[ປັນຜົນຮຸ້ນສ່ວນ') || 
+        noteLower.includes('ຖອນ') || 
+        noteLower.includes('ถอน') || 
+        noteLower.includes('ປັນຜົນ') || 
+        noteLower.includes('ปันผล') || 
+        noteLower.includes('เบิก') || 
+        noteLower.includes('หุ้นส่วน') || 
+        noteLower.includes('ຮຸ້ນສ່ວນ');
+      // Stock purchases are COGS — exclude from operating expenses
+      const isStockPurchase = noteRaw.includes('#STOCK#') ||
+        noteRaw.startsWith('ຊື້ສິນຄ້າເຂົ້າສາງ') ||
+        noteRaw.startsWith('ຕື່ມສິນຄ້າເຂົ້າສາງ');
+        
+      if ((t.type === 'expense' || t.Type === 'Expense') && !t.note?.startsWith('Order #') && !isWithdrawal && !isStockPurchase) {
         if (!monthFilter || ymOf(t.date || t.Date) === monthFilter) {
           expenses += Number(t.amount) || Number(t.Amount) || 0;
         }
@@ -698,7 +713,7 @@ export default function OrderDashboard({ onViewAll }: OrderDashboardProps) {
               type="month"
               value={monthFilter}
               onChange={(e) => setMonthFilter(e.target.value)}
-              className="hidden sm:block bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 outline-none focus:border-violet-400 cursor-pointer"
+              className="hidden sm:block bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-base font-bold text-slate-600 dark:text-slate-300 outline-none focus:border-violet-400 cursor-pointer"
             />
             <button
               onClick={() => setQuickFilter('')}

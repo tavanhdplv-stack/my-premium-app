@@ -100,7 +100,7 @@ export interface WalletStats {
 export interface Transaction {
   id: string;
   wallet_id: string;
-  type: 'income' | 'expense' | 'profit_split';
+  type: 'income' | 'expense' | 'profit_split' | 'withdraw';
   amount: number;
   notes: string;
   date: string;

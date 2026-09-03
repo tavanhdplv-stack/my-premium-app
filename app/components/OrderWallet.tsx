@@ -18,7 +18,7 @@ interface Wallet {
 interface Transaction {
   id: string;
   wallet_id: string;
-  type: 'income' | 'expense' | 'profit_split';
+  type: 'income' | 'expense' | 'profit_split' | 'withdraw';
   amount: number;
   notes: string;
   date: string;
@@ -65,7 +65,7 @@ function fmtDate(d: Date) {
 }
 
 function fmtTime(d: Date) {
-  return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 // ─── Does an order belong to this wallet? ────────────────────────────────────
@@ -190,13 +190,14 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
 
   // ── Wallet stats (all-time balance + monthly in/out) ─────────────────────
   function getWalletStats(wallet: Wallet, month: string) {
-    let bal = 0, inAmt = 0, outAmt = 0, cap = 0;
+    let bal = 0, inAmt = 0, outAmt = 0, cap = 0, withdrawAmt = 0;
 
     // From manual transactions
     transactions.forEach(t => {
       let amountToAdd = 0;
       let amountToSub = 0;
       let isIncome = false;
+      let isWithdraw = false;
 
       if (t.wallet_id === wallet.id) {
         if (t.type === 'income') {
@@ -204,6 +205,12 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
           isIncome = true;
         } else {
           amountToSub = t.amount;
+          if (t.type === 'profit_split' || t.type === 'withdraw') {
+            isWithdraw = true;
+          } else {
+            const note = (t.notes || '').toLowerCase();
+            isWithdraw = note.includes('ປັນຜົນ') || note.includes('ปันผล') || note.includes('ຖອນ') || note.includes('ถอน') || note.includes('เบิก') || note.includes('หุ้นส่วน') || note.includes('ຮຸ້ນສ່ວນ');
+          }
         }
       } else if (t.type === 'profit_split' && t.partner_split_id === wallet.id) {
         // Legacy dividend payout from another wallet (like W-COMP) to this partner's wallet
@@ -222,7 +229,10 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
         if (isCurrent) { inAmt += amountToAdd; if (!t.notes?.includes('ຄືນທຶນ')) cap += amountToAdd; }
       } else {
         if (pastOrCurrent) bal -= amountToSub;
-        if (isCurrent) outAmt += amountToSub;
+        if (isCurrent) {
+          if (isWithdraw) withdrawAmt += amountToSub;
+          else outAmt += amountToSub;
+        }
       }
     });
 
@@ -239,7 +249,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
       if (isCurrent) { inAmt += income; outAmt += cost; }
     });
 
-    return { bal, in: inAmt, out: outAmt, capital: cap };
+    return { bal, in: inAmt, out: outAmt, capital: cap, withdraw: withdrawAmt };
   }
 
   const totalBalance = useMemo(() =>
@@ -256,13 +266,27 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
     [orders]);
 
   const totalExpenses = useMemo(() =>
-    transactions.filter(t => t.type === 'expense')
-      .reduce((s, t) => s + t.amount, 0),
+    transactions.filter(t => {
+      if (t.type !== 'expense') return false;
+      const note = (t.notes || '').toLowerCase();
+      const isWithdrawal = note.includes('ປັນຜົນ') || note.includes('ปันผล') || note.includes('ຖອນ') || note.includes('ถอน') || note.includes('เบิก') || note.includes('หุ้นส่วน') || note.includes('ຮຸ້ນສ່ວນ');
+      // Stock purchases are COGS — already reflected in order cost, don't count twice
+      const isStockPurchase = (t.notes || '').includes('#STOCK#') ||
+        (t.notes || '').startsWith('ຊື້ສິນຄ້າເຂົ້າສາງ') ||
+        (t.notes || '').startsWith('ຕື່ມສິນຄ້າເຂົ້າສາງ');
+      return !isWithdrawal && !isStockPurchase;
+    }).reduce((s, t) => s + t.amount, 0),
     [transactions]);
 
   const totalDividends = useMemo(() =>
-    transactions.filter(t => t.type === 'profit_split')
-      .reduce((s, t) => s + t.amount, 0),
+    transactions.filter(t => {
+      if (t.type === 'profit_split' || t.type === 'withdraw') return true;
+      if (t.type === 'expense') {
+        const note = (t.notes || '').toLowerCase();
+        return note.includes('ປັນຜົນ') || note.includes('ปันผล') || note.includes('ຖອນ') || note.includes('ถอน') || note.includes('เบิก') || note.includes('หุ้นส่วน') || note.includes('ຮຸ້ນສ່ວນ');
+      }
+      return false;
+    }).reduce((s, t) => s + t.amount, 0),
     [transactions]);
 
   const netProfit = totalProfit - totalExpenses;
@@ -309,9 +333,11 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
           kind: t.type,
           label: t.type === 'income' ? 'ຮັບເຂົ້າ / ເຕີມທຶນ'
             : t.type === 'profit_split' ? 'ປັນຜົນຮຸ້ນສ່ວນ'
-            : 'ຄ່າໃຊ້ຈ່າຍ / ຖອນ',
+            : t.type === 'withdraw' ? 'ຖອນເງິນ'
+            : 'ຄ່າໃຊ້ຈ່າຍ',
           labelColor: t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400 font-bold'
             : t.type === 'profit_split' ? 'text-amber-600 dark:text-amber-400 font-bold'
+            : t.type === 'withdraw' ? 'text-amber-600 dark:text-amber-400 font-bold'
             : 'text-slate-600 dark:text-slate-400',
           detail: detailText,
           subDetail: null,
@@ -402,8 +428,8 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   const handleSaveTransaction = async () => {
     if (!transAmount || !showTransModal) return;
     const txType = showTransModal.type === 'income' ? 'income'
-      : isProfitSplit ? 'profit_split' : 'expense';
-    const note = transNote || (showTransModal.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນອອກ');
+      : isProfitSplit ? 'profit_split' : 'withdraw';
+    const note = transNote || (showTransModal.type === 'income' ? 'ເຕີມທຶນ' : 'ຖອນເງິນ');
 
     if (isProfitSplit && splitPartnerId) {
       const partner = wallets.find(w => w.id === splitPartnerId);
@@ -487,32 +513,36 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
   return (
     <div className="animate-fadeIn font-sans">
       {/* ══ Top Banner ══ */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-900 via-indigo-900 to-slate-900 border border-white/10 p-6 mb-6 shadow-2xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-900 via-indigo-900 to-slate-900 border border-white/10 p-5 sm:p-6 mb-6 shadow-2xl">
         <div className="absolute -top-16 -right-16 w-56 h-56 bg-violet-500/20 rounded-full blur-[60px] pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-500/15 rounded-full blur-[50px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="w-full sm:w-auto">
             <p className="text-xs text-indigo-300 font-bold uppercase tracking-widest mb-1">ຍອດລວມທຸກກະເປົາ</p>
             <div className="flex items-end gap-2">
               <p className="text-4xl sm:text-5xl font-black text-white tabular-nums tracking-tight">{fmt(totalBalance)}</p>
               <span className="text-xl text-indigo-300 font-bold mb-1">₭</span>
             </div>
-            <div className="flex flex-wrap gap-4 mt-2 text-xs text-indigo-200">
-              <span>ກຳໄລລວມ: <span className="font-bold text-emerald-300">{fmt(totalProfit)} ₭</span></span>
-              <span>ຕົ້ນທຶນສັ່ງເຄື່ອງ: <span className="font-bold text-amber-300">{fmt(totalStockCost)} ₭</span></span>
-              <span>ຄ່າໃຊ້ຈ່າຍອື່ນໆ: <span className="font-bold text-orange-300">{fmt(totalExpenses)} ₭</span></span>
-              <span>ເບີກປັນຜົນ: <span className="font-bold text-rose-300">{fmt(totalDividends)} ₭</span></span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-1.5 gap-x-4 mt-4 text-[11px] sm:text-xs text-indigo-200">
+              <span className="flex justify-between sm:block">ກຳໄລລວມ: <span className="font-bold text-emerald-300">{fmt(totalProfit)} ₭</span></span>
+              <span className="flex justify-between sm:block">ຕົ້ນທຶນສັ່ງເຄື່ອງ: <span className="font-bold text-amber-300">{fmt(totalStockCost)} ₭</span></span>
+              <span className="flex justify-between sm:block">ຄ່າໃຊ້ຈ່າຍອື່ນໆ: <span className="font-bold text-orange-300">{fmt(totalExpenses)} ₭</span></span>
+              <span className="flex justify-between sm:block">ເບີກປັນຜົນ: <span className="font-bold text-rose-300">{fmt(totalDividends)} ₭</span></span>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <input
-              type="month" value={monthFilter}
-              onChange={e => setMonthFilter(e.target.value)}
-              className="bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-sm text-white outline-none [color-scheme:dark]"
-            />
-            <button onClick={() => setMonthFilter('all')} className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold hover:bg-white/20 transition-all">ທັງໝົດ</button>
-            <button onClick={() => setShowProfitSplit(true)} className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold shadow-lg shadow-amber-500/25 transition-all active:scale-95">ແບ່ງຮຸ້ນ</button>
-            <button onClick={() => setShowAddWallet(true)} className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-900 text-xs font-bold shadow-lg transition-all active:scale-95">+ ກະເປົາ</button>
+          <div className="flex flex-col gap-2 w-full sm:w-auto shrink-0">
+            <div className="flex gap-2">
+              <input
+                type="month" value={monthFilter}
+                onChange={e => setMonthFilter(e.target.value)}
+                className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2 sm:py-1.5 text-sm sm:text-base text-white outline-none [color-scheme:dark]"
+              />
+              <button onClick={() => setMonthFilter('all')} className="shrink-0 px-4 py-2 sm:py-1.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold hover:bg-white/20 transition-all">ທັງໝົດ</button>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowProfitSplit(true)} className="flex-1 px-4 py-2.5 sm:py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold shadow-lg shadow-amber-500/25 transition-all active:scale-95">ແບ່ງຮຸ້ນ</button>
+              <button onClick={() => setShowAddWallet(true)} className="flex-1 px-4 py-2.5 sm:py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-900 text-xs font-bold shadow-lg transition-all active:scale-95">+ ກະເປົາ</button>
+            </div>
           </div>
         </div>
       </div>
@@ -605,6 +635,15 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                       </span>
                       <span className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">-{fmt(stats.out)}</span>
                     </div>
+                    {stats.withdraw > 0 && (
+                      <div className="flex justify-between items-center bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 rounded-xl px-4 py-2.5">
+                        <span className="text-xs text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                          ຖອນ/ປັນຜົນ (Withdraw):
+                        </span>
+                        <span className="text-sm font-bold text-amber-700 dark:text-amber-400 tabular-nums">-{fmt(stats.withdraw)}</span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2 mb-5 relative z-10">
@@ -634,7 +673,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                         className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 hover:bg-rose-200 dark:hover:bg-rose-500/25 transition-all active:scale-95"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-                        {isMain ? 'ຖອນ/ຈ່າຍ' : 'ຖອນອອກ'}
+                        {isMain ? 'ຖອນເງິນ' : 'ຖອນອອກ'}
                       </button>
                     </div>
                   )}
@@ -669,7 +708,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
           <input autoFocus type="text" value={newWalletName}
             onChange={e => setNewWalletName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddWallet()}
-            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white mb-4 outline-none focus:border-violet-500 text-sm"
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white mb-4 outline-none focus:border-violet-500 text-base"
             placeholder="ເຊັ່ນ: ສົມຊາຍ"
           />
           <div className="flex gap-2">
@@ -685,7 +724,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
           title={
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                {showTransModal.type === 'income' ? '💰 ເຕີມ / ຮັບເງິນ' : '💸 ຖອນ / ຈ່າຍ'}
+                {showTransModal.type === 'income' ? '💰 ເຕີມ / ຮັບເງິນ' : '💸 ຖອນເງິນ'}
               </h3>
               <p className="text-xs text-slate-400 mt-0.5 font-normal">
                 ກະເປົາ: <span className="font-bold text-slate-200">{wallets.find(w => w.id === showTransModal.wallet_id)?.name}</span>
@@ -701,7 +740,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
             placeholder="0"
           />
           <input type="text" value={transNote} onChange={e => setTransNote(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-violet-500 text-sm"
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-violet-500 text-base"
             placeholder="ໝາຍເຫດ..."
           />
           {showTransModal.type === 'expense' && showTransModal.wallet_id === 'W-COMP' && (
@@ -712,7 +751,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
               </label>
               {isProfitSplit && (
                 <select value={splitPartnerId} onChange={e => setSplitPartnerId(e.target.value)}
-                  className="w-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-slate-900 dark:text-white text-sm outline-none"
+                  className="w-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-slate-900 dark:text-white text-base outline-none"
                 >
                   <option value="">ເລືອກຮຸ້ນສ່ວນ</option>
                   {wallets.filter(w => w.type === 'partner').map(w => (
@@ -770,7 +809,7 @@ export default function OrderWallet({ onEditOrder }: OrderWalletProps) {
                       type="month"
                       value={statementMonth === 'all' ? '' : statementMonth}
                       onChange={e => setStatementMonth(e.target.value || 'all')}
-                      className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 outline-none"
+                      className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-base text-slate-700 dark:text-slate-200 outline-none"
                     />
                     <button onClick={() => setStatementMonth('all')} className="px-3 py-1.5 text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">ທັງໝົດ</button>
                   </div>

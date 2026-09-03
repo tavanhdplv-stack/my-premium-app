@@ -8,12 +8,15 @@ interface ThemeContextValue {
   theme: Theme;
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
+  appZoom: number;
+  setAppZoom: (zoom: number) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('light');
+  const [appZoom, setAppZoomState] = useState<number>(100);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -22,6 +25,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const initial = stored ?? (prefersDark ? 'dark' : 'light');
     setThemeState(initial);
     document.documentElement.classList.toggle('dark', initial === 'dark');
+
+    const storedZoom = localStorage.getItem('appZoom');
+    const initialZoom = storedZoom ? parseInt(storedZoom, 10) : 50; // User wants default 50%
+    setAppZoomState(initialZoom);
+    // @ts-ignore
+    document.documentElement.style.zoom = `${initialZoom}%`;
+
     setMounted(true);
   }, []);
 
@@ -33,10 +43,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
+  const setAppZoom = (zoom: number) => {
+    setAppZoomState(zoom);
+    localStorage.setItem('appZoom', zoom.toString());
+    // @ts-ignore
+    document.documentElement.style.zoom = `${zoom}%`;
+  };
+
   if (!mounted) return null;
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, appZoom, setAppZoom }}>
       {children}
     </ThemeContext.Provider>
   );

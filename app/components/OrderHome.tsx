@@ -12,6 +12,7 @@ interface HomeProps {
   orderCount: number;
   pendingNotify: number;
   pendingOrder: number;
+  sentCount: number;
 }
 
 const BANNERS = [
@@ -128,7 +129,8 @@ function fmtNum(n: number) {
   return n.toLocaleString();
 }
 
-export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendingOrder }: HomeProps) {
+export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendingOrder, sentCount }: HomeProps) {
+  const totalBellCount = pendingNotify + pendingOrder + sentCount;
   const [bannerIdx, setBannerIdx] = useState(0);
   const [shopName, setShopName] = useState('PreOrder');
   const [todayOrders, setTodayOrders] = useState(0);
@@ -144,6 +146,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
   const [isAIScanningOrder, setIsAIScanningOrder] = useState(false);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { theme, toggleTheme } = useTheme();
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const handleAIScanOrder = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -302,12 +305,15 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
     }
   }, []);
 
-  // Load today stats
+  // Load stats based on selected date
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        setLoading(true);
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(selectedDate);
+        endOfDay.setHours(23, 59, 59, 999);
 
         // Load Global Banners
         const { data: bannerData } = await supabase.from('notes').select('*').eq('title', '___BANNERS___').maybeSingle();
@@ -320,8 +326,9 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
 
         const { data: orders } = await supabase
           .from('orders')
-          .select('total_sales, total_cost, total_profit, deposit, shipping_fee, shipping_cost, total_expenses, status')
-          .gte('created_at', today.toISOString());
+          .select('total_sales, total_cost, total_profit, deposit, shipping_fee, shipping_cost, total_expenses, status, created_at')
+          .gte('created_at', startOfDay.toISOString())
+          .lte('created_at', endOfDay.toISOString());
 
         if (orders) {
           setTodayOrders(orders.length);
@@ -388,7 +395,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
       }
     };
     loadStats();
-  }, []);
+  }, [selectedDate]);
 
   const activeBanners = globalBanners.length > 0 
     ? globalBanners.map((url, i) => ({ id: `custom_${i}`, isCustom: true, url, bg: '' }))
@@ -405,6 +412,9 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? 'ສະບາຍດີຕອນເຊົ້າ 🌅' : hour < 17 ? 'ສະບາຍດີຕອນທ່ຽງ ☀️' : 'ສະບາຍດີຕອນແລງ 🌆';
+
+  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+  const dayLabel = isToday ? 'ມື້ນີ້' : 'ປະຈຳວັນ';
 
   return (
     <div className="pb-10 space-y-5 px-4 pt-4">
@@ -463,9 +473,9 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
             <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-rose-500">
               <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
             </svg>
-            {pendingNotify > 0 && (
+            {totalBellCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] bg-rose-500 text-white text-[11px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-slate-900">
-                {pendingNotify > 9 ? '9+' : pendingNotify}
+                {totalBellCount > 9 ? '9+' : totalBellCount}
               </span>
             )}
           </button>
@@ -474,7 +484,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
 
       {/* ── Search Bar ── */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="relative mx-auto max-w-[98%]">
-        <div className="flex items-center bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700/60 rounded-[20px] p-2 shadow-sm">
+        <div className="flex items-center bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700/60 rounded-[24px] p-3 shadow-md">
           <div className="flex-1 flex items-center pl-3 pr-2">
             <input 
               type="text" 
@@ -482,23 +492,24 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && searchQuery.trim()) onNavigate('list', searchQuery.trim()); }}
               placeholder="ປ້ອນເລກບິນ ຫຼື ເບີໂທຜູ້ຮັບ..." 
-              className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-[18px] placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-800 dark:text-white"
+              style={{ fontSize: '16px' }}
+              className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-800 dark:text-white"
             />
           </div>
           <button 
             onClick={() => { if (searchQuery.trim()) onNavigate('list', searchQuery.trim()); }}
-            className="w-12 h-12 rounded-[14px] bg-rose-600 flex items-center justify-center shrink-0 shadow-md shadow-rose-500/20 text-white hover:bg-rose-700 transition-colors"
+            className="w-14 h-14 sm:w-16 sm:h-16 rounded-[16px] bg-rose-600 flex items-center justify-center shrink-0 shadow-md shadow-rose-500/20 text-white hover:bg-rose-700 transition-colors"
           >
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-7 h-7 sm:w-8 sm:h-8">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
           </button>
-          <div className="w-[1px] h-8 bg-slate-200 dark:bg-slate-700 mx-2" />
-          <label className={`w-12 h-12 rounded-[14px] ${isAIScanningOrder ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100'} flex items-center justify-center shrink-0 transition-colors cursor-pointer relative overflow-hidden`} title="AI Scanner (ສະແກນຮູບ/ບິນ)">
+          <div className="w-[1px] h-10 bg-slate-200 dark:bg-slate-700 mx-2.5" />
+          <label className={`w-14 h-14 sm:w-16 sm:h-16 rounded-[16px] ${isAIScanningOrder ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100'} flex items-center justify-center shrink-0 transition-colors cursor-pointer relative overflow-hidden`} title="AI Scanner (ສະແກນຮູບ/ບິນ)">
             {isAIScanningOrder ? (
               <svg className="animate-spin w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
             ) : (
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-7 h-7">
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-7 h-7 sm:w-8 sm:h-8">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
               </svg>
             )}
@@ -555,132 +566,153 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
         </div>
       </motion.div>
 
-      {/* ── Premium Service Grid (Anousith Style) ── */}
+      {/* ── Premium Service Grid (Anousith Plus Style) ── */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}>
         <h3 className="text-[18px] font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">ບໍລິການຂອງພວກເຮົາ</h3>
         
-        {/* Top 3 Tall Cards */}
-        <div className="grid grid-cols-3 gap-3">
-          {/* Card 1: ສ້າງອໍເດີ */}
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+          
+          {/* ── BIG HERO CARD (col-span-2 row-span-2) ── */}
           <motion.button
-            whileTap={{ scale: 0.96 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => onNavigate('add')}
-            className="relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[24px] shadow-sm flex flex-col items-center text-center p-4 pt-5 pb-4 overflow-hidden"
+            className="col-span-2 row-span-2 relative bg-gradient-to-br from-red-600 to-rose-600 border border-red-500/50 rounded-[16px] sm:rounded-[24px] shadow-md flex flex-col items-center justify-center text-center p-4 overflow-hidden"
           >
-            <span className="absolute top-2.5 left-0 bg-rose-500 text-white text-[11px] font-bold px-3 py-1 rounded-r-full shadow-sm z-10">
+            <span className="absolute top-0 left-0 bg-yellow-400 text-red-700 text-[10px] sm:text-[12px] font-black px-2 py-1 rounded-br-[12px] shadow-sm z-10">
               NEW
             </span>
-            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/30 mb-3 mt-2">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8 text-white">
+            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-[16px] sm:rounded-[24px] bg-white text-red-600 flex items-center justify-center shadow-lg mb-2 sm:mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-8 h-8 sm:w-12 sm:h-12">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
             </div>
-            <span className="text-[18px] sm:text-[20px] font-extrabold text-slate-800 dark:text-white leading-tight">ສ້າງອໍເດີ</span>
-            <span className="text-[13px] sm:text-[14px] text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">ເພີ່ມອໍເດີໃໝ່<br/>ເລີ່ມຂາຍໄດ້ທັນທີ</span>
-            <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mt-4">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={3} stroke="currentColor" className="w-4 h-4 text-rose-500"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-            </div>
+            <span className="text-[14px] sm:text-[22px] font-black text-white leading-tight">ສ້າງອໍເດີ</span>
+            <span className="text-[11px] sm:text-[14px] text-red-100 mt-1 font-medium">ເລີ່ມຂາຍໄດ້ທັນທີ</span>
           </motion.button>
+
+          {/* ── SMALL CARDS ── */}
 
           {/* Card 2: ລາຍການອໍເດີ */}
           <motion.button
-            whileTap={{ scale: 0.96 }}
+            whileTap={{ scale: 0.94 }}
             onClick={() => onNavigate('list')}
-            className="relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[24px] shadow-sm flex flex-col items-center text-center p-4 pt-5 pb-4 overflow-hidden"
+            className="col-span-1 relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[12px] sm:rounded-[20px] shadow-sm flex flex-col items-center justify-center text-center p-2 sm:p-4 aspect-square"
           >
             {orderCount > 0 && (
-              <span className="absolute top-2 right-2 min-w-[20px] h-[20px] bg-rose-500 text-white text-[12px] font-bold rounded-full flex items-center justify-center px-1.5 shadow-sm z-10">
+              <span className="absolute -top-1 -right-1 sm:top-2 sm:right-2 min-w-[16px] sm:min-w-[20px] h-[16px] sm:h-[20px] bg-rose-500 text-white text-[9px] sm:text-[12px] font-bold rounded-full flex items-center justify-center px-1 sm:px-1.5 shadow-sm z-10">
                 {orderCount > 99 ? '99+' : orderCount}
               </span>
             )}
-            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center shadow-lg shadow-green-500/30 mb-3 mt-2">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-white">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-              </svg>
-            </div>
-            <span className="text-[18px] sm:text-[20px] font-extrabold text-slate-800 dark:text-white leading-tight">ລາຍການອໍເດີ</span>
-            <span className="text-[13px] sm:text-[14px] text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">ຈັດການອໍເດີ<br/>ທັງໝົດຂອງທ່ານ</span>
-            <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mt-4">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={3} stroke="currentColor" className="w-4 h-4 text-emerald-500"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-            </div>
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-7 h-7 sm:w-10 sm:h-10 text-emerald-500 mb-1.5 sm:mb-2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+            <span className="text-[10px] sm:text-[14px] font-bold text-slate-700 dark:text-slate-200 leading-tight">ລາຍການ<br/>ອໍເດີ</span>
           </motion.button>
 
           {/* Card 3: ສາງສິນຄ້າ */}
           <motion.button
-            whileTap={{ scale: 0.96 }}
+            whileTap={{ scale: 0.94 }}
             onClick={() => onNavigate('stock')}
-            className="relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[24px] shadow-sm flex flex-col items-center text-center p-4 pt-5 pb-4 overflow-hidden"
+            className="col-span-1 relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[12px] sm:rounded-[20px] shadow-sm flex flex-col items-center justify-center text-center p-2 sm:p-4 aspect-square"
           >
-            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30 mb-3 mt-2">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-white">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-              </svg>
-            </div>
-            <span className="text-[18px] sm:text-[20px] font-extrabold text-slate-800 dark:text-white leading-tight">ສາງສິນຄ້າ</span>
-            <span className="text-[13px] sm:text-[14px] text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">ກວດສອບສະຕ໋ອກ<br/>ແລະ ຄັງສິນຄ້າ</span>
-            <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center mt-4">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={3} stroke="currentColor" className="w-4 h-4 text-amber-500"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-            </div>
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-7 h-7 sm:w-10 sm:h-10 text-amber-500 mb-1.5 sm:mb-2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+            </svg>
+            <span className="text-[10px] sm:text-[14px] font-bold text-slate-700 dark:text-slate-200 leading-tight">ສາງ<br/>ສິນຄ້າ</span>
           </motion.button>
-        </div>
 
-        {/* Bottom 3 Cards */}
-        <div className="grid grid-cols-3 gap-3 mt-3">
-          {/* Card: ລາຍງານ */}
+          {/* Card 4: ຕອບລູກຄ້າ (Notes) */}
           <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={() => onNavigate('dashboard')}
-            className="relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[24px] shadow-sm flex flex-col items-center text-center p-4 pt-5 pb-4 overflow-hidden"
+            whileTap={{ scale: 0.94 }}
+            onClick={() => onNavigate('notes')}
+            className="col-span-1 relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[12px] sm:rounded-[20px] shadow-sm flex flex-col items-center justify-center text-center p-2 sm:p-4 aspect-square"
           >
-            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-indigo-400 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/30 mb-3 mt-2">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" /><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" /></svg>
-            </div>
-            <span className="text-[18px] sm:text-[20px] font-extrabold text-slate-800 dark:text-white leading-tight">ລາຍງານ</span>
-            <span className="text-[13px] sm:text-[14px] text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">ເບິ່ງຍອດລາຍຮັບ<br/>ແລະ ຍອດຂາຍ</span>
-            <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center mt-4">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={3} stroke="currentColor" className="w-4 h-4 text-indigo-500"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-            </div>
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-7 h-7 sm:w-10 sm:h-10 text-violet-500 mb-1.5 sm:mb-2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+            </svg>
+            <span className="text-[10px] sm:text-[14px] font-bold text-slate-700 dark:text-slate-200 leading-tight">ຕອບ<br/>ລູກຄ້າ</span>
           </motion.button>
 
-          {/* Card: ລາຍຈ່າຍອື່ນໆ */}
+          {/* Card 5: ລາຍງານ */}
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={() => onNavigate('dashboard')}
+            className="col-span-1 relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[12px] sm:rounded-[20px] shadow-sm flex flex-col items-center justify-center text-center p-2 sm:p-4 aspect-square"
+          >
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-7 h-7 sm:w-10 sm:h-10 text-cyan-500 mb-1.5 sm:mb-2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" />
+            </svg>
+            <span className="text-[10px] sm:text-[14px] font-bold text-slate-700 dark:text-slate-200 leading-tight">ລາຍງານ<br/>ຍອດຂາຍ</span>
+          </motion.button>
+
+          {/* Card 6: ລາຍຈ່າຍອື່ນໆ (col-span-2 on mobile for full width block) */}
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={() => onNavigate('expenses')}
-            className="relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[24px] shadow-sm flex flex-col items-center text-center p-4 pt-5 pb-4 overflow-hidden"
+            className="col-span-2 relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[12px] sm:rounded-[20px] shadow-sm flex flex-row items-center justify-center gap-2 p-2 sm:p-4 h-[60px] sm:h-[80px]"
           >
-            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-[#FF7A50] to-[#FF4B5C] flex items-center justify-center shadow-lg shadow-orange-500/30 mb-3 mt-2">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
-            </div>
-            <span className="text-[18px] sm:text-[20px] font-extrabold text-slate-800 dark:text-white leading-tight">ບັນທຶກລາຍຈ່າຍ</span>
-            <span className="text-[13px] sm:text-[14px] text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">ຄ່າກ່ອງ, ຍິງແອດ<br/>ແລະ ອື່ນໆ</span>
-            <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center mt-4">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={3} stroke="currentColor" className="w-4 h-4 text-orange-500"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-            </div>
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6 sm:w-10 sm:h-10 text-orange-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            <span className="text-[12px] sm:text-[15px] font-bold text-slate-700 dark:text-slate-200">ລາຍຈ່າຍ</span>
           </motion.button>
 
-          {/* Card: ຕົວແທນ */}
+          {/* Card 7: ຕົວແທນ (col-span-2 on mobile) */}
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={() => onNavigate('agent')}
-            className="relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[24px] shadow-sm flex flex-col items-center text-center p-4 pt-5 pb-4 overflow-hidden"
+            className="col-span-2 relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[12px] sm:rounded-[20px] shadow-sm flex flex-row items-center justify-center gap-2 p-2 sm:p-4 h-[60px] sm:h-[80px]"
           >
-            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-pink-400 to-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/30 mb-3 mt-2">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-            </div>
-            <span className="text-[18px] sm:text-[20px] font-extrabold text-slate-800 dark:text-white leading-tight">ຕົວແທນ</span>
-            <span className="text-[13px] sm:text-[14px] text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">ຈັດການບັນຊີ<br/>ແລະ ສິດເຂົ້າເຖິງ</span>
-            <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mt-4">
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={3} stroke="currentColor" className="w-4 h-4 text-rose-500"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-            </div>
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6 sm:w-10 sm:h-10 text-pink-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+            </svg>
+            <span className="text-[12px] sm:text-[15px] font-bold text-slate-700 dark:text-slate-200">ຕົວແທນ</span>
           </motion.button>
+          
         </div>
       </motion.div>
 
       {/* ── Financial Dashboard (Premium FinTech Style) ── */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-[18px] font-bold text-slate-800 dark:text-slate-100">ສະຫຼຸບການເງິນ</h3>
-          <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-1 gap-3 sm:gap-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="text-[18px] font-bold text-slate-800 dark:text-slate-100">ສະຫຼຸບການເງິນ</h3>
+            <div className="flex items-center bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm p-1">
+              <button 
+                onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() - 1);
+                  setSelectedDate(d.toISOString().split('T')[0]);
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors shrink-0"
+              >
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+              </button>
+              <div className="relative flex items-center px-1">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-blue-500 absolute left-2 pointer-events-none">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+                <input 
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="pl-7 pr-1 py-1 bg-transparent text-base font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer relative z-10 w-[155px] sm:w-[160px]"
+                />
+              </div>
+              <button 
+                onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() + 1);
+                  setSelectedDate(d.toISOString().split('T')[0]);
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors shrink-0"
+              >
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+              </button>
+            </div>
+          </div>
+          <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1 self-start sm:self-auto">
             <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
             ອັບເດດລ່າສຸດ: {String(now.getHours()).padStart(2, '0')}:{String(now.getMinutes()).padStart(2, '0')}
           </span>
@@ -748,7 +780,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
                 <div className="w-8 h-8 rounded-[10px] bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
                   <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-emerald-600 dark:text-emerald-400"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" /></svg>
                 </div>
-                <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ຍອດຂາຍມື້ນີ້</span>
+                <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ຍອດຂາຍ{dayLabel}</span>
               </div>
               <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded-md">+8.5%</span>
             </div>
@@ -775,7 +807,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
                 <div className="w-8 h-8 rounded-[10px] bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
                   <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-violet-600 dark:text-violet-400"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
-                <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ກຳໄລມື້ນີ້</span>
+                <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ກຳໄລ{dayLabel}</span>
               </div>
               <span className="text-[11px] font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 px-1.5 py-0.5 rounded-md">+12.3%</span>
             </div>
@@ -803,7 +835,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ຍອດມັດຈຳມື້ນີ້</span>
+                <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ຍອດມັດຈຳ{dayLabel}</span>
               </div>
             </div>
             
@@ -811,7 +843,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
               <span className="text-[26px] font-black text-slate-800 dark:text-white tabular-nums tracking-tight block leading-none">
                 ₭ {loading ? '...' : fmtNum(todayDeposit)}
               </span>
-              <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 mt-1.5 block">ລູກຄ້າມັດຈຳມື້ນີ້</span>
+              <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 mt-1.5 block">ລູກຄ້າມັດຈຳ{dayLabel}</span>
             </div>
           </div>
           
@@ -831,7 +863,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                   </svg>
                 </div>
-                <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ຍອດສັ່ງເຄື່ອງມື້ນີ້</span>
+                <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ຍອດສັ່ງເຄື່ອງ{dayLabel}</span>
               </div>
             </div>
             
@@ -839,7 +871,7 @@ export default function OrderHome({ onNavigate, orderCount, pendingNotify, pendi
               <span className="text-[26px] font-black text-slate-800 dark:text-white tabular-nums tracking-tight block leading-none">
                 ₭ {loading ? '...' : fmtNum(todayCost)}
               </span>
-              <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 mt-1.5 block">ຕົ້ນທຶນ ແລະ ຄ່າໃຊ້ຈ່າຍມື້ນີ້</span>
+              <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 mt-1.5 block">ຕົ້ນທຶນ ແລະ ຄ່າໃຊ້ຈ່າຍ{dayLabel}</span>
             </div>
           </div>
         </div>

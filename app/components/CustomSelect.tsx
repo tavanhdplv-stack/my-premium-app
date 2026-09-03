@@ -52,7 +52,7 @@ export function CustomSelect({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full h-11 flex items-center justify-between px-4 bg-white/70 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/70 dark:border-white/10 rounded-[18px] text-sm text-left transition-all duration-200 focus:outline-none ${
+        className={`w-full h-10 sm:h-12 flex items-center justify-between px-3 sm:px-4 bg-white/70 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/70 dark:border-white/10 rounded-xl sm:rounded-[18px] text-[14px] sm:text-sm text-left transition-all duration-200 focus:outline-none ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-white dark:hover:bg-slate-800/90'
         } ${
           isOpen

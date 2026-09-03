@@ -69,7 +69,12 @@ export default function OtherExpenses({ onSaved }: { onSaved?: () => void }) {
         const h: ExpenseTransaction[] = [];
         data.forEach((d: any) => {
           const noteText = d.notes || d.note || '';
-          if (d.type === 'expense' && !noteText.startsWith('Order #')) {
+          const noteLower = noteText.toLowerCase();
+          const isWithdrawal = noteLower.includes('ປັນຜົນ') || noteLower.includes('ปันผล') || noteLower.includes('ຖອນ') || noteLower.includes('ถอน') || noteLower.includes('เบิก') || noteLower.includes('หุ้นส่วน') || noteLower.includes('ຮຸ້ນส่วน');
+          // Stock purchases are COGS (ຕົ້ນທຶນສິນຄ້າ), not operating expenses — exclude from this list
+          const isStockPurchase = noteText.includes('#STOCK#') || noteText.startsWith('ຊື້ສິນຄ້າເຂົ້າສາງ');
+          
+          if (d.type === 'expense' && !noteText.startsWith('Order #') && !isWithdrawal && !isStockPurchase) {
             h.push({
               id: d.id,
               note: noteText,
@@ -198,9 +203,9 @@ export default function OtherExpenses({ onSaved }: { onSaved?: () => void }) {
     }
   };
 
-  const field = "w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-500/10 outline-none transition-all";
+  const field = "w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-[16px] focus:border-orange-400 focus:ring-2 focus:ring-orange-500/10 outline-none transition-all";
   const label = "block text-[11px] font-bold text-slate-500 mb-1.5";
-  const modalField = "w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all";
+  const modalField = "w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[16px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all";
 
   return (
     <>
@@ -295,6 +300,148 @@ export default function OtherExpenses({ onSaved }: { onSaved?: () => void }) {
             <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             ປະຫວັດບິນ
           </button>
+        </div>
+      </div>
+
+      {/* ── Expenses Dashboard ── */}
+      <div className="space-y-4 animate-[fadeIn_0.4s_ease-out]">
+        <h3 className="text-[18px] font-bold text-slate-800 dark:text-slate-100 px-1">ພາບລວມລາຍຈ່າຍ</h3>
+        
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          {(() => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            
+            let todayTotal = 0;
+            let monthTotal = 0;
+            let allTotal = 0;
+            
+            history.forEach(item => {
+              const d = new Date(item.date);
+              if (d >= today) todayTotal += item.amount;
+              if (d >= firstDayOfMonth) monthTotal += item.amount;
+              allTotal += item.amount;
+            });
+            
+            return (
+              <>
+                {/* Today */}
+                <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 border border-slate-100 dark:border-slate-700/50 shadow-sm relative overflow-hidden group">
+                  <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30 dark:opacity-20 pointer-events-none">
+                    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full text-rose-500">
+                      <path d="M0 40 Q 20 20, 40 30 T 70 10 T 100 5 L 100 40 Z" fill="currentColor" stroke="none" />
+                      <path d="M0 40 Q 20 20, 40 30 T 70 10 T 100 5" fill="none" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                  </div>
+                  <div className="flex justify-between items-start mb-2 relative z-10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-[10px] bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-rose-600 dark:text-rose-400"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </div>
+                      <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ມື້ນີ້</span>
+                    </div>
+                  </div>
+                  <div className="relative z-10 mt-3">
+                    <span className="text-[26px] font-black text-slate-800 dark:text-white tabular-nums tracking-tight block leading-none">
+                      ₭ {todayTotal.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* This Month */}
+                <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 border border-slate-100 dark:border-slate-700/50 shadow-sm relative overflow-hidden group">
+                  <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30 dark:opacity-20 pointer-events-none">
+                    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full text-orange-500">
+                      <path d="M0 40 Q 15 35, 30 20 T 60 25 T 100 0 L 100 40 Z" fill="currentColor" stroke="none" />
+                      <path d="M0 40 Q 15 35, 30 20 T 60 25 T 100 0" fill="none" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                  </div>
+                  <div className="flex justify-between items-start mb-2 relative z-10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-[10px] bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-orange-600 dark:text-orange-400"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+                      </div>
+                      <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ເດືອນນີ້</span>
+                    </div>
+                  </div>
+                  <div className="relative z-10 mt-3">
+                    <span className="text-[26px] font-black text-slate-800 dark:text-white tabular-nums tracking-tight block leading-none">
+                      ₭ {monthTotal.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* All Time */}
+                <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 border border-slate-100 dark:border-slate-700/50 shadow-sm relative overflow-hidden group">
+                  <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30 dark:opacity-20 pointer-events-none">
+                    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full text-violet-500">
+                      <path d="M0 40 Q 25 25, 50 30 T 80 15 T 100 10 L 100 40 Z" fill="currentColor" stroke="none" />
+                      <path d="M0 40 Q 25 25, 50 30 T 80 15 T 100 10" fill="none" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                  </div>
+                  <div className="flex justify-between items-start mb-2 relative z-10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-[10px] bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-violet-600 dark:text-violet-400"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" /></svg>
+                      </div>
+                      <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">ລວມທັງໝົດ</span>
+                    </div>
+                  </div>
+                  <div className="relative z-10 mt-3">
+                    <span className="text-[26px] font-black text-slate-800 dark:text-white tabular-nums tracking-tight block leading-none">
+                      ₭ {allTotal.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+
+        {/* Recent Expenses List (Top 5) */}
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-5 sm:p-6 border border-slate-100 dark:border-slate-700/50 shadow-sm mt-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-[16px] font-bold text-slate-800 dark:text-slate-100">ລາຍການຫຼ້າສຸດ</h3>
+            <button 
+              onClick={() => setShowHistory(true)}
+              className="text-[13px] font-bold text-orange-500 hover:text-orange-600 dark:text-orange-400"
+            >
+              ເບິ່ງທັງໝົດ &rarr;
+            </button>
+          </div>
+          
+          <div className="space-y-3">
+            {history.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-sm">
+                ຍັງບໍ່ມີລາຍການລາຍຈ່າຍ
+              </div>
+            ) : (
+              history.slice(0, 5).map(item => {
+                const w = wallets.find(x => x.id === item.wallet_id);
+                return (
+                  <div key={item.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-500">
+                        <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12h-15" /></svg>
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-[14px]">{item.note}</div>
+                        <div className="text-[12px] text-slate-400 mt-0.5">
+                          {new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} • 
+                          <span className="text-violet-500 dark:text-violet-400 ml-1">{w?.name}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="font-extrabold text-rose-500 tabular-nums text-[15px]">
+                      -{item.amount.toLocaleString()} ₭
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
       </div>
 

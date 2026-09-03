@@ -198,13 +198,24 @@ export default function DashboardPage() {
 
         if (!notifyError && !cancelled) setGlobalPendingNotifyCount(notifyCount || 0);
 
-        const { count: receiveCount, error: receiveError } = await supabase
+        const { data: pendingItemOrders, error: pendingItemError } = await supabase
           .from('orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'ຮັບອໍເດີແລ້ວ');
+          .select('items')
+          .neq('status', 'ຍົກເລີກອໍເດີ')
+          .neq('status', 'ໄດ້ຮັບເງິນແລ້ວ')
+          .neq('status', 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ');
 
-        if (!receiveError && !cancelled) {
-          setGlobalPendingOrderCount(receiveCount || 0);
+        if (!pendingItemError && !cancelled && pendingItemOrders) {
+          let pendingItemsCount = 0;
+          pendingItemOrders.forEach(o => {
+            const items = o.items || [];
+            items.forEach((i: any) => {
+              if (!i.status || i.status === 'ຮັບອໍເດີແລ້ວ') {
+                pendingItemsCount++;
+              }
+            });
+          });
+          setGlobalPendingOrderCount(pendingItemsCount);
         }
 
         const { count: sentCount, error: sentError } = await supabase
@@ -362,11 +373,21 @@ export default function DashboardPage() {
   // Show skeleton until Firebase responds (avoids blank white screen)
   if (!appReady) return <AppSkeleton />;
 
-  const handleTabChange = (tab: TabType, search?: string) => {
+  const handleTabChange = (tab: TabType, search?: string, filter?: string) => {
     setActiveTab(tab);
+    
     if (search) {
       setGlobalSearch({ query: search, ts: Date.now() });
+    } else {
+      setGlobalSearch(undefined);
     }
+    
+    if (filter) {
+      setGlobalPendingFilter({ filter, ts: Date.now() });
+    } else {
+      setGlobalPendingFilter(undefined);
+    }
+
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);
     }
@@ -390,117 +411,7 @@ export default function DashboardPage() {
     <div className="relative h-[100dvh] lg:overflow-hidden font-lao text-slate-800 dark:text-slate-100 flex overflow-x-hidden selection:bg-teal-100 dark:selection:bg-teal-900/50 selection:text-teal-900 dark:selection:text-teal-100 transition-colors duration-300">
       {/* Decorative Orbs handled in layout.tsx */}
 
-      {/* Global Notification Pills */}
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col sm:flex-row items-center gap-3">
-        <AnimatePresence>
-          {globalAnnouncement && globalAnnouncement !== dismissedAnnouncement && (
-            <motion.div
-              initial={{ y: -50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -50, opacity: 0, scale: 0.9 }}
-              className="flex items-center gap-3 px-3 py-1.5 sm:px-5 sm:py-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-indigo-100 dark:border-indigo-500/20 shadow-2xl shadow-indigo-500/20 rounded-full"
-            >
-              <div className="relative flex items-center justify-center shrink-0">
-                <div className="absolute w-4 h-4 bg-indigo-500/40 rounded-full animate-ping" />
-                <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
-              </div>
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                {globalAnnouncement}
-              </span>
-              <button 
-                onClick={() => setDismissedAnnouncement(globalAnnouncement)}
-                className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors ml-1 shrink-0"
-                title="ປິດ"
-              >
-                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {globalPendingNotifyCount > 0 && (
-            <motion.button
-              initial={{ y: -50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -50, opacity: 0, scale: 0.9 }}
-              onClick={() => {
-                setGlobalPendingFilter({ filter: 'pending_notify', ts: Date.now() });
-                handleTabChange('list');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className="flex items-center gap-3 px-5 py-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-rose-100 dark:border-rose-500/20 shadow-2xl shadow-rose-500/20 rounded-full hover:scale-105 active:scale-95 transition-all group cursor-pointer"
-            >
-              <div className="relative flex items-center justify-center">
-                <div className="absolute w-4 h-4 bg-rose-500/40 rounded-full animate-ping" />
-                <div className="w-2.5 h-2.5 bg-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
-              </div>
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors whitespace-nowrap">
-                ລໍຖ້າແຈ້ງລູກຄ້າ
-              </span>
-              <span className="flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-rose-500 text-white text-xs font-bold shadow-sm">
-                {globalPendingNotifyCount}
-              </span>
-            </motion.button>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {globalPendingOrderCount > 0 && (
-            <motion.button
-              initial={{ y: -50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -50, opacity: 0, scale: 0.9 }}
-              onClick={() => {
-                setGlobalPendingFilter({ filter: 'ຮັບອໍເດີແລ້ວ', ts: Date.now() });
-                handleTabChange('list');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className="flex items-center gap-3 px-5 py-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-orange-100 dark:border-orange-500/20 shadow-2xl shadow-orange-500/20 rounded-full hover:scale-105 active:scale-95 transition-all group cursor-pointer"
-            >
-              <div className="relative flex items-center justify-center">
-                <div className="absolute w-4 h-4 bg-orange-500/40 rounded-full animate-ping" />
-                <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
-              </div>
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors whitespace-nowrap">
-                ລໍຖ້າສັ່ງເຄື່ອງ
-              </span>
-              <span className="flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-orange-500 text-white text-xs font-bold shadow-sm">
-                {globalPendingOrderCount}
-              </span>
-            </motion.button>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {globalSentCount > 0 && (
-            <motion.button
-              initial={{ y: -50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -50, opacity: 0, scale: 0.9 }}
-              onClick={() => {
-                setGlobalPendingFilter({ filter: 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', ts: Date.now() });
-                handleTabChange('list');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className="flex items-center gap-3 px-5 py-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-emerald-100 dark:border-emerald-500/20 shadow-2xl shadow-emerald-500/20 rounded-full hover:scale-105 active:scale-95 transition-all group cursor-pointer"
-            >
-              <div className="relative flex items-center justify-center">
-                <div className="absolute w-4 h-4 bg-emerald-500/40 rounded-full animate-ping" />
-                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-              </div>
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors whitespace-nowrap">
-                ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ
-              </span>
-              <span className="flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-emerald-500 text-white text-xs font-bold shadow-sm">
-                {globalSentCount}
-              </span>
-            </motion.button>
-          )}
-        </AnimatePresence>
-      </div>
+      {/* Notification Pills moved to Header */}
 
       {/* ─── MOBILE OVERLAY BACKDROP ───────────────────────────────────── */}
       {sidebarOpen && (
@@ -602,37 +513,134 @@ export default function DashboardPage() {
 
       {/* ─── MAIN CONTENT ────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col h-[100dvh] relative z-10 min-w-0 lg:overflow-hidden">
-        {/* Header — hidden on home tab for full-screen feel */}
         {activeTab !== 'home' && (
-        <header className="glass !border-x-0 !border-t-0 border-b border-white/40 dark:border-white/5 px-4 sm:px-6 lg:px-10 py-4 lg:py-5 flex items-center justify-between z-20 sticky top-0 transition-colors duration-300 mx-4 mt-4 lg:rounded-t-[30px]">
-          {/* Hamburger button (visible on all screens now) */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                if (window.innerWidth < 1024) {
-                  setSidebarOpen(true);
-                } else {
-                  setSidebarExpanded(!sidebarExpanded);
-                }
-              }}
-              aria-label="ເປີດປິດເມນູ"
-              className="w-10 h-10 rounded-xl bg-white/60 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-white/10 transition-all shadow-sm hover:shadow-md"
-            >
-              <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 transition-transform duration-300 ${!sidebarExpanded ? 'rotate-180' : ''}`}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
-            </button>
-            <div>
-              <h2 className="text-xl lg:text-2xl font-bold font-heading text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                {navConfig.find((n) => n.id === activeTab)?.label}
-              </h2>
-              <p className="text-[13px] lg:text-[14px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium hidden sm:block">
-                ພາບລວມ ແລະ ການຈັດການຂໍ້ມູນລ່າສຸດ — PreOrder
-              </p>
+        <header className="glass !border-x-0 !border-t-0 border-b border-white/40 dark:border-white/5 px-2 sm:px-6 lg:px-10 py-2 sm:py-3 flex flex-col sm:flex-row items-center justify-between z-20 sticky top-0 transition-colors duration-300 mx-0 sm:mx-4 mt-0 sm:mt-4 lg:rounded-t-[30px] gap-2 sm:gap-4">
+          
+          {/* Top Row on Mobile: Hamburger, Title, Moon, Add */}
+          <div className="flex items-center justify-between w-full sm:w-auto shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                onClick={() => {
+                  if (window.innerWidth < 1024) {
+                    setSidebarOpen(true);
+                  } else {
+                    setSidebarExpanded(!sidebarExpanded);
+                  }
+                }}
+                aria-label="ເປີດປິດເມນູ"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/60 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-white/10 transition-all shadow-sm hover:shadow-md"
+              >
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-300 ${!sidebarExpanded ? 'rotate-180' : ''}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+              </button>
+              <div>
+                <h2 className="text-[16px] sm:text-xl lg:text-2xl font-bold font-heading text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                  {navConfig.find((n) => n.id === activeTab)?.label}
+                </h2>
+                <p className="text-[13px] lg:text-[14px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium hidden sm:block">
+                  ພາບລວມ ແລະ ການຈັດການຂໍ້ມູນລ່າສຸດ — PreOrder
+                </p>
+              </div>
+            </div>
+
+            {/* Mobile-only Right Buttons */}
+            <div className="flex sm:hidden items-center gap-2">
+              <ThemeToggle />
+              <button
+                onClick={() => handleTabChange('add')}
+                className="btn-premium w-8 h-8 flex items-center justify-center rounded-[10px]"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 lg:gap-5">
+          {/* Central Notification Pills */}
+          <div className="flex flex-row flex-wrap justify-center items-center gap-1.5 sm:gap-2 w-full pb-1 sm:pb-0">
+            <AnimatePresence>
+              {globalPendingNotifyCount > 0 && (
+                <motion.button
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  onClick={() => {
+                    handleTabChange('list', undefined, 'pending_notify');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-rose-500/10 dark:bg-rose-500/20 border border-rose-200/50 dark:border-rose-500/30 rounded-full hover:bg-rose-500/20 transition-all cursor-pointer shadow-sm shadow-rose-500/10"
+                >
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                  <span className="text-[11px] sm:text-xs font-bold text-rose-700 dark:text-rose-400 whitespace-nowrap">
+                    ລໍຖ້າແຈ້ງ
+                  </span>
+                  <span className="flex items-center justify-center h-4 sm:h-5 px-1.5 rounded-full bg-rose-500 text-white text-[9px] sm:text-[10px] font-bold">
+                    {globalPendingNotifyCount}
+                  </span>
+                </motion.button>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {globalPendingOrderCount > 0 && (
+                <motion.button
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  onClick={() => {
+                    handleTabChange('list', undefined, 'ຮັບອໍເດີແລ້ວ');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-orange-500/10 dark:bg-orange-500/20 border border-orange-200/50 dark:border-orange-500/30 rounded-full hover:bg-orange-500/20 transition-all cursor-pointer shadow-sm shadow-orange-500/10"
+                >
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                  </span>
+                  <span className="text-[11px] sm:text-xs font-bold text-orange-700 dark:text-orange-400 whitespace-nowrap">
+                    ລໍຖ້າສັ່ງ
+                  </span>
+                  <span className="flex items-center justify-center h-4 sm:h-5 px-1.5 rounded-full bg-orange-500 text-white text-[9px] sm:text-[10px] font-bold">
+                    {globalPendingOrderCount}
+                  </span>
+                </motion.button>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {globalSentCount > 0 && (
+                <motion.button
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  onClick={() => {
+                    handleTabChange('list', undefined, 'ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-200/50 dark:border-emerald-500/30 rounded-full hover:bg-emerald-500/20 transition-all cursor-pointer shadow-sm shadow-emerald-500/10"
+                >
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                    ສັ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ
+                  </span>
+                  <span className="flex items-center justify-center h-4 sm:h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[9px] sm:text-[10px] font-bold">
+                    {globalSentCount}
+                  </span>
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Desktop Right Buttons */}
+          <div className="hidden sm:flex items-center gap-3 lg:gap-5 shrink-0">
             <StorageUsage />
             <button
               onClick={() => handleTabChange('settings')}
@@ -667,11 +675,12 @@ export default function DashboardPage() {
               orderCount={orderCount}
               pendingNotify={globalPendingNotifyCount}
               pendingOrder={globalPendingOrderCount}
+              sentCount={globalSentCount}
             />
           </div>
         ) : (
         <div 
-          className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-10 mx-4 mb-4 lg:rounded-b-[30px] glass !border-t-0 !shadow-none scrollbar-thin scrollbar-thumb-teal-500/20 hover:scrollbar-thumb-teal-500/40 scrollbar-track-transparent"
+          className="flex-1 overflow-y-auto px-0 sm:px-6 lg:px-10 py-1 sm:py-6 lg:py-10 mx-0 sm:mx-4 mb-0 sm:mb-4 lg:rounded-b-[30px] glass !border-t-0 !border-x-0 sm:!border-x !shadow-none scrollbar-thin scrollbar-thumb-teal-500/20 hover:scrollbar-thumb-teal-500/40 scrollbar-track-transparent"
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}
         >
           <div className="max-w-7xl mx-auto min-h-full">
@@ -703,9 +712,9 @@ export default function DashboardPage() {
         className="lg:hidden fixed bottom-0 inset-x-0 z-30 pb-[env(safe-area-inset-bottom)]"
       >
         {/* Nav Background */}
-        <div className="absolute inset-x-0 bottom-0 h-[115px] bg-white/95 dark:bg-[#1a222c]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.08)] rounded-t-[36px]" />
+        <div className="absolute inset-x-0 bottom-0 h-[65px] sm:h-[115px] bg-white/95 dark:bg-[#1a222c]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.08)] rounded-t-[20px] sm:rounded-t-[36px]" />
 
-        <div className="relative h-[115px] flex items-center justify-between px-2 sm:px-4">
+        <div className="relative h-[65px] sm:h-[115px] flex items-center justify-between px-1 sm:px-4">
           {/* Left 2 */}
           <div className="flex-1 flex justify-around">
             {bottomNavItems.slice(0, 2).map((item) => {
@@ -714,19 +723,19 @@ export default function DashboardPage() {
                 <button
                   key={item.id}
                   onClick={() => handleTabChange(item.id)}
-                  className="relative flex flex-col items-center justify-center h-full w-[90px]"
+                  className="relative flex flex-col items-center justify-center h-full w-[50px] sm:w-[90px]"
                 >
-                  <div className={`relative transition-all duration-300 ${isActive ? 'scale-110 text-teal-600 dark:text-teal-400 -translate-y-1' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
-                    <Icon name={item.icon} className="w-11 h-11" />
+                  <div className={`relative transition-all duration-300 ${isActive ? 'scale-110 text-teal-600 dark:text-teal-400 -translate-y-0.5 sm:-translate-y-1' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
+                    <Icon name={item.icon} className="w-6 h-6 sm:w-11 sm:h-11" />
                     {isActive && (
-                      <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
+                      <span className="absolute -bottom-1.5 sm:-bottom-3 left-1/2 -translate-x-1/2 w-1 h-1 sm:w-2.5 sm:h-2.5 rounded-full bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.8)]" />
                     )}
                   </div>
-                  <span className={`text-[16px] mt-2 font-bold transition-all duration-300 ${isActive ? 'text-teal-600 dark:text-teal-400 opacity-100' : 'text-slate-400 opacity-70'}`}>
+                  <span className={`text-[9px] sm:text-[16px] mt-0.5 sm:mt-2 font-bold transition-all duration-300 ${isActive ? 'text-teal-600 dark:text-teal-400 opacity-100' : 'text-slate-400 opacity-70'}`}>
                     {item.label}
                   </span>
                   {item.id === 'list' && orderCount > 0 && (
-                    <span className="absolute top-3 right-2 w-7 h-7 bg-rose-500 text-white text-[12px] font-bold rounded-full flex items-center justify-center shadow-md border-2 border-white dark:border-[#1a222c]">
+                    <span className="absolute top-1 sm:top-3 right-0 sm:right-2 w-4 h-4 sm:w-7 sm:h-7 bg-rose-500 text-white text-[8px] sm:text-[12px] font-bold rounded-full flex items-center justify-center shadow-md border-[1.5px] border-white dark:border-[#1a222c]">
                       {orderCount > 99 ? '99+' : orderCount}
                     </span>
                   )}
@@ -736,28 +745,28 @@ export default function DashboardPage() {
           </div>
 
           {/* Center FAB — Premium Notched Design */}
-          <div className="relative z-10 flex flex-col items-center shrink-0 w-[120px] -mt-[58px]">
+          <div className="relative z-10 flex flex-col items-center shrink-0 w-[60px] sm:w-[120px] -mt-[20px] sm:-mt-[58px]">
             {/* The Cutout Ring Effect (matches app background) */}
-            <div className="absolute top-1 left-1/2 -translate-x-1/2 w-[116px] h-[116px] bg-slate-50 dark:bg-[#0B1120] rounded-[40px] rotate-45 scale-105" />
-            <div className="absolute top-1 left-1/2 -translate-x-1/2 w-[116px] h-[116px] bg-slate-50 dark:bg-[#0B1120] rounded-full" />
+            <div className="absolute top-1 left-1/2 -translate-x-1/2 w-[56px] h-[56px] sm:w-[116px] sm:h-[116px] bg-slate-50 dark:bg-[#0B1120] rounded-[20px] sm:rounded-[40px] rotate-45 scale-105" />
+            <div className="absolute top-1 left-1/2 -translate-x-1/2 w-[56px] h-[56px] sm:w-[116px] sm:h-[116px] bg-slate-50 dark:bg-[#0B1120] rounded-full" />
             
             {/* The Actual Button */}
             <button
               onClick={() => handleTabChange('add')}
-              className="relative mt-2.5 flex flex-col items-center group"
+              className="relative mt-2 sm:mt-2.5 flex flex-col items-center group"
             >
-              <div className={`relative w-[94px] h-[94px] rounded-[32px] flex items-center justify-center shadow-2xl transition-all duration-300 ${
+              <div className={`relative w-[48px] h-[48px] sm:w-[94px] sm:h-[94px] rounded-[16px] sm:rounded-[32px] flex items-center justify-center shadow-lg sm:shadow-2xl transition-all duration-300 ${
                 activeTab === 'add'
                   ? 'bg-gradient-to-tr from-teal-400 via-blue-500 to-indigo-500 shadow-blue-500/60 scale-105 -rotate-3'
                   : 'bg-gradient-to-tr from-teal-500 via-indigo-500 to-purple-600 shadow-indigo-500/40 hover:scale-105'
               }`}>
                 {/* Inner subtle glow */}
-                <div className="absolute inset-0 rounded-[32px] border border-white/30" />
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-[52px] h-[52px] text-white drop-shadow-md">
+                <div className="absolute inset-0 rounded-[16px] sm:rounded-[32px] border border-white/30" />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-[24px] h-[24px] sm:w-[52px] sm:h-[52px] text-white drop-shadow-md">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
               </div>
-              <span className={`text-[16px] font-extrabold mt-3 ${
+              <span className={`text-[9px] sm:text-[16px] font-extrabold mt-1 sm:mt-3 ${
                 activeTab === 'add' ? 'text-teal-600 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400'
               }`}>ເພີ່ມອໍເດີ</span>
             </button>
@@ -771,15 +780,15 @@ export default function DashboardPage() {
                 <button
                   key={item.id}
                   onClick={() => handleTabChange(item.id)}
-                  className="relative flex flex-col items-center justify-center h-full w-[90px]"
+                  className="relative flex flex-col items-center justify-center h-full w-[50px] sm:w-[90px]"
                 >
-                  <div className={`relative transition-all duration-300 ${isActive ? 'scale-110 text-indigo-500 dark:text-indigo-400 -translate-y-1' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
-                    <Icon name={item.icon} className="w-11 h-11" />
+                  <div className={`relative transition-all duration-300 ${isActive ? 'scale-110 text-indigo-500 dark:text-indigo-400 -translate-y-0.5 sm:-translate-y-1' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
+                    <Icon name={item.icon} className="w-6 h-6 sm:w-11 sm:h-11" />
                     {isActive && (
-                      <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.8)]" />
+                      <span className="absolute -bottom-1.5 sm:-bottom-3 left-1/2 -translate-x-1/2 w-1 h-1 sm:w-2.5 sm:h-2.5 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.8)]" />
                     )}
                   </div>
-                  <span className={`text-[16px] mt-2 font-bold transition-all duration-300 ${isActive ? 'text-indigo-600 dark:text-indigo-400 opacity-100' : 'text-slate-400 opacity-70'}`}>
+                  <span className={`text-[9px] sm:text-[16px] mt-0.5 sm:mt-2 font-bold transition-all duration-300 ${isActive ? 'text-indigo-600 dark:text-indigo-400 opacity-100' : 'text-slate-400 opacity-70'}`}>
                     {item.label}
                   </span>
                 </button>
