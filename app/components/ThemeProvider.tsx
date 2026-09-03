@@ -29,8 +29,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const storedZoom = localStorage.getItem('appZoom');
     const initialZoom = storedZoom ? parseInt(storedZoom, 10) : 50; // User wants default 50%
     setAppZoomState(initialZoom);
-    // @ts-ignore
-    document.documentElement.style.zoom = `${initialZoom}%`;
+    document.documentElement.style.fontSize = `${(initialZoom / 100) * 16}px`;
+    // Clean up old zoom property if exists
+    document.documentElement.style.removeProperty('zoom');
 
     setMounted(true);
   }, []);
@@ -46,8 +47,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setAppZoom = (zoom: number) => {
     setAppZoomState(zoom);
     localStorage.setItem('appZoom', zoom.toString());
-    // @ts-ignore
-    document.documentElement.style.zoom = `${zoom}%`;
+    document.documentElement.style.fontSize = `${(zoom / 100) * 16}px`;
   };
 
   if (!mounted) return null;

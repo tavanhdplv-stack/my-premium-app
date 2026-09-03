@@ -62,7 +62,7 @@ export default function RootLayout({
   function fix(el) {
     if (!TAGS.test(el.tagName)) return;
     if (el.type === 'file') return;
-    el.style.setProperty('font-size', '16px', 'important');
+    el.style.setProperty('font-size', '1rem', 'important');
     el.style.setProperty('touch-action', 'manipulation', 'important');
   }
   function fixAll() {

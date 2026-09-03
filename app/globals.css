@@ -90,8 +90,8 @@ input[type="datetime-local"],
 input[type="color"],
 textarea,
 select {
-  /* Guarantee ≥16px so the browser never auto-zooms on focus */
-  font-size: max(16px, 1em) !important;
+  /* Guarantee ≥1rem so the browser never auto-zooms on focus */
+  font-size: max(1rem, 1em) !important;
   /* Remove 300ms tap delay & disable double-tap zoom on the element */
   touch-action: manipulation;
 }
@@ -109,7 +109,7 @@ html {
   input:focus,
   textarea:focus,
   select:focus {
-    font-size: 16px !important;
+    font-size: 1rem !important;
   }
 }
 
