@@ -58,12 +58,12 @@ export const STATUS_META = [
 // TABLE THEMES (ปรับให้เป็นสีพาสเทลตาม Palette)
 // ═══════════════════════════════════════════════════════════════════════
 const THEMES: Record<string, { label: string; row: string; th: string }> = {
-  default: { label: 'ຄ່າເລີ່ມຕົ້ນ', row: 'hover:bg-teal-50/40 dark:hover:bg-teal-500/5', th: 'bg-teal-50/20 dark:bg-teal-500/5' },
-  blue:    { label: 'ນ້ຳເງິນ',      row: 'hover:bg-blue-50/40 dark:hover:bg-blue-500/5', th: 'bg-blue-50/20 dark:bg-blue-500/5' },
-  green:   { label: 'ຂຽວ',          row: 'hover:bg-emerald-50/40 dark:hover:bg-emerald-500/5', th: 'bg-emerald-50/20 dark:bg-emerald-500/5' },
-  purple:  { label: 'ມ່ວງ',          row: 'hover:bg-purple-50/40 dark:hover:bg-purple-500/5', th: 'bg-purple-50/20 dark:bg-purple-500/5' },
-  rose:    { label: 'ບົວ',           row: 'hover:bg-rose-50/40 dark:hover:bg-rose-500/5', th: 'bg-rose-50/20 dark:bg-rose-500/5' },
-  red:     { label: 'ແດງ',           row: 'hover:bg-red-50/40 dark:hover:bg-red-500/5', th: 'bg-red-50/20 dark:bg-red-500/5' },
+  default: { label: 'ຄ່າເລີ່ມຕົ້ນ', row: 'group-hover:[&>td]:bg-teal-50/40 dark:group-hover:[&>td]:bg-teal-500/10', th: 'bg-teal-50/20 dark:bg-teal-500/5' },
+  blue:    { label: 'ນ້ຳເງິນ',      row: 'group-hover:[&>td]:bg-blue-50/40 dark:group-hover:[&>td]:bg-blue-500/10', th: 'bg-blue-50/20 dark:bg-blue-500/5' },
+  green:   { label: 'ຂຽວ',          row: 'group-hover:[&>td]:bg-emerald-50/40 dark:group-hover:[&>td]:bg-emerald-500/10', th: 'bg-emerald-50/20 dark:bg-emerald-500/5' },
+  purple:  { label: 'ມ່ວງ',          row: 'group-hover:[&>td]:bg-purple-50/40 dark:group-hover:[&>td]:bg-purple-500/10', th: 'bg-purple-50/20 dark:bg-purple-500/5' },
+  rose:    { label: 'ບົວ',           row: 'group-hover:[&>td]:bg-rose-50/40 dark:group-hover:[&>td]:bg-rose-500/10', th: 'bg-rose-50/20 dark:bg-rose-500/5' },
+  red:     { label: 'ແດງ',           row: 'group-hover:[&>td]:bg-red-50/40 dark:group-hover:[&>td]:bg-red-500/10', th: 'bg-red-50/20 dark:bg-red-500/5' },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1775,7 +1775,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.2 }}
-        className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden"
+        className=""
       >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
@@ -1789,9 +1789,9 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="text-left border-collapse whitespace-nowrap">
+            <table className="w-full text-left border-separate border-spacing-y-4 whitespace-nowrap">
               <thead>
-                <tr className={`border-b border-slate-200/80 dark:border-white/8 ${themeConfig.th}`}>
+                <tr className={`${themeConfig.th} px-2`}>
                   {['#', 'ລູກຄ້າ / ຂົນສົ່ງ', hideCosts ? 'ລາຍການສິນຄ້າ' : 'ລາຍການສິນຄ້າ / ຕົ້ນທຶນ', hideCosts ? 'ຍອດຂາຍ ₭' : 'ຍອດຂາຍ / ກຳໄລ ₭', 'ຈັດການ'].map(h => (
                     <th key={h} className="px-1.5 py-2 sm:px-4 sm:py-4 text-[0.5625rem] md:text-sm font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap last:text-right">
                       {h}
@@ -1799,7 +1799,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y-0">
+              <tbody className="[&_tr>td]:bg-white dark:[&_tr>td]:bg-slate-900 [&_tr>td]:border-y [&_tr>td]:border-slate-200/80 dark:[&_tr>td]:border-slate-800/80 [&_tr>td:first-child]:border-l [&_tr>td:first-child]:rounded-l-[24px] [&_tr>td:last-child]:border-r [&_tr>td:last-child]:rounded-r-[24px]">
                 {filteredOrders.slice(0, visibleCount).map((order, idx) => {
                   const total_sales = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0);
                   const isUpdating = updatingId === order.id;
@@ -1820,7 +1820,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                   ].filter(Boolean).join('\n');
 
                   const isHighlighted = highlightedOrders[order.id];
-                  const highlightClass = isHighlighted ? 'bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-900/20 dark:hover:bg-amber-900/30' : themeConfig.row;
+                  const highlightClass = isHighlighted ? '[&>td]:bg-amber-50/70 group-hover:[&>td]:bg-amber-100/70 dark:[&>td]:bg-amber-900/20 dark:group-hover:[&>td]:bg-amber-900/30' : themeConfig.row;
 
                   const lowerName = (order.customer_name || '').toLowerCase();
                   const isFb = lowerName.includes('ເຟສ') || lowerName.includes('fb') || lowerName.includes('facebook');
@@ -1833,7 +1833,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.2 }}
                       onClick={(e) => toggleHighlight(order.id, e)}
-                      className={`${highlightClass} transition-colors group cursor-pointer border-b-[8px] border-slate-100 dark:border-slate-800/80 last:border-b-0`}
+                      className={`${highlightClass} transition-all duration-300 group cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1`}
                     >
                       {/* # */}
                       <td className="px-1.5 py-1.5 sm:px-4 sm:py-4 text-[0.8125rem] md:text-lg font-bold text-slate-400 tabular-nums w-8 sm:w-10">{idx + 1}</td>
