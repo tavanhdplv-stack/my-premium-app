@@ -1820,7 +1820,7 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
                   ].filter(Boolean).join('\n');
 
                   const isHighlighted = highlightedOrders[order.id];
-                  const highlightClass = isHighlighted ? '[&>td]:bg-amber-50/70 group-hover:[&>td]:bg-amber-100/70 dark:[&>td]:bg-amber-900/20 dark:group-hover:[&>td]:bg-amber-900/30' : themeConfig.row;
+                  const highlightClass = isHighlighted ? '[&>td]:!bg-slate-200/80 dark:[&>td]:!bg-slate-700/80 [&>td]:!border-slate-300 dark:[&>td]:!border-slate-600/80' : themeConfig.row;
 
                   const lowerName = (order.customer_name || '').toLowerCase();
                   const isFb = lowerName.includes('ເຟສ') || lowerName.includes('fb') || lowerName.includes('facebook');
