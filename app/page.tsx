@@ -546,12 +546,10 @@ export default function DashboardPage() {
             <div className="flex sm:hidden items-center gap-2">
               <ThemeToggle />
               <button
-                onClick={() => handleTabChange('add')}
-                className="btn-premium w-8 h-8 flex items-center justify-center rounded-[10px]"
+                onClick={() => handleTabChange('settings')}
+                className="w-8 h-8 flex items-center justify-center rounded-[10px] bg-white/60 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-600 dark:text-slate-300 shadow-sm"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
+                <Icon name="settings" className="w-4 h-4" />
               </button>
             </div>
           </div>
