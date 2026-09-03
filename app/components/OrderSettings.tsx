@@ -135,6 +135,7 @@ function Toggle({
 export default function OrderSettings() {
   const { appZoom, setAppZoom } = useTheme();
   // ── State ─────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState('shop');
   const [shopName, setShopName] = useState('PreOrder');
   const [shopPhone, setShopPhone] = useState('');
   const [exchangeRate, setExchangeRate] = useState('750');
@@ -364,8 +365,35 @@ export default function OrderSettings() {
         </p>
       </div>
 
+      
+      {/* ── Tabs Navigation ── */}
+      <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 mb-4 border-b border-slate-200 dark:border-white/10">
+        {[
+          { id: 'shop', label: 'ຮ້ານຄ້າ', icon: <Store className="w-4 h-4" /> },
+          { id: 'conditions', label: 'ເງື່ອນໄຂ', icon: <Clock className="w-4 h-4" /> },
+          { id: 'notifications', label: 'ແຈ້ງເຕືອນ', icon: <Bell className="w-4 h-4" /> },
+          { id: 'banners', label: 'ປ້າຍໂຄສະນາ', icon: <ImageIcon className="w-4 h-4" /> },
+          { id: 'display', label: 'ສະແດງຜົນ', icon: <Eye className="w-4 h-4" /> },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-[13px] whitespace-nowrap transition-all ${
+              activeTab === tab.id
+                ? 'bg-violet-600 text-white shadow-md shadow-violet-500/20'
+                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-6">
+
         {/* ── Section 1: Shop Info ── */}
+        {activeTab === "shop" && (
         <SettingSection
           label="ຂໍ້ມູນຮ້ານຄ້າ"
           color="bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
@@ -422,8 +450,10 @@ export default function OrderSettings() {
             </p>
           </div>
         </SettingSection>
+        )}
 
         {/* ── Section 2: Order Conditions ── */}
+        {activeTab === "conditions" && (
         <SettingSection
           label="ເງື່ອນໄຂສັ່ງຊື້"
           color="bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400"
@@ -486,8 +516,10 @@ export default function OrderSettings() {
             </div>
           </div>
         </SettingSection>
+        )}
 
         {/* ── Section 3: Notifications (Global) ── */}
+        {activeTab === "notifications" && (
         <SettingSection
           label="ການແຈ້ງເຕືອນ (ມີຜົນກັບທຸກເຄື່ອງ)"
           color="bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400"
@@ -556,8 +588,10 @@ export default function OrderSettings() {
             </div>
           </div>
         </SettingSection>
+        )}
 
         {/* ── Section: Banner Ad ── */}
+        {activeTab === "banners" && (
         <SettingSection
           label="ປ້າຍໂຄສະນາ (Banner Ads)"
           color="bg-sky-50 dark:bg-sky-500/15 text-sky-600 dark:text-sky-400"
@@ -644,8 +678,10 @@ export default function OrderSettings() {
             </div>
           </div>
         </SettingSection>
+        )}
 
         {/* ── Section 4: Display & UI ── */}
+        {activeTab === "display" && (
         <SettingSection
           label="ການສະແດງຜົນ & UI"
           color="bg-purple-50 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400"
@@ -695,6 +731,7 @@ export default function OrderSettings() {
             </div>
           </div>
         </SettingSection>
+        )}
 
         {/* ── System Info card ── */}
         <div className={card}>
