@@ -965,6 +965,31 @@ export default function OrderList({ onEdit, onAdd, initialFilter, initialSearch 
       const oldStatus = newItems[itemIdx].status;
       newItems[itemIdx] = { ...newItems[itemIdx], status: newStatus };
       
+      const terminalStatuses = ['ສົ່ງເຄື່ອງໃຫ້ລູກຄ້າແລ້ວ', 'ສົ່ງບິນແລ້ວ', 'ແຈ້ງລູກຄ້າແລ້ວ', 'ໄດ້ຮັບເງິນແລ້ວ'];
+      if (newItems.length > 1 && terminalStatuses.includes(newStatus)) {
+        const result = await Swal.fire({
+          title: 'ປ່ຽນທຸກລາຍການ?',
+          text: `ຕ້ອງການປ່ຽນສະຖານະທຸກລາຍການໃນອໍເດີນີ້ເປັນ "${newStatus}" ພ້ອມກັນເລີຍບໍ່?`,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'ແນ່ນອນ, ປ່ຽນທັງໝົດ',
+          cancelButtonText: 'ປ່ຽນແຄ່ລາຍການດຽວ',
+          confirmButtonColor: '#8b5cf6',
+          cancelButtonColor: '#64748b',
+          background: '#1e293b',
+          color: '#f1f5f9',
+          customClass: { popup: 'rounded-2xl' },
+        });
+        
+        if (result.isConfirmed) {
+          newItems.forEach(it => {
+            if (it.status !== 'ຍົກເລີກອໍເດີ') {
+              it.status = newStatus;
+            }
+          });
+        }
+      }
+      
       const updateData: any = { items: newItems };
       
       let newMainStatus = order.status;
